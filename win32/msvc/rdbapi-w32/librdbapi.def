@@ -1,0 +1,97 @@
+;librdbapi-w32.lib : export dll functions
+
+LIBRARY librdbapi-w32
+EXPORTS
+	RDBCurrentTime
+	RDBMemAlloc
+	RDBMemFree
+	RDBExprValues
+
+	RDBThreadCtxCreate
+	RDBThreadCtxAttach
+	RDBThreadCtxGetConn
+	RDBThreadCtxGetKBuf
+	RDBThreadCtxGetVBuf
+	RDBThreadCtxFree
+
+    RDBEnvCreate
+    RDBEnvDestroy
+    RDBEnvNumNodes
+	RDBEnvNumMasterNodes
+    RDBEnvGetNode
+    RDBEnvSetNode
+    RDBEnvFindNode
+    RDBEnvNodeIndex
+    RDBEnvNodeHost
+    RDBEnvNodePort
+    RDBEnvNodeTimeout
+    RDBEnvNodeSotimeo
+    RDBEnvNodeHostPort
+    RDBEnvInitAllNodes
+	RDBEnvNodeGetMaster
+	RDBEnvNodeGetSlaves
+
+	RDBCtxCreate
+	RDBCtxFree
+	RDBCtxGetEnv
+	RDBCtxErrMsg
+	RDBCtxGetNode
+	RDBCtxGetActiveNode
+	RDBCtxNodeIsOpen
+	RDBCtxNodeOpen
+	RDBCtxNodeClose
+	RDBCtxNodeIndex
+	RDBCtxNodeGetCtx
+	RDBCtxNodeGetRedisContext
+	RDBCtxNodeGetEnvNode
+	RDBCtxNodeCheckInfo
+	RDBCtxNodeInfoProp
+	RDBCtxCheckInfo
+	RDBCtxPrintInfo
+
+	RedisCheckReplyStatus
+	RedisFreeReplyObject
+	RedisFreeReplyObjects
+	RedisExecCommand
+	RedisExecCommandOnAllNodes
+	RedisExecArgvOnNode
+	RedisExecCommandOnNode
+	RedisReplyObjectWatch
+	RedisReplyObjectPrint
+	RedisExpireKey
+	RedisSetKey
+	RedisHMSet
+	RedisHMSetLen
+	RedisHMGet
+	RedisDeleteKey
+	RedisExistsKey
+	RedisClusterKeyslot
+	RedisTransStart
+	RedisTransCommit
+	RedisTransDiscard
+	RedisWatchKey
+	RedisWatchKeys
+	RedisUnwatch
+	RedisGenerateId
+	RedisIncrIntegerField
+	RedisIncrFloatField
+	RedisClusterCheck
+
+	RDBResultMapFree
+	RDBResultMapClean
+	RDBResultMapSize
+	RDBResultMapInsert
+	RDBResultMapExist
+	RDBResultMapTraverse
+	RDBResultMapGetOffset
+	RDBResultMapSetDelimiter
+	RDBResultMapPrintOut
+
+	RDBTableScanFirst
+	RDBTableScanNext
+	RDBTableCreate
+	RDBTableDesc
+	RDBTableFindField
+	RDBTableFetchFields
+	RDBFieldsMapGetField
+	RDBFieldsMapFree

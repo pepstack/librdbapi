@@ -1,0 +1,18 @@
+
+https://github.com/winkyao/lemon
+
+https://sqlite.org/src/doc/trunk/doc/lemon.html
+
+http://www.hwaci.com/sw/lemon/
+
+[v] https://blog.csdn.net/liqiang981/article/details/50509731
+[v] http://souptonuts.sourceforge.net/readme_lemon_tutorial.html
+
+
+$ lemon[.exe] gramma.y
+
+generates:
+
+	gramma.c
+	gramma.h
+	gramma.out

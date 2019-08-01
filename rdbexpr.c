@@ -1,0 +1,286 @@
+/***********************************************************************
+* Copyright (c) 2008-2080 pepstack.com, 350137278@qq.com
+*
+* ALL RIGHTS RESERVED.
+* 
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions
+* are met:
+* 
+*   Redistributions of source code must retain the above copyright
+*    notice, this list of conditions and the following disclaimer.
+* 
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+* "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+* LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+* A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+* OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+* SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+* LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+* DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+* THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+***********************************************************************/
+
+/**
+ * rdbexpr.c
+ *
+ * @author: master@pepstack.com
+ *
+ * @version: 1.0.0
+ * @create: 2019-06-14
+ * @update:
+ */
+#include "rdbapi.h"
+#include "rdbtypes.h"
+
+/**
+ * https://github.com/kokke/tiny-regex-c
+ */
+#include "common/tiny-regex-c/re.h"
+
+
+#define RDBEXPR_SGN(a, b)  ((a)>(b)? 1:((a)<(b)? (-1):0))
+
+
+static int string_to_dbl (const char *str, int slen, double *outval)
+{
+    if (slen == 0) {
+        // null string
+        return 0;
+    } else {
+        double val;
+        char *endptr;
+
+        /* To distinguish success/failure after call */
+        errno = 0;
+
+        val = strtod(str, &endptr);
+
+        /* Check for various possible errors */
+        if ((errno == ERANGE) || (errno != 0 && val == 0)) {
+            // error: overflow or underflow
+            return (-1);
+        }
+
+        if (endptr == str) {
+            // No digits were found
+            return 0;
+        }
+
+        /* success return */
+        *outval = val;
+        return 1;        
+    }
+}
+
+
+static int string_to_sb8 (int base, const char *str, int slen, sb8 *outval)
+{
+    if (slen == 0) {
+        // null string
+        return 0;
+    } else {
+        sb8 val;
+        char *endptr;
+
+        /* To distinguish success/failure after call */
+        errno = 0;
+
+        val = strtoll(str, &endptr, base);
+
+        /* Check for various possible errors */
+        if ((errno == ERANGE && (val == LLONG_MAX || val == LLONG_MIN)) || (errno != 0 && val == 0)) {
+            // error
+            return (-1);
+        }
+
+        if (endptr == str) {
+            // No digits were found
+            return (0);
+        }
+
+        /* success return */
+        *outval = val;
+        return 1;
+    }
+}
+
+
+
+static int string_to_ub8 (int base, const char *str, int slen, ub8 *outval)
+{
+    if (slen == 0) {
+        // null string
+        return 0;
+    } else {
+        ub8 val;
+        char *endptr;
+
+        /* To distinguish success/failure after call */
+        errno = 0;
+
+        val = strtoull(str, &endptr, base);
+
+        /* Check for various possible errors */
+        if ((errno == ERANGE && (val == ULLONG_MAX || val == 0)) || (errno != 0 && val == 0)) {
+            // error
+            return (-1);
+        }
+
+        if (endptr == str) {
+            // No digits were found
+            return (0);
+        }
+
+        /* success return */
+        *outval = val;
+        return 1;
+    }
+}
+
+
+// src $expr dst ? true(1) : false(0)
+//
+int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBSqlExpr expr, const char *dst, int dlen)
+{
+    // error
+    int result = -1;
+    int cmp;
+
+    if (expr == RDBSQLEX_IGNORE) {
+        // always accept if expr not given
+        return 1;
+    }
+
+    if (vt == RDBVTYPE_STR || ! vt) {
+        cmp = cstr_compare_len(src, slen, dst, dlen);
+
+        switch (expr) {
+        case RDBSQLEX_EQUAL:
+            result = (!cmp? 1 : 0);
+            break;
+
+        case RDBSQLEX_NOT_EQUAL:
+            result = (!cmp? 0 : 1);
+            break;
+
+        case RDBSQLEX_GREAT_THAN:
+            result = (cmp > 0? 1 : 0);
+            break;
+
+        case RDBSQLEX_LESS_THAN:
+            result = (cmp < 0? 1 : 0);
+            break;
+
+        case RDBSQLEX_GREAT_EQUAL:
+            result = (cmp >= 0? 1 : 0);
+            break;
+
+        case RDBSQLEX_LESS_EQUAL:
+            result = (cmp <= 0? 1 : 0);
+            break;
+
+        case RDBSQLEX_LEFT_LIKE:
+            // a like 'left%'
+            //   src="aaaaB"
+            //   dst="aaaaBBBB"    
+            result = cstr_startwith(dst, dlen, src, slen);
+            break;
+
+        case RDBSQLEX_RIGHT_LIKE:
+            // a like '%right'
+            //   src="aBBBB"            
+            //   dst="aaaaBBBB" 
+            result = cstr_endwith(dst, dlen, src, slen);
+            break;
+
+        case RDBSQLEX_LIKE:
+            // a like 'left%' or '%mid%' or '%right'
+            result = cstr_containwith(dst, dlen, src, slen);
+            break;
+
+        case RDBSQLEX_REG_MATCH:
+            if (re_match(dst, src) == -1) {
+                result = 0;
+            } else {
+                result = 1;
+            }
+            break;
+        }
+
+        return result;
+    }
+
+    if (vt == RDBVTYPE_SB8 ||
+        vt == RDBVTYPE_SB4 ||
+        vt == RDBVTYPE_SB2 ||
+        vt == RDBVTYPE_CHAR) {
+        sb8 s8src, s8dst;
+        if (string_to_sb8(10, src, slen, &s8src) > 0 && string_to_sb8(10, dst, dlen, &s8dst) > 0) {
+            cmp = RDBEXPR_SGN(s8src, s8dst);
+        } else {
+            // error
+            return (-1);
+        }
+    } else if (vt == RDBVTYPE_UB8 ||
+        vt == RDBVTYPE_UB4 ||
+        vt == RDBVTYPE_UB2 ||
+        vt == RDBVTYPE_BYTE) {
+        ub8 u8src, u8dst;
+        if (string_to_ub8(10, src, slen, &u8src) > 0 && string_to_ub8(10, dst, dlen, &u8dst) > 0) {
+            cmp = RDBEXPR_SGN(u8src, u8dst);
+        } else {
+            // error
+            return (-1);
+        }
+    } else if (vt == RDBVTYPE_UB8X ||
+        vt == RDBVTYPE_UB4X) {
+        ub8 u8src, u8dst;
+        if (string_to_ub8(16, src, slen, &u8src) > 0 && string_to_ub8(16, dst, dlen, &u8dst) > 0) {
+            cmp = RDBEXPR_SGN(u8src, u8dst);
+        } else {
+            // error
+            return (-1);
+        }
+    } else if (vt == RDBVTYPE_FLT64) {
+        double dblsrc, dbldst;
+        if (string_to_dbl(src, slen, &dblsrc) > 0 && string_to_dbl(dst, dlen, &dbldst) > 0) {
+            cmp = RDBEXPR_SGN(dblsrc, dbldst);
+        } else {
+            // error
+            return (-1);
+        }
+    } else {
+        return (-1);
+    }
+
+    switch (expr) {
+    case RDBSQLEX_EQUAL:
+        result = (!cmp? 1 : 0);
+        break;
+
+    case RDBSQLEX_NOT_EQUAL:
+        result = (! cmp? 0 : 1);
+        break;
+
+    case RDBSQLEX_GREAT_THAN:
+        result = (cmp > 0? 1 : 0);
+        break;
+
+    case RDBSQLEX_LESS_THAN:
+        result = (cmp < 0? 1 : 0);
+        break;
+
+    case RDBSQLEX_GREAT_EQUAL:
+        result = (cmp >= 0? 1 : 0);
+        break;
+
+    case RDBSQLEX_LESS_EQUAL:
+        result = (cmp <= 0? 1 : 0);
+        break;
+    }
+
+    return result;
+}
