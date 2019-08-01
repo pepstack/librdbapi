@@ -5,6 +5,7 @@ VisualStudioVersion = 12.0.21005.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "hiredis-w32-client", "hiredis-w32-client.vcxproj", "{E6805E91-BDBC-4A50-9164-883AAC024B7D}"
 	ProjectSection(ProjectDependencies) = postProject
+		{11F8D15E-25D1-4E24-A1B0-67C6FEE50A2D} = {11F8D15E-25D1-4E24-A1B0-67C6FEE50A2D}
 		{8F34729F-FDF6-42DB-BBC3-624F505CC4F6} = {8F34729F-FDF6-42DB-BBC3-624F505CC4F6}
 	EndProjectSection
 EndProject
@@ -14,6 +15,16 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "librdbapi-w32", "rdbapi-w32
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "lemon", "lemon\lemon.vcxproj", "{BEA0C2FA-57BA-4A6B-92CF-439DE169D394}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "librdbapi-w32lib", "rdbapi-w32lib\rdbapi-w32lib.vcxproj", "{11F8D15E-25D1-4E24-A1B0-67C6FEE50A2D}"
+	ProjectSection(ProjectDependencies) = postProject
+		{BEA0C2FA-57BA-4A6B-92CF-439DE169D394} = {BEA0C2FA-57BA-4A6B-92CF-439DE169D394}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "redplus", "redplus\redplus.vcxproj", "{1DC1321E-ECB4-4FFA-93A6-AC658CCF3A8C}"
+	ProjectSection(ProjectDependencies) = postProject
+		{11F8D15E-25D1-4E24-A1B0-67C6FEE50A2D} = {11F8D15E-25D1-4E24-A1B0-67C6FEE50A2D}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +44,14 @@ Global
 		{BEA0C2FA-57BA-4A6B-92CF-439DE169D394}.Debug|x64.Build.0 = Debug|x64
 		{BEA0C2FA-57BA-4A6B-92CF-439DE169D394}.Release|x64.ActiveCfg = Release|x64
 		{BEA0C2FA-57BA-4A6B-92CF-439DE169D394}.Release|x64.Build.0 = Release|x64
+		{11F8D15E-25D1-4E24-A1B0-67C6FEE50A2D}.Debug|x64.ActiveCfg = Debug|x64
+		{11F8D15E-25D1-4E24-A1B0-67C6FEE50A2D}.Debug|x64.Build.0 = Debug|x64
+		{11F8D15E-25D1-4E24-A1B0-67C6FEE50A2D}.Release|x64.ActiveCfg = Release|x64
+		{11F8D15E-25D1-4E24-A1B0-67C6FEE50A2D}.Release|x64.Build.0 = Release|x64
+		{1DC1321E-ECB4-4FFA-93A6-AC658CCF3A8C}.Debug|x64.ActiveCfg = Debug|x64
+		{1DC1321E-ECB4-4FFA-93A6-AC658CCF3A8C}.Debug|x64.Build.0 = Debug|x64
+		{1DC1321E-ECB4-4FFA-93A6-AC658CCF3A8C}.Release|x64.ActiveCfg = Release|x64
+		{1DC1321E-ECB4-4FFA-93A6-AC658CCF3A8C}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

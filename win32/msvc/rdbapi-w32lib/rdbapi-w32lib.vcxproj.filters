@@ -69,7 +69,4 @@
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
-  <ItemGroup>
-    <None Include="..\..\..\librdbapi.def" />
-  </ItemGroup>
 </Project>

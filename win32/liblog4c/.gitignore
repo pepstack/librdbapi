@@ -1,0 +1,8 @@
+# MS VC files
+*.sdf
+*.opensdf
+*.suo
+*.log
+*.user
+build/
+target/
