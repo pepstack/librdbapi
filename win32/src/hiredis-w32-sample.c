@@ -259,22 +259,6 @@ int main(int argc, const char *argv[])
         exit(-1);
     }
 
-/*
-    do {
-        redisReply *replys[9];
-
-        int i;
-        int num = RedisExecCommandOnAllNodes(ctx, "keys *", replys, NULL);
-        assert(num == 9);
-
-        for (i = 0; i < 9; i++) {
-            RedisReplyObjectPrint(replys[i], RDBCtxGetNode(ctx, i));
-        }
-
-        RedisFreeReplyObjects(replys, 9);
-    } while(0);
-*/
-
     double retval;
     res = RedisIncrFloatField(ctx, "zl", "age", DBL_MAX, &retval, 1);
     assert(res == RDBAPI_SUCCESS);
@@ -292,7 +276,6 @@ int main(int argc, const char *argv[])
     RedisFreeReplyObject(&reply);
 
     RDBResultMap resultMap;
-    ub8 totalRows = 0;
 
     const char * fields[] = {
         "cretime",
