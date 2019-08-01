@@ -42,9 +42,107 @@ extern "C"
 #include <stdlib.h>
 #include <string.h>
 #include <memory.h>
+#include <errno.h>
 
 #define cstr_bool_true   1
 #define cstr_bool_false  0
+
+
+static int cstr_to_dbl (const char *str, int slen, double *outval)
+{
+    if (slen == 0) {
+        // null string
+        return 0;
+    } else {
+        double val;
+        char *endptr;
+
+        /* To distinguish success/failure after call */
+        errno = 0;
+
+        val = strtod(str, &endptr);
+
+        /* Check for various possible errors */
+        if ((errno == ERANGE) || (errno != 0 && val == 0)) {
+            // error: overflow or underflow
+            return (-1);
+        }
+
+        if (endptr == str) {
+            // No digits were found
+            return 0;
+        }
+
+        /* success return */
+        *outval = val;
+        return 1;        
+    }
+}
+
+
+static int cstr_to_sb8 (int base, const char *str, int slen, sb8 *outval)
+{
+    if (slen == 0) {
+        // null string
+        return 0;
+    } else {
+        sb8 val;
+        char *endptr;
+
+        /* To distinguish success/failure after call */
+        errno = 0;
+
+        val = strtoll(str, &endptr, base);
+
+        /* Check for various possible errors */
+        if ((errno == ERANGE && (val == LLONG_MAX || val == LLONG_MIN)) || (errno != 0 && val == 0)) {
+            // error
+            return (-1);
+        }
+
+        if (endptr == str) {
+            // No digits were found
+            return (0);
+        }
+
+        /* success return */
+        *outval = val;
+        return 1;
+    }
+}
+
+
+
+static int cstr_to_ub8 (int base, const char *str, int slen, ub8 *outval)
+{
+    if (slen == 0) {
+        // null string
+        return 0;
+    } else {
+        ub8 val;
+        char *endptr;
+
+        /* To distinguish success/failure after call */
+        errno = 0;
+
+        val = strtoull(str, &endptr, base);
+
+        /* Check for various possible errors */
+        if ((errno == ERANGE && (val == ULLONG_MAX || val == 0)) || (errno != 0 && val == 0)) {
+            // error
+            return (-1);
+        }
+
+        if (endptr == str) {
+            // No digits were found
+            return (0);
+        }
+
+        /* success return */
+        *outval = val;
+        return 1;
+    }
+}
 
 
 static int cstr_notequal (const char *str1, const char *str2)

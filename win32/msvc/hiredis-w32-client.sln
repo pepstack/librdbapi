@@ -23,8 +23,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "librdbapi-w32lib", "rdbapi-
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "redplus", "redplus\redplus.vcxproj", "{1DC1321E-ECB4-4FFA-93A6-AC658CCF3A8C}"
 	ProjectSection(ProjectDependencies) = postProject
+		{D0C5B748-D9DB-42A2-B54A-A680EBDCEA5C} = {D0C5B748-D9DB-42A2-B54A-A680EBDCEA5C}
 		{11F8D15E-25D1-4E24-A1B0-67C6FEE50A2D} = {11F8D15E-25D1-4E24-A1B0-67C6FEE50A2D}
 	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "liblog4c", "..\liblog4c\makefiles\msvc\vs2013\liblog4c.vcxproj", "{D0C5B748-D9DB-42A2-B54A-A680EBDCEA5C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -52,6 +55,10 @@ Global
 		{1DC1321E-ECB4-4FFA-93A6-AC658CCF3A8C}.Debug|x64.Build.0 = Debug|x64
 		{1DC1321E-ECB4-4FFA-93A6-AC658CCF3A8C}.Release|x64.ActiveCfg = Release|x64
 		{1DC1321E-ECB4-4FFA-93A6-AC658CCF3A8C}.Release|x64.Build.0 = Release|x64
+		{D0C5B748-D9DB-42A2-B54A-A680EBDCEA5C}.Debug|x64.ActiveCfg = Debug|x64
+		{D0C5B748-D9DB-42A2-B54A-A680EBDCEA5C}.Debug|x64.Build.0 = Debug|x64
+		{D0C5B748-D9DB-42A2-B54A-A680EBDCEA5C}.Release|x64.ActiveCfg = Release|x64
+		{D0C5B748-D9DB-42A2-B54A-A680EBDCEA5C}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

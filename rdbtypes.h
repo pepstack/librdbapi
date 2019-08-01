@@ -126,6 +126,7 @@ typedef struct _RDBEnv_t
 
     RDBEnvNodeMap nodemap;
 
+    int maxclusternodes;
     int clusternodes;
 
     RDBEnvNode_t nodes[0];

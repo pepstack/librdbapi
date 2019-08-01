@@ -44,103 +44,6 @@
 #define RDBEXPR_SGN(a, b)  ((a)>(b)? 1:((a)<(b)? (-1):0))
 
 
-static int string_to_dbl (const char *str, int slen, double *outval)
-{
-    if (slen == 0) {
-        // null string
-        return 0;
-    } else {
-        double val;
-        char *endptr;
-
-        /* To distinguish success/failure after call */
-        errno = 0;
-
-        val = strtod(str, &endptr);
-
-        /* Check for various possible errors */
-        if ((errno == ERANGE) || (errno != 0 && val == 0)) {
-            // error: overflow or underflow
-            return (-1);
-        }
-
-        if (endptr == str) {
-            // No digits were found
-            return 0;
-        }
-
-        /* success return */
-        *outval = val;
-        return 1;        
-    }
-}
-
-
-static int string_to_sb8 (int base, const char *str, int slen, sb8 *outval)
-{
-    if (slen == 0) {
-        // null string
-        return 0;
-    } else {
-        sb8 val;
-        char *endptr;
-
-        /* To distinguish success/failure after call */
-        errno = 0;
-
-        val = strtoll(str, &endptr, base);
-
-        /* Check for various possible errors */
-        if ((errno == ERANGE && (val == LLONG_MAX || val == LLONG_MIN)) || (errno != 0 && val == 0)) {
-            // error
-            return (-1);
-        }
-
-        if (endptr == str) {
-            // No digits were found
-            return (0);
-        }
-
-        /* success return */
-        *outval = val;
-        return 1;
-    }
-}
-
-
-
-static int string_to_ub8 (int base, const char *str, int slen, ub8 *outval)
-{
-    if (slen == 0) {
-        // null string
-        return 0;
-    } else {
-        ub8 val;
-        char *endptr;
-
-        /* To distinguish success/failure after call */
-        errno = 0;
-
-        val = strtoull(str, &endptr, base);
-
-        /* Check for various possible errors */
-        if ((errno == ERANGE && (val == ULLONG_MAX || val == 0)) || (errno != 0 && val == 0)) {
-            // error
-            return (-1);
-        }
-
-        if (endptr == str) {
-            // No digits were found
-            return (0);
-        }
-
-        /* success return */
-        *outval = val;
-        return 1;
-    }
-}
-
-
 // src $expr dst ? true(1) : false(0)
 //
 int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBSqlExpr expr, const char *dst, int dlen)
@@ -218,7 +121,7 @@ int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBSqlExpr expr, 
         vt == RDBVTYPE_SB2 ||
         vt == RDBVTYPE_CHAR) {
         sb8 s8src, s8dst;
-        if (string_to_sb8(10, src, slen, &s8src) > 0 && string_to_sb8(10, dst, dlen, &s8dst) > 0) {
+        if (cstr_to_sb8(10, src, slen, &s8src) > 0 && cstr_to_sb8(10, dst, dlen, &s8dst) > 0) {
             cmp = RDBEXPR_SGN(s8src, s8dst);
         } else {
             // error
@@ -229,7 +132,7 @@ int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBSqlExpr expr, 
         vt == RDBVTYPE_UB2 ||
         vt == RDBVTYPE_BYTE) {
         ub8 u8src, u8dst;
-        if (string_to_ub8(10, src, slen, &u8src) > 0 && string_to_ub8(10, dst, dlen, &u8dst) > 0) {
+        if (cstr_to_ub8(10, src, slen, &u8src) > 0 && cstr_to_ub8(10, dst, dlen, &u8dst) > 0) {
             cmp = RDBEXPR_SGN(u8src, u8dst);
         } else {
             // error
@@ -238,7 +141,7 @@ int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBSqlExpr expr, 
     } else if (vt == RDBVTYPE_UB8X ||
         vt == RDBVTYPE_UB4X) {
         ub8 u8src, u8dst;
-        if (string_to_ub8(16, src, slen, &u8src) > 0 && string_to_ub8(16, dst, dlen, &u8dst) > 0) {
+        if (cstr_to_ub8(16, src, slen, &u8src) > 0 && cstr_to_ub8(16, dst, dlen, &u8dst) > 0) {
             cmp = RDBEXPR_SGN(u8src, u8dst);
         } else {
             // error
@@ -246,7 +149,7 @@ int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBSqlExpr expr, 
         }
     } else if (vt == RDBVTYPE_FLT64) {
         double dblsrc, dbldst;
-        if (string_to_dbl(src, slen, &dblsrc) > 0 && string_to_dbl(dst, dlen, &dbldst) > 0) {
+        if (cstr_to_dbl(src, slen, &dblsrc) > 0 && cstr_to_dbl(dst, dlen, &dbldst) > 0) {
             cmp = RDBEXPR_SGN(dblsrc, dbldst);
         } else {
             // error
