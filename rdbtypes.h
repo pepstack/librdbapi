@@ -188,6 +188,9 @@ typedef struct _RDBAsynCtx_t
 } RDBAsynCtx_t, RDBACtx_t;
 
 
+#define RDBCTX_ERRMSG_ZERO(ctxp)   *(ctxp->errmsg) = '\0'
+#define RDBCTX_ERRMSG_DONE(ctxp)   ctxp->errmsg[RDB_ERROR_MSG_LEN] = '\0'
+
 #if defined(__cplusplus)
 }
 #endif

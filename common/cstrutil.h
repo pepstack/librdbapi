@@ -44,6 +44,9 @@ extern "C"
 #include <memory.h>
 #include <errno.h>
 
+#include "unitypes.h"
+
+
 #define cstr_bool_true   1
 #define cstr_bool_false  0
 

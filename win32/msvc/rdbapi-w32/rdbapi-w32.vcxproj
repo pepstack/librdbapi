@@ -20,6 +20,7 @@
     <ClCompile Include="..\..\..\rdbexpr.c" />
     <ClCompile Include="..\..\..\rdbmapr.c" />
     <ClCompile Include="..\..\..\rdbparam.c" />
+    <ClCompile Include="..\..\..\rdbsqlparser.c" />
     <ClCompile Include="..\..\..\rdbstmt.c" />
     <ClCompile Include="..\..\..\rdbtable.c" />
   </ItemGroup>

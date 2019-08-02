@@ -48,6 +48,9 @@
     <ClCompile Include="..\..\..\common\tiny-regex-c\re.c">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\rdbsqlparser.c">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\rdbapi.h">

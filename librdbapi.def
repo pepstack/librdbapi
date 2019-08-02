@@ -95,3 +95,7 @@ EXPORTS
 	RDBTableFetchFields
 	RDBFieldsMapGetField
 	RDBFieldsMapFree
+
+	RDBSQLParserNew
+	RDBSQLParserFree
+	RDBSQLExecute

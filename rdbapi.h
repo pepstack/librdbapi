@@ -119,6 +119,7 @@ typedef int RDBAPI_BOOL;
 #define RDBAPI_ERR_NODES     (-13)
 #define RDBAPI_ERR_REJECTED  (-14)
 #define RDBAPI_ERR_NOFIELD   (-15)
+#define RDBAPI_ERR_RDBSQL    (-16)
 
 
 /**********************************************************************
@@ -186,8 +187,9 @@ typedef struct _RDBResultMap_t * RDBResultMap;
 typedef struct _RDBFieldDef_t  * RDBFieldDef;
 typedef struct _RDBNameReply_t * RDBFieldsMap;
 
-
 typedef struct _RDBThreadCtx_t * RDBThreadCtx;
+
+typedef struct _RDBSQLParser_t * RDBSQLParser;
 
 
 typedef enum
@@ -239,6 +241,16 @@ typedef enum
     NODEINFO_KEYSPACE,
     MAX_NODEINFO_SECTIONS
 } RDBNodeInfoSection;
+
+
+typedef enum
+{
+    RDBSQL_INVALID = 0,
+    RDBSQL_SELECT  = 1,
+    RDBSQL_DELETE  = 2,
+    RDBSQL_UPDATE  = 3,
+    RDBSQL_CREATE  = 4
+} RDBSQLStmt;
 
 
 typedef struct
@@ -610,6 +622,19 @@ extern ub8 RDBResultMapGetOffset (RDBResultMap hResultMap);
 extern char RDBResultMapSetDelimiter (RDBResultMap hResultMap, char delimiter);
 
 extern void RDBResultMapPrintOut (RDBResultMap hResultMap, RDBAPI_BOOL withHead);
+
+
+/**********************************************************************
+ *
+ * RDBSQLParser API
+ *
+ *********************************************************************/
+
+extern RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQLParser *outSqlParser);
+
+extern void RDBSQLParserFree (RDBSQLParser sqlParser);
+
+extern RDBAPI_RESULT RDBSQLExecute (RDBCtx ctx, RDBSQLParser sqlParser);
 
 
 #if defined(__cplusplus)
