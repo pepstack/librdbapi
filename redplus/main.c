@@ -72,7 +72,7 @@ int main(int argc, const char *argv[])
         {"numnodes", required_argument, 0, 'N'},
         {"rediscluster", required_argument, 0, 'R'},
         {"command", required_argument, 0, 'C'},
-        {"redsql", required_argument, 0, 'S'},
+        {"rdbsql", required_argument, 0, 'S'},
         {"output", required_argument, 0, 'O'},
         {0, 0, 0, 0}
     };
@@ -87,7 +87,7 @@ int main(int argc, const char *argv[])
     while ((ch = getopt_long_only(argc, (char *const *) argv, "hVR:C:S:O:", lopts, &index)) != -1) {
         switch (ch) {
         case '?':
-            fprintf(stderr, "\033[1;31m[error]\033[0m option not defined.\n");
+            fprintf(stderr, "ERROR: option not defined.\n");
             exit(-1);
 
         case 0:
@@ -126,7 +126,7 @@ int main(int argc, const char *argv[])
             break;
 
         case 'V':
-            fprintf(stdout, "\033[1;35m%s-%s, build: %s %s\033[0m\n\n", APPNAME, APPVER, __DATE__, __TIME__);
+            fprintf(stdout, "%s-%s, build: %s %s\n\n", APPNAME, APPVER, __DATE__, __TIME__);
             exit(0);
             break;
         }
@@ -141,21 +141,39 @@ int main(int argc, const char *argv[])
 
     ub8 startTime = RDBCurrentTime(1, ts);
 
-    printf("%s-%s start : %s\n"
-           "redis cluster : %s\n"
-           "numb of nodes : %d\n",
+    printf("# %s-%s start : %s\n"
+           "# redis cluster : %s\n"
+           "# numb of nodes : %d\n",
            APPNAME, APPVER, ts, cluster, numnodes);
 
-    redplus_exec_command(cluster, numnodes, command, output);
+    // redplus_exec_command(cluster, numnodes, command, output);
 
     redplus_exec_redsql(cluster, numnodes, redsql, output);
 
+    ub8 endTime = RDBCurrentTime(1, ts);
+
+    printf("# end on: %s. elapsed: %.3lf seconds.\n", ts, (endTime - startTime) * 0.001);
  	return 0;
 }
 
 
 void redplus_print_usage()
 {
+#ifndef __WINDOWS__
+    printf("Usage: %s.exe [Options...] \n", APPNAME);
+#else
+    printf("Usage: %s [Options...] \n", APPNAME);
+#endif
+    printf("%s is a Redis SQL tool.\n", APPNAME);
+
+    printf("Options:\n");
+    printf("  -h, --help               Display help info\n");
+    printf("  -V, --version            Show version info\n\n");
+    printf("  -N, --numnodes=NUMBER    Number of redis cluster nodes. (9 default)\n");
+    printf("  -R, --rediscluster=HOSTS Redis cluster host nodes. (example: 'authpass@127.0.0.1:7001-7009')\n");
+    printf("  -C, --command=REDISCMD   Redis command to call\033[0m\n");
+    printf("  -S, --rdbsql=RDBSQL      SQL to execute on redisdb. (example: SELECT * FROM a.t WHERE ...)\n");
+    printf("  -O, --output=PATHFILE    Pathfile to store output result map\n\n");
 }
 
 
@@ -179,8 +197,6 @@ int redplus_exec_command (const char *cluster, int numnodes, const char *command
         exit(EXIT_FAILURE);
     }
 
-
-
     RDBCtxFree(ctx);
     RDBEnvDestroy(env);
     return 0;
@@ -196,6 +212,8 @@ int redplus_exec_redsql (const char *cluster, int numnodes, const char *rdbsql, 
 
     RDBResultMap resultMap = NULL;
     RDBSQLParser sqlparser = NULL;
+
+    ub8 offset = RDBAPI_ERROR;
 
     err = RDBEnvCreate(0, numnodes, &env);
     if (err) {
@@ -221,16 +239,25 @@ int redplus_exec_redsql (const char *cluster, int numnodes, const char *rdbsql, 
         goto error_exit;
     }
 
-    err = RDBSQLExecute(ctx, sqlparser, &resultMap);
-    if (err) {
-        printf("RDBSQLExecute failed: %s\n", RDBCtxErrMsg(ctx));
+    offset = RDBSQLExecute(ctx, sqlparser, &resultMap);
+    if (offset == RDBAPI_ERROR) {
+        printf("RDBSQLExecute failed!");
         goto error_exit;
     }
 
-    // TODO:
+    // print out
+    RDBResultMapPrintOut(resultMap, 1);
 
+    printf("# result rows=%"PRIu64".\n", RDBResultMapSize(resultMap));
 
-    err = RDBAPI_SUCCESS;
+    RDBResultMapClean(resultMap);
+
+    RDBSQLParserFree(sqlparser);
+    RDBResultMapFree(resultMap);
+    RDBCtxFree(ctx);
+    RDBEnvDestroy(env);
+
+    return RDBAPI_SUCCESS;
 
 error_exit:
     if (sqlparser) {

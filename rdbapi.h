@@ -55,15 +55,15 @@ extern "C"
 #endif
 
 #ifndef RDB_CLUSTER_NODES_MAX
-# define RDB_CLUSTER_NODES_MAX   255
+# define RDB_CLUSTER_NODES_MAX     255
 #endif
 
 #ifndef RDB_TABLE_LIMIT_MAX
-# define RDB_TABLE_LIMIT_MAX   10000
+# define RDB_TABLE_LIMIT_MAX       10000
 #endif
 
 #ifndef RDB_TABLE_LIMIT_MIN
-# define RDB_TABLE_LIMIT_MIN   10
+# define RDB_TABLE_LIMIT_MIN       10
 #endif
 
 
@@ -127,16 +127,16 @@ typedef int RDBAPI_BOOL;
  * RDBAPI Constants
  *
  *********************************************************************/
-#define RDBAPI_ARGV_MAXNUM    252
+#define RDBAPI_ARGV_MAXNUM         252
 
-#define RDBAPI_SLAVES_MAXNUM    9
+#define RDBAPI_SLAVES_MAXNUM       9
 
-#define RDBAPI_PROP_MAXSIZE   256
+#define RDBAPI_PROP_MAXSIZE        256
 
-#define RDBAPI_KEY_PERSIST    (-1)
+#define RDBAPI_KEY_PERSIST        (-1)
 
-#define RDBAPI_KEY_DELETED      1
-#define RDBAPI_KEY_NOTFOUND     0
+#define RDBAPI_KEY_DELETED         1
+#define RDBAPI_KEY_NOTFOUND        0
 
 #define RDBAPI_SQL_PATTERN_SIZE    256
 #define RDBAPI_SQL_KEYS_MAX        10
@@ -634,7 +634,7 @@ extern RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen,
 
 extern void RDBSQLParserFree (RDBSQLParser sqlParser);
 
-extern RDBAPI_RESULT RDBSQLExecute (RDBCtx ctx, RDBSQLParser sqlParser);
+extern ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser sqlParser, RDBResultMap *outResultMap);
 
 
 #if defined(__cplusplus)

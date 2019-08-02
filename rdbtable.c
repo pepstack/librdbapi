@@ -1181,8 +1181,6 @@ static void RDBTableDescCallback (void * pvReply, void *pvArg)
             redisReply *fieldValue = replyRow->element[i++];
 
             if (fieldName && fieldValue && fieldName->type == REDIS_REPLY_STRING && fieldValue->type == REDIS_REPLY_STRING && fieldValue->len) {
-                printf("%s\n", fieldName->str);
-
                 if (! flddes.fieldname[0] &&
                     ! cstr_notequal_len(fieldName->str, fieldName->len, "fieldname", 9) ) {
 
@@ -1284,8 +1282,6 @@ int RDBTableDesc (RDBCtx ctx, const char *tablespace, const char *tablename, RDB
 
         while ((offset = RDBTableScanNext(resultMap, offset, RDBAPI_ARGV_MAXNUM + 1)) != RDB_ERROR_OFFSET) {
             fields += RDBResultMapSize(resultMap);
-
-            printf("%"PRIu64"\n", fields);
 
             if (fields > RDBAPI_ARGV_MAXNUM) {
                 snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERROR: too many fields");

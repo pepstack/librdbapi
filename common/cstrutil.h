@@ -51,6 +51,52 @@ extern "C"
 #define cstr_bool_false  0
 
 
+/**
+ * trim specified character in given string
+ */
+static char * cstr_trim_chr (char * s, char c)
+{
+    return (*s==0)?s:(((*s!=c)?(((cstr_trim_chr(s+1,c)-1)==s)?s:(*(cstr_trim_chr(s+1,c)-1)=*s,*s=c,cstr_trim_chr(s+1,c))):cstr_trim_chr(s+1,c)));
+}
+
+
+static char * cstr_Ltrim_chr (char * str, char ch)
+{
+    char *p = str;
+    while (*p && *p++ == ch) {
+        str = p;
+    }
+    return str;
+}
+
+
+static char * cstr_Rtrim_chr (char * str, char ch)
+{
+    char *p = str;
+    char *q = str;
+
+    while (*p) {
+        if (*p != ch) {
+            q = p;            
+        }
+
+        p++;
+    }
+
+    if (++q != p) {
+        *q = 0;
+    }
+
+    return str;
+}
+
+
+static char * cstr_LRtrim_chr (char * str, char c)
+{
+    return cstr_Rtrim_chr(cstr_Ltrim_chr(str, c), c);
+}
+
+
 static int cstr_to_dbl (const char *str, int slen, double *outval)
 {
     if (slen == 0) {
@@ -80,6 +126,39 @@ static int cstr_to_dbl (const char *str, int slen, double *outval)
         *outval = val;
         return 1;        
     }
+}
+
+
+/*
+    =
+    >
+    >=
+    <
+    <=
+    !=
+    LIKE
+    MATCH
+*/
+
+static int cstr_split_substr (char *str, const char *sub, int sublen, char **offs, int maxoffs)
+{
+    int i = 0;
+
+    char *s = str;
+
+    while (s && i < maxoffs) {
+        char *p = strstr(s, sub);
+        if (p) {
+            *p = 0;
+            p += sublen;
+        }
+
+        offs[i++] = s;
+
+        s = p;
+    }
+
+    return i;
 }
 
 
