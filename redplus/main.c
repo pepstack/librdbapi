@@ -152,7 +152,7 @@ int main(int argc, const char *argv[])
 
     ub8 endTime = RDBCurrentTime(1, ts);
 
-    printf("# end on: %s. elapsed: %.3lf seconds.\n", ts, (endTime - startTime) * 0.001);
+    printf("\n\n# end on: %s. elapsed: %.3lf seconds.\n", ts, (endTime - startTime) * 0.001);
  	return 0;
 }
 
@@ -241,14 +241,19 @@ int redplus_exec_redsql (const char *cluster, int numnodes, const char *rdbsql, 
 
     offset = RDBSQLExecute(ctx, sqlparser, &resultMap);
     if (offset == RDBAPI_ERROR) {
-        printf("RDBSQLExecute failed!");
+        printf("RDBSQLExecute failed: %s", RDBCtxErrMsg(ctx));
         goto error_exit;
     }
 
-    // print out
-    RDBResultMapPrintOut(resultMap, 1);
+    if (RDBSQLParserGetStmt(sqlparser, NULL, 0) == RDBSQL_SELECT) {
+        RDBResultMapPrintOut(resultMap, 1);
 
-    printf("# result rows=%"PRIu64".\n", RDBResultMapSize(resultMap));
+        printf("# result rows=%"PRIu64".\n", RDBResultMapSize(resultMap));
+    } else if (RDBSQLParserGetStmt(sqlparser, NULL, 0) == RDBSQL_CREATE) {
+        RDBResultMapPrintOut(resultMap, 1);
+
+        printf("table create success.\n");
+    }
 
     RDBResultMapClean(resultMap);
 

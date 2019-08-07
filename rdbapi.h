@@ -210,20 +210,20 @@ typedef enum
 
 typedef enum
 {
-    RDBVTYPE_SB2    = 'j',   // 16-bit signed int
-    RDBVTYPE_UB2    = 'v',   // 16-bit unsigned int
-    RDBVTYPE_SB4    = 'i',   // 32-bit signed int
-    RDBVTYPE_UB4    = 'u',   // 32-bit unsigned int
-    RDBVTYPE_UB4X   = 'x',   // 32-bit unsigned int (hex encoded)
-    RDBVTYPE_SB8    = 'I',   // 64-bit signed int
-    RDBVTYPE_UB8    = 'U',   // 64-bit unsigned int
-    RDBVTYPE_UB8X   = 'X',   // 64-bit unsigned int (hex encoded)
-    RDBVTYPE_CHAR   = 'c',   // character (signed char)
-    RDBVTYPE_BYTE   = 'b',   // byte (unsigned char)
-    RDBVTYPE_STR    = 's',   // utf8 encoded ascii string
-    RDBVTYPE_FLT64  = 'f',   // 64-bit double precision
-    RDBVTYPE_BIN    = 'B',   // binary with variable size
-    RDBVTYPE_DEC    = 'D'    // decimal(precision, scale)
+    RDBVTYPE_SB2    = 'j',   // 16-bit signed int: SB2
+    RDBVTYPE_UB2    = 'v',   // 16-bit unsigned int: UB2
+    RDBVTYPE_SB4    = 'i',   // 32-bit signed int: SB4
+    RDBVTYPE_UB4    = 'u',   // 32-bit unsigned int: UB4
+    RDBVTYPE_UB4X   = 'x',   // 32-bit unsigned int (hex encoded): UB4X
+    RDBVTYPE_SB8    = 'I',   // 64-bit signed int: SB8
+    RDBVTYPE_UB8    = 'U',   // 64-bit unsigned int: UB8
+    RDBVTYPE_UB8X   = 'X',   // 64-bit unsigned int (hex encoded): UB8X
+    RDBVTYPE_CHAR   = 'c',   // character (signed char): CHAR
+    RDBVTYPE_BYTE   = 'b',   // byte (unsigned char): BYTE
+    RDBVTYPE_STR    = 's',   // utf8 encoded ascii string: STR
+    RDBVTYPE_FLT64  = 'f',   // 64-bit double precision: DBL
+    RDBVTYPE_BIN    = 'B',   // binary with variable size: BIN
+    RDBVTYPE_DEC    = 'D'    // decimal(precision, scale): DEC
 } RDBValueType;
 
 
@@ -635,6 +635,8 @@ extern RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen,
 extern void RDBSQLParserFree (RDBSQLParser sqlParser);
 
 extern ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser sqlParser, RDBResultMap *outResultMap);
+
+extern RDBSQLStmt RDBSQLParserGetStmt (RDBSQLParser sqlParser, char **parsedClause, int pretty);
 
 
 #if defined(__cplusplus)

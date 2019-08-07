@@ -35,9 +35,6 @@
 #include "rdbapi.h"
 #include "rdbtypes.h"
 
-#include "common/red_black_tree.h"
-#include "common/uthash/utarray.h"
-
 #define RDBTABLE_FILTER_ACCEPT    1
 #define RDBTABLE_FILTER_REJECT    0
 #define RDBTABLE_FILTER_FAILED  (-1)
@@ -98,31 +95,6 @@ typedef struct _RDBTableSql_t
 
 
 #define RDBResultNodeState(resMap, nodeid)  (&(resMap->rdbsql->nodestates[nodeid]))
-
-
-typedef struct _RDBResultMap_t
-{
-    RDBCtx ctxh;
-
-    RDBTableSql rdbsql;
-
-    char delimiter;
-
-    red_black_tree_t  rbtree;
-
-    // temp variables
-    int rowkey_offs[RDBAPI_SQL_KEYS_MAX];
-    int rowkey_lens[RDBAPI_SQL_KEYS_MAX];
-
-    // constants
-    int rowkeyid[RDBAPI_SQL_KEYS_MAX + 1];
-
-    int kplen;
-    char *keyprefix;
-
-    int numfields;
-    RDBFieldDesc fielddes[0];
-} RDBResultMap_t;
 
 
 static RDBAPI_RESULT RDBTableSqlCreate (RDBTableSql *rdbsql, ub4 blobsz)
@@ -407,76 +379,71 @@ static void RedisReplyNodeDelete (void *nodeobj, void *arg)
 }
 
 
-static RDBAPI_RESULT RDBResultMapNew (RDBTableSql rdbsql, int numfields, const RDBFieldDesc *fielddes, RDBResultMap *phResultMap)
+// build key format like:
+//  {tablespace::tablename:$fieldname1:$fieldname2}
+int RDBBuildKeyFormat (const char * tablespace, const char * tablename, const RDBFieldDesc *fielddes, int numfields, int *rowkeyid, char **keyformat)
 {
     int offlen = 0;
     char *keyprefix = NULL;
-    int rowkeyid[RDBAPI_SQL_KEYS_MAX + 1] = {0};
+        
+    int j, k;
+    size_t szlen = 0;
 
-    if (numfields) {
-        // build key format like:
-        //  {tablespace::tablename:$fieldname1:$fieldname2}
-        //
-        int j, k;
-        size_t szlen = 0;
+    szlen += strlen(tablespace) + 4;
+    szlen += strlen(tablename) + 4;
 
-        szlen += strlen(rdbsql->tablespace) + 4;
-        szlen += strlen(rdbsql->tablename) + 4;
-
-        for (j = 0; j < numfields; j++) {
-            if (fielddes[j].rowkey) {
-                rowkeyid[fielddes[j].rowkey] = j;
-                rowkeyid[0] = rowkeyid[0] + 1;
-            }
+    for (j = 0; j < numfields; j++) {
+        if (fielddes[j].rowkey) {
+            rowkeyid[fielddes[j].rowkey] = j;
+            rowkeyid[0] = rowkeyid[0] + 1;
         }
-
-        for (k = 1; k <= rowkeyid[0]; k++) {
-            j = rowkeyid[k];
-
-            szlen += strlen(fielddes[j].fieldname) + 4;
-        }
-
-        keyprefix = (char *) RDBMemAlloc(szlen + 1);
-
-        offlen += snprintf(keyprefix + offlen, szlen - offlen, "{%s::%s", rdbsql->tablespace, rdbsql->tablename);
-
-        for (k = 1; k <= rowkeyid[0]; k++) {
-            j = rowkeyid[k];
-
-            offlen += snprintf(keyprefix + offlen, szlen - offlen, ":$%s", fielddes[j].fieldname);
-        }
-
-        offlen += snprintf(keyprefix + offlen, szlen - offlen, "}");
-        keyprefix[offlen] = 0;
     }
 
+    for (k = 1; k <= rowkeyid[0]; k++) {
+        j = rowkeyid[k];
+
+        szlen += strlen(fielddes[j].fieldname) + 4;
+    }
+
+    keyprefix = (char *) RDBMemAlloc(szlen + 1);
+
+    offlen += snprintf(keyprefix + offlen, szlen - offlen, "{%s::%s", tablespace, tablename);
+
+    for (k = 1; k <= rowkeyid[0]; k++) {
+        j = rowkeyid[k];
+
+        offlen += snprintf(keyprefix + offlen, szlen - offlen, ":$%s", fielddes[j].fieldname);
+    }
+
+    offlen += snprintf(keyprefix + offlen, szlen - offlen, "}");
+    keyprefix[offlen] = 0;
+
+    *keyformat = keyprefix;
+    return offlen;
+}
+
+
+RDBAPI_RESULT RDBResultMapNew (RDBTableSql rdbsql, int numfields, const RDBFieldDesc *fielddes, RDBResultMap *phResultMap)
+{
     RDBResultMap hMap = (RDBResultMap) RDBMemAlloc(sizeof(RDBResultMap_t) + sizeof(RDBFieldDesc) * numfields);
     if (! hMap) {
         return RDBAPI_ERR_NOMEM;
     }
 
-    rbtree_init(&hMap->rbtree, (fn_comp_func*) RedisReplyNodeCompare);
-
-    if (numfields) {
-        memcpy(hMap->fielddes, fielddes, sizeof(RDBFieldDesc) * numfields);
-        hMap->numfields = numfields;
-
-        if (keyprefix) {
-            hMap->kplen = offlen;
-            hMap->keyprefix = strdup(keyprefix);
-
-            memcpy(hMap->rowkeyid, rowkeyid, sizeof(rowkeyid));
-
-            RDBMemFree(keyprefix);
-        }
-    }
+    hMap->rdbsql = rdbsql;
 
     RDBResultMapSetDelimiter(hMap, RDB_TABLE_DELIMITER_CHAR);
 
-    hMap->rdbsql = rdbsql;
+    rbtree_init(&hMap->rbtree, (fn_comp_func*) RedisReplyNodeCompare);
+
+    if (numfields) {
+        hMap->kplen = RDBBuildKeyFormat(rdbsql->tablespace, rdbsql->tablename, fielddes, numfields, hMap->rowkeyid, &hMap->keyprefix);
+
+        memcpy(hMap->fielddes, fielddes, sizeof(RDBFieldDesc) * numfields);
+        hMap->numfields = numfields;
+    }
 
     *phResultMap = hMap;
-
     return RDBAPI_SUCCESS;
 }
 
@@ -485,7 +452,9 @@ void RDBResultMapFree (RDBResultMap hResultMap)
 {
     RDBMemFree(hResultMap->keyprefix);
 
-    RDBTableSqlFree(hResultMap->rdbsql);
+    if (hResultMap->rdbsql) {
+        RDBTableSqlFree(hResultMap->rdbsql);
+    }
 
     RDBResultMapClean(hResultMap);
 
@@ -563,7 +532,7 @@ ub8 RDBResultMapGetOffset (RDBResultMap hResultMap)
 }
 
 
-RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
+static RDBAPI_RESULT RDBTableScanFirstInternal (int isdesc, RDBCtx ctx,
     const char *tablespace,  // must valid
     const char *tablename,   // must valid
     int numkeys,
@@ -606,10 +575,11 @@ RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
         return RDBAPI_ERROR;
     }
 
-    if (cstr_notequal(tablespace, RDB_SYSTEM_TABLE_PREFIX)) {
+    if (! isdesc) {
         bzero(fielddes, sizeof(fielddes));
 
         nfields = RDBTableDesc(ctx, tablespace, tablename, fielddes);
+
         if (nfields <= 0) {
             return RDBAPI_ERROR;
         }
@@ -642,6 +612,38 @@ RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
 
     *phResultMap = resultMap;
     return RDBAPI_SUCCESS;
+}
+
+
+RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
+    const char *tablespace,  // must valid
+    const char *tablename,   // must valid
+    int numkeys,
+    const char *keys[],
+    const RDBSqlExpr keyexprs[],
+    const char *keyvals[],
+    int numfields,
+    const char *fields[],
+    const RDBSqlExpr fieldexprs[],
+    const char *fieldvals[],
+    const char *groupby[],    // Not Supported Now!
+    const char *orderby[],    // Not Supported Now!
+    RDBResultMap *phResultMap)
+{
+   return RDBTableScanFirstInternal(0, ctx,
+            tablespace,
+            tablename,
+            numkeys,
+            keys,
+            keyexprs,
+            keyvals,
+            numfields,
+            fields,
+            fieldexprs,
+            fieldvals,
+            groupby,
+            orderby,
+            phResultMap);
 }
 
 
@@ -1256,7 +1258,7 @@ int RDBTableDesc (RDBCtx ctx, const char *tablespace, const char *tablename, RDB
         0
     };
 
-    result = RDBTableScanFirst(ctx, RDB_SYSTEM_TABLE_PREFIX, tablespace, 2, keys, exprs, vals, 0, 0, 0, 0, 0, 0, &resultMap);
+    result = RDBTableScanFirstInternal(1, ctx, RDB_SYSTEM_TABLE_PREFIX, tablespace, 2, keys, exprs, vals, 0, 0, 0, 0, 0, 0, &resultMap);
     if (result == RDBAPI_SUCCESS) {
         int ifld = 0;
 
@@ -1420,8 +1422,7 @@ static int ResultMapParseRowkeyValues (RDBResultMap resultMap, const char *rowke
     if (resultMap->keyprefix) {
         char *p = strstr(resultMap->keyprefix, ":$");
         if (p) {
-            if (! cstr_notequal_len(rowkeystr, rowkeylen, resultMap->keyprefix, (int)(p - resultMap->keyprefix + 1))) {
-
+            if (cstr_startwith(rowkeystr, rowkeylen, resultMap->keyprefix, (int)(p - resultMap->keyprefix + 1))) {
                 // skip over prefix ok
                 const char *val = &rowkeystr[p - resultMap->keyprefix + 1];
                 const char *end = strchr(val, ':');
@@ -1457,13 +1458,14 @@ static int ResultMapParseRowkeyValues (RDBResultMap resultMap, const char *rowke
 }
 
 
-static void RDBResultMapPrintOutCallback (void *_reply, void *_arg)
+static void RDBResultMapPrintOutCallback (void *result, void *_arg)
 {
     int i;
     int num;
 
-    redisReply *reply = (redisReply *)_reply;
     RDBResultMap resultMap = (RDBResultMap)_arg;
+
+    redisReply *reply = (redisReply *) result;
 
     RDBFieldsMap fieldsamp = RDBTableFetchFields(resultMap->ctxh, reply->str);
 
@@ -1481,16 +1483,22 @@ static void RDBResultMapPrintOutCallback (void *_reply, void *_arg)
         if (! resultMap->fielddes[i].rowkey) {
             // print value for fields
             redisReply * fieldValue = RDBFieldsMapGetField(fieldsamp, resultMap->fielddes[i].fieldname);
-            if (fieldValue) {
 
-                if (num) {
-                    printf("%c%s", resultMap->delimiter, fieldValue->str);
+            if (num) {
+                if (fieldValue && fieldValue->str) {
+                    printf("%c%.*s", resultMap->delimiter, fieldValue->len, fieldValue->str);
                 } else {
-                    printf("%s", fieldValue->str);
+                    printf("%c(null)", resultMap->delimiter);
                 }
-
-                num++;
+            } else {
+                if (fieldValue && fieldValue->str) {
+                    printf("%.*s", fieldValue->len, fieldValue->str);
+                } else {
+                    printf("(null)");
+                }
             }
+
+            num++;
         }
     }
 
@@ -1522,8 +1530,16 @@ void RDBResultMapPrintOut (RDBResultMap resultMap, RDBAPI_BOOL withHead)
         size_t len = 0;
 
         printf("\n# Keys Prefix: %.*s", resultMap->kplen, resultMap->keyprefix);
-        printf("\n# Last Offset: %"PRIu64, RDBResultMapGetOffset(resultMap));
-        printf("\n# Num of Rows: %"PRIu64"\n", RDBResultMapSize(resultMap));
+
+        if (resultMap->rdbsql) {
+            printf("\n# Last Offset: %"PRIu64, RDBResultMapGetOffset(resultMap));
+        }
+
+        if (resultMap->rbtree.iSize) {
+            printf("\n# Num of Rows: %"PRIu64, RDBResultMapSize(resultMap));
+        }
+
+        printf("\n");
 
         for (i = 1; i <= resultMap->rowkeyid[0]; i++) {
             int j = resultMap->rowkeyid[i];

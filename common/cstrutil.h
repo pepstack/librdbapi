@@ -60,6 +60,17 @@ static char * cstr_trim_chr (char * s, char c)
 }
 
 
+static char * cstr_trim_chr_mul (char * str, const char * chrs, int num)
+{
+    char *s = str;
+    while (num-- > 0) {
+        char ch = chrs[num];
+        s = cstr_trim_chr(s, ch);
+    }
+    return s;
+}
+
+
 static char * cstr_Ltrim_chr (char * str, char ch)
 {
     char *p = str;
@@ -94,6 +105,66 @@ static char * cstr_Rtrim_chr (char * str, char ch)
 static char * cstr_LRtrim_chr (char * str, char c)
 {
     return cstr_Rtrim_chr(cstr_Ltrim_chr(str, c), c);
+}
+
+
+static char * cstr_replace_chr (char * str, char ch, char rpl)
+{
+    char *p = str;
+    while (p && *p) {
+        if (*p == ch) { 
+            *p = rpl;
+        }
+        p++;
+    }
+    return str;
+}
+
+
+static int cstr_slpit_chr (const char * str, int len, char delim, char **outs, int numouts)
+{
+    char *p;
+    const char *s = str;
+
+    int i = 0;
+
+    int n = 1;
+    while (s && (p = strchr(s, delim)) && (p < str +len)) {
+        s = p+1;
+
+        n++;
+    }
+
+    if (! outs) {
+        return n;
+    }
+
+    if (n > 0) {
+        char *s0 = malloc(len + 1);
+        memcpy(s0, str, len);
+        s0[len] = 0;
+
+        s = s0;
+        while (s && (p = strchr(s, delim))) {
+            *p++ = 0;
+
+            if (i < numouts) {
+                outs[i++] = strdup(s);
+            } else {
+                break;
+            }            
+
+            s = p;
+        }
+
+        if (i < numouts) {
+            outs[i++] = strdup(s);
+        }
+
+        free(s0);
+    }
+
+    return i;
 }
 
 
@@ -365,6 +436,55 @@ static int cstr_containwith (const char *str, int count, const char *sub, int su
 
     return cstr_bool_false;
 }
+
+
+static int cstr_startwith_mul (const char *str, int count, const char *starts[], const int *startslen, int startsnum)
+{
+    while (startsnum-- > 0) {
+        const char *s = starts[startsnum];
+
+        if (s) {
+            int len = (startslen? startslen[startsnum] : (int) strlen(s));
+
+            if (cstr_startwith(str, count, s, len)) {
+                return startsnum;
+            }
+        }
+    }
+
+    return (-1);
+}
+
+
+static int cstr_endwith_mul (const char *str, int count, const char *ends[], const int *endslen, int endsnum)
+{
+    while (endsnum-- > 0) {
+        const char *s = ends[endsnum];
+
+        if (s) {
+            int len = (endslen? endslen[endsnum] : (int) strlen(s));
+
+            if (cstr_endwith(str, count, s, len)) {
+                return endsnum;
+            }
+        }
+    }
+
+    return (-1);
+}
+
+
+static int cstr_findstr_in (const char *str, int count, const char *dests[], int destsnum)
+{
+    while (destsnum-- > 0) {
+        if (! cstr_notequal_len(str, count, dests[destsnum], (int)strlen(dests[destsnum]))) {
+            return destsnum;
+        }
+    }
+
+    return (-1);
+}
+
 
 #ifdef __cplusplus
 }

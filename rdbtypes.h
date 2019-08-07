@@ -50,7 +50,11 @@ extern "C"
 
 #include "common/memapi.h"
 #include "common/cstrutil.h"
+
+#include "common/red_black_tree.h"
+
 #include "common/uthash/uthash.h"
+#include "common/uthash/utarray.h"
 
 
 typedef struct _RDBEnvNode_t * RDBEnvNodeMap;
@@ -190,6 +194,36 @@ typedef struct _RDBAsynCtx_t
 
 #define RDBCTX_ERRMSG_ZERO(ctxp)   *(ctxp->errmsg) = '\0'
 #define RDBCTX_ERRMSG_DONE(ctxp)   ctxp->errmsg[RDB_ERROR_MSG_LEN] = '\0'
+
+
+typedef struct _RDBResultMap_t
+{
+    RDBCtx ctxh;
+
+    RDBTableSql rdbsql;
+
+    char delimiter;
+
+    red_black_tree_t  rbtree;
+
+    // temp variables
+    int rowkey_offs[RDBAPI_SQL_KEYS_MAX];
+    int rowkey_lens[RDBAPI_SQL_KEYS_MAX];
+
+    // constants
+    int rowkeyid[RDBAPI_SQL_KEYS_MAX + 1];
+
+    int kplen;
+    char *keyprefix;
+
+    int numfields;
+    RDBFieldDesc fielddes[0];
+} RDBResultMap_t;
+
+
+int RDBBuildKeyFormat (const char * tablespace, const char * tablename, const RDBFieldDesc *fielddes, int numfields, int *rowkeyid, char **keyformat);
+
+RDBAPI_RESULT RDBResultMapNew (RDBTableSql rdbsql, int numfields, const RDBFieldDesc *fielddes, RDBResultMap *phResultMap);
 
 #if defined(__cplusplus)
 }
