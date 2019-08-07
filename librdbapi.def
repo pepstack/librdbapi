@@ -15,6 +15,7 @@ EXPORTS
 	RDBThreadCtxFree
 
     RDBEnvCreate
+	RDBEnvCreateInit
     RDBEnvDestroy
     RDBEnvNumNodes
 	RDBEnvNumMasterNodes

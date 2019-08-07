@@ -342,6 +342,8 @@ extern void RDBThreadCtxFree (RDBThreadCtx thrctx);
 
 extern RDBAPI_RESULT RDBEnvCreate (ub4 flags, ub2 clusternodes, RDBEnv *outenv);
 
+extern RDBAPI_RESULT RDBEnvCreateInit (const char *cfgfile, RDBEnv *outenv);
+
 extern void RDBEnvDestroy (RDBEnv env);
 
 extern int RDBEnvNumNodes (RDBEnv env);
@@ -376,7 +378,7 @@ extern int RDBEnvNodeGetSlaves (RDBEnvNode envnode, int slaveindex[RDBAPI_SLAVES
  *   - 127.0.0.1:7001-7009
  *   - 127.0.0.1:7001,127.0.0.1:7002-7005,...
  *   - 192.168.22.11:7001-7003,192.168.22.12:7001-7003,...
- *   - authpass@host:port,...
+ *   - authpass@host:port,authpass@host2:port2,...
  */
 extern RDBAPI_RESULT RDBEnvInitAllNodes (RDBEnv env, const char *ahostport, size_t ahostportlen, ub4 ctxtimeout, ub4 sotimeoms);
 

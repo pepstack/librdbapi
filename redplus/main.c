@@ -13,6 +13,7 @@
 #define APPVER   "0.0.1"
 
 #ifdef __WINDOWS__
+
 /** memory leak auto-detect in MSVC
  * https://blog.csdn.net/lyc201219/article/details/62219503
  */
@@ -28,14 +29,105 @@
 # pragma comment(lib, "Win32_Interop.lib")
 
 # pragma comment(lib, "liblog4c.lib")
+
 #else
+
 /* Linux: link liblog4c.lib */
 # include <getopt.h>  /* getopt_long */
 # include <common/log4c_logger.h>
+
 #endif
 
 
 #include <common/cstrutil.h>
+
+
+#ifndef __WINDOWS__
+/**
+ * realfilepath()
+ *   for linux
+ *
+ * returns:
+ *   success:
+ *     > 0 - length of rpdir
+ *   error:
+ *     <= 0 - failed anyway
+ */
+static int realfilepath (const char * file, char * rpdirbuf, size_t maxlen)
+{
+    char * p;
+
+    p = realpath(file, 0);
+
+    if (p) {
+        snprintf(rpdirbuf, maxlen, "%s", p);
+
+        free(p);
+
+        p = strrchr(rpdirbuf, '/');
+        if (p) {
+            *++p = 0;
+
+            /* success return here */
+            return (int)(p - rpdirbuf);
+        }
+
+        snprintf(rpdirbuf, maxlen, "invlid path: %s", file);
+        return 0;
+    }
+
+    snprintf(rpdirbuf, maxlen, "realpath error(%d): %s", errno, strerror(errno));
+    return (-2);
+}
+#endif
+
+
+static int get_app_path (const char *argv0, char apppath[256])
+{
+    bzero(apppath, sizeof(apppath));
+
+#ifdef __WINDOWS__
+# define PATH_SEPARATOR_CHAR  '\\'
+
+    GetModuleFileNameA(NULL, apppath, 256);
+
+    if (strnlen(apppath, 256) == 256) {
+        printf("app path too long: %s\n", argv0);
+        return (-1);
+    }
+
+    if (! strrchr(apppath, PATH_SEPARATOR_CHAR)) {
+        printf("invalid path: %s\n", apppath);
+        return (-1);
+    }
+
+    *strrchr(apppath, PATH_SEPARATOR_CHAR) = 0;
+
+    return (int) strlen(apppath);
+
+#else
+# define PATH_SEPARATOR_CHAR  '/'
+
+    int ret = realfilepath(argv0, apppath, 255);
+
+    if (ret <= 0) {
+        fprintf(stderr, "\033[1;31m[error]\033[0m %s\n", apppath);
+        return (-1);
+    }
+
+    if (strrchr(apppath, PATH_SEPARATOR_CHAR) == strchr(apppath, PATH_SEPARATOR_CHAR)) {
+        fprintf(stderr, "\033[1;31m[error]\033[0m under root path: %s\n", apppath);
+        return (-1);
+    }
+
+    if (ret > 255) {
+        fprintf(stderr, "\033[1;31m[error]\033[0m path is too long: %s\n", apppath);
+        return (-1);
+    }
+
+    return ret;
+#endif
+}
 
 
 static void redplus_check_result(const char *errsour, RDBCtx ctx, RDBAPI_RESULT res)
@@ -51,9 +143,9 @@ static void redplus_check_result(const char *errsour, RDBCtx ctx, RDBAPI_RESULT 
 
 void redplus_print_usage();
 
-int redplus_exec_command (const char *cluster, int numnodes, const char *command, const char *output);
+int redplus_exec_command (RDBEnv env, const char *command, const char *output);
 
-int redplus_exec_redsql (const char *cluster, int numnodes, const char *redsql, const char *output);
+int redplus_exec_redsql (RDBEnv env, const char *redsql, const char *output);
 
 
 int main(int argc, const char *argv[])
@@ -82,7 +174,29 @@ int main(int argc, const char *argv[])
     char redsql[2048] = {0};
     char output[256] = {0};
 
+    char appcfg[260] = {0};
+
     int numnodes = 9;
+    int ctxtimeout = 0;         // seconds
+    int sotimeoms = 12000;      // milliseconds
+
+    char *nodenames[RDB_CLUSTER_NODES_MAX] = {0};
+
+    char ts[24];
+    ub8 startTime, endTime;
+
+    RDBEnv env = NULL;
+
+    startTime = RDBCurrentTime(1, ts);
+    printf("# %s-%s start : %s\n", APPNAME, APPVER, ts);
+
+    ch = get_app_path(argv[0], appcfg);
+    if (ch == -1) {
+        exit(-1);
+    }
+
+    appcfg[ch++] = PATH_SEPARATOR_CHAR;
+    snprintf(appcfg + ch, 260 - ch - 1, "%s.cfg", APPNAME);
 
     while ((ch = getopt_long_only(argc, (char *const *) argv, "hVR:C:S:O:", lopts, &index)) != -1) {
         switch (ch) {
@@ -137,21 +251,31 @@ int main(int argc, const char *argv[])
     redsql[2047] = 0;
     output[255] = 0;
 
-    char ts[24];
+    if (cluster[0]) {
+        printf("# redis cluster: %s\n", cluster);
+        if (RDBEnvCreate(0, numnodes, &env) == RDBAPI_SUCCESS) {
+            if (RDBEnvInitAllNodes(env, cluster, -1, ctxtimeout, sotimeoms) != RDBAPI_SUCCESS) {
+                RDBEnvDestroy(env);
+                env = NULL;
+            }
+        }
+    } else {
+        printf("# load config: %s\n", appcfg);
+        RDBEnvCreateInit(appcfg, &env);
+    }
 
-    ub8 startTime = RDBCurrentTime(1, ts);
+    if (! env) {
+        printf("# No Cluster.\n");
+        exit(EXIT_FAILURE);
+    }
 
-    printf("# %s-%s start : %s\n"
-           "# redis cluster : %s\n"
-           "# numb of nodes : %d\n",
-           APPNAME, APPVER, ts, cluster, numnodes);
+    redplus_exec_command(env, command, output);
 
-    // redplus_exec_command(cluster, numnodes, command, output);
+    redplus_exec_redsql(env,  redsql, output);
 
-    redplus_exec_redsql(cluster, numnodes, redsql, output);
+    RDBEnvDestroy(env);
 
-    ub8 endTime = RDBCurrentTime(1, ts);
-
+    endTime = RDBCurrentTime(1, ts);
     printf("\n\n# end on: %s. elapsed: %.3lf seconds.\n", ts, (endTime - startTime) * 0.001);
  	return 0;
 }
@@ -177,55 +301,23 @@ void redplus_print_usage()
 }
 
 
-int redplus_exec_command (const char *cluster, int numnodes, const char *command, const char *output)
+int redplus_exec_command (RDBEnv env, const char *command, const char *output)
 {
-    RDBAPI_RESULT err;
-    RDBEnv env;
-    RDBCtx ctx;
 
-    RDBEnvCreate(0, numnodes, &env);
-
-    err = RDBEnvInitAllNodes(env, cluster, -1, 0, 12000);
-    if (err) {
-        printf("RDBEnvInitAllNodes failed(%d).\n", err);
-        exit(EXIT_FAILURE);
-    }
-
-    err = RDBCtxCreate(env, &ctx);
-    if (err) {
-        printf("RDBCtxCreate failed(%d).\n", err);
-        exit(EXIT_FAILURE);
-    }
-
-    RDBCtxFree(ctx);
-    RDBEnvDestroy(env);
     return 0;
 }
 
 
-int redplus_exec_redsql (const char *cluster, int numnodes, const char *rdbsql, const char *output)
+int redplus_exec_redsql (RDBEnv env, const char *rdbsql, const char *output)
 {
     RDBAPI_RESULT err = RDBAPI_ERROR;
 
-    RDBEnv env = NULL;
     RDBCtx ctx = NULL;
 
     RDBResultMap resultMap = NULL;
     RDBSQLParser sqlparser = NULL;
 
     ub8 offset = RDBAPI_ERROR;
-
-    err = RDBEnvCreate(0, numnodes, &env);
-    if (err) {
-        printf("RDBEnvCreate error(%d).\n", err);
-        goto error_exit;
-    }
-
-    err = RDBEnvInitAllNodes(env, cluster, -1, 0, 12000);
-    if (err) {
-        printf("RDBEnvInitAllNodes error(%d).\n", err);
-        goto error_exit;
-    }
 
     err = RDBCtxCreate(env, &ctx);
     if (err) {
@@ -260,7 +352,6 @@ int redplus_exec_redsql (const char *cluster, int numnodes, const char *rdbsql, 
     RDBSQLParserFree(sqlparser);
     RDBResultMapFree(resultMap);
     RDBCtxFree(ctx);
-    RDBEnvDestroy(env);
 
     return RDBAPI_SUCCESS;
 
@@ -275,10 +366,6 @@ error_exit:
 
     if (ctx) {
         RDBCtxFree(ctx);
-    }
-
-    if (env) {
-        RDBEnvDestroy(env);
     }
 
     return err;

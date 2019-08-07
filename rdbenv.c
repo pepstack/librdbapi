@@ -62,6 +62,97 @@ RDBAPI_RESULT RDBEnvCreate (ub4 flags, ub2 clusternodes, RDBEnv *outenv)
 }
 
 
+RDBAPI_RESULT RDBEnvCreateInit (const char *appcfg, RDBEnv *outenv)
+{
+    int numnodes = 0;
+
+    int ctxtimeout = 0;
+    int sotimeoms = 12000;
+
+    char *nodenames[RDB_CLUSTER_NODES_MAX] = {0};
+
+    FILE *fp;
+
+    if ((fp = fopen(appcfg, "r")) != NULL) {
+        int nn = 0;
+        int nnlen = 0;
+
+        numnodes = 0;
+
+        while (!feof(fp) && nn < RDB_CLUSTER_NODES_MAX) {
+            char rdbuf[256] = {0};
+
+            fgets(rdbuf, 255, fp);
+
+            if (! numnodes) {
+                char *outs[20] = {0};
+
+                int n = cstr_slpit_chr(rdbuf, (int) strnlen(rdbuf, 255), ',', outs, 3);
+                if (n >= 1) {
+                    numnodes = atoi(outs[0]);
+                    free(outs[0]);
+                }
+                if (n >= 2) {
+                    ctxtimeout = atoi(outs[1]);
+                    free(outs[1]);
+                }
+                if (n == 3) {
+                    sotimeoms = atoi(outs[2]);
+                    free(outs[2]);
+                }
+            } else {
+                nodenames[nn] = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(cstr_LRtrim_chr(rdbuf, '\r'), '\n'), 32));
+                nnlen += (int) strlen(nodenames[nn]);
+                nn++;
+            }
+        }
+
+        fclose(fp);
+
+        if (! nn || ! numnodes || nnlen + numnodes > 4095) {
+            while(nn-- > 0) {
+                free(nodenames[nn]);
+            }
+            return RDBAPI_ERROR;
+        }
+
+        do {
+            int n = 1;
+            char cluster[4096] = {0};
+
+            strcat(cluster, nodenames[0]);
+
+            while (n++ < nn) {
+                strcat(cluster, ",");
+                strcat(cluster, nodenames[nn]);
+            }
+
+            cluster[nnlen + numnodes] = 0;
+        
+            RDBEnv env;
+            if (RDBEnvCreate(0, numnodes, &env) == RDBAPI_SUCCESS) {
+                if (RDBEnvInitAllNodes(env, cluster, -1, ctxtimeout, sotimeoms) == RDBAPI_SUCCESS) {
+                    *outenv = env;
+
+                    while(nn-- > 0) {
+                        free(nodenames[nn]);
+                    }
+                    return RDBAPI_SUCCESS;
+                }
+
+                RDBEnvDestroy(env);
+            }
+        } while(0);
+
+        while(nn-- > 0) {
+            free(nodenames[nn]);
+        }
+    }
+
+    return RDBAPI_ERROR;
+}
+
+
 void RDBEnvDestroy (RDBEnv env)
 {
     int section;
@@ -215,121 +306,92 @@ const char * RDBEnvNodeHostPort (RDBEnvNode envnode)
  *   - 192.168.22.11:7001-7003,192.168.22.12:7001-7003,...
  *   - authpass@host:port,...
  */
-
-static char * strtrimchr (char *s, char c)
+static int RDBEnvNodeParseHosts (RDBEnv_t *env, const char *hosts, size_t hostslen, ub4 ctxtimeout, ub4 sotimeoms)
 {
-    return (*s==0)?s:(((*s!=c)?(((strtrimchr(s+1,c)-1)==s)?s:(*(strtrimchr(s+1,c)-1)=*s,*s=c,strtrimchr(s+1,c))):strtrimchr(s+1,c)));
-}
+    char *nodenames[RDB_CLUSTER_NODES_MAX] = {0};
+    int nn = cstr_slpit_chr(hosts, (int) hostslen, ',', nodenames, RDB_CLUSTER_NODES_MAX);
 
+    int nodeindex = 0;
 
-static int port_str2no (char *port, int portnomin, int portnomax)
-{
-    int pno = 0;
+    while (nodeindex < RDB_CLUSTER_NODES_MAX && nodenames[nodeindex]) {
+        // pass@host:port
+        char *authpass = NULL;
+        char *host = NULL;
+        char *port = NULL;
 
-    char *p = port;
+        char *outs[2] = {0};
 
-    while (*p) {
-        if (! isdigit(*p)) {
-            return 0;
-        }
+        int flds = cstr_slpit_chr(nodenames[nodeindex], (int)strlen(nodenames[nodeindex]), '@', outs, 2);
 
-        p++;
+        if (flds == 1) {
+            // no pass
+            char *hpouts[2] = {0};
 
-        if (p - port > 8) {
-            return 0;
-        }
-    }
-
-    if (p == port) {
-        return 0;
-    }
-
-    pno = atoi(port);
-
-    if (pno < portnomin || pno > portnomax) {
-        return 0;
-    }
-
-    return pno;
-}
-
-
-static int _RDBEnvNodeParseHosts (RDBEnv_t *env, const char *hosts, size_t hostslen, ub4 ctxtimeout, ub4 sotimeoms)
-{
-    char *sbuf, *nbuf, *hp, *port, *endp;
-
-    int pno, nodeindex = 0;
-
-    sbuf = (char *) mem_alloc_zero(1, hostslen + 1);
-
-    memcpy(sbuf, hosts, hostslen);
-
-    nbuf = strtrimchr(sbuf, 32);
-
-    hp = strtok(nbuf, ",");
-    while (hp) {
-        int startpno, endpno;
-
-        port = strchr(hp, ':');
-        if (! port) {
-            free(sbuf);
-            return 0;
-        }
-
-        *port++ = 0;
-
-        endp = strchr(port, '-');
-        if (endp) {
-            *endp++ = 0;
-
-            startpno = port_str2no(port, RDB_PORT_NUMB_MIN, RDB_PORT_NUMB_MAX);
-            endpno = port_str2no(endp, RDB_PORT_NUMB_MIN, RDB_PORT_NUMB_MAX);
-        } else {
-            startpno = port_str2no(port, RDB_PORT_NUMB_MIN, RDB_PORT_NUMB_MAX);
-            endpno = startpno;
-        }
-
-        if (startpno == 0 || endpno == 0 || startpno > endpno || endpno - startpno > env->clusternodes) {
-            free(sbuf);
-            return 0;
-        }
-
-        for (pno = startpno; pno <= endpno; pno++) {
-            if (nodeindex < env->clusternodes) {
-                char hostname[RDB_HOSTADDR_MAXLEN + 1];
-                char authpass[RDB_AUTHPASS_MAXLEN + 1];
-
-                char *at = strrchr(hp, '@');
-                if (at) {
-                    snprintf(hostname, sizeof(hostname), "%s", at + 1);
-                    if (hp[0] == '\'' || hp[0] == '"') {
-                        snprintf(authpass, sizeof(authpass), "%.*s", (int)(at - hp - 2), hp + 1);
-                    } else {
-                        snprintf(authpass, sizeof(authpass), "%.*s", (int)(at - hp), hp);
-                    }
-                } else {
-                    snprintf(hostname, sizeof(hostname), "%s", hp);
-                    authpass[0] = '\0';
+            if (cstr_slpit_chr(nodenames[nodeindex], (int)strlen(nodenames[nodeindex]), ':', hpouts, 2) == 2) {
+                if (cstr_slpit_chr(outs[1], (int)strlen(outs[1]), ':', hpouts, 2) == 2) {
+                    host = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[0], 32), '\''));
+                    port = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[1], 32), '\''));
                 }
 
-                hostname[RDB_HOSTADDR_MAXLEN] = 0;
-                authpass[RDB_AUTHPASS_MAXLEN] = 0;
+                free(hpouts[0]);
+                free(hpouts[1]);
+            }
+        } else if (flds == 2) {
+            char *hpouts[2] = {0};
 
-                RDBEnvSetNode(RDBEnvGetNode(env, nodeindex), hostname, pno, ctxtimeout, sotimeoms, authpass);
-            } else {
-                free(sbuf);
-                return (-1);
+            authpass = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(outs[0], 32), '\''));
+
+            if (cstr_slpit_chr(outs[1], (int)strlen(outs[1]), ':', hpouts, 2) == 2) {
+                host = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[0], 32), '\''));
+                port = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[1], 32), '\''));
             }
 
-            nodeindex++;
+            free(hpouts[0]);
+            free(hpouts[1]);
         }
 
-        if (nodeindex == env->clusternodes) {
+        free(outs[0]);
+        free(outs[1]);
+
+        if (! host || !port) {
+            free(host);
+            free(port);
+            free(authpass);
+
             break;
         }
+
+        do {
+            char *pnouts[2] = {0};
+
+            if (cstr_slpit_chr(port, (int) strlen(port), '-', pnouts, 2) == 2) {
+                int pno = atoi(pnouts[0]);
+                int endpno = atoi(pnouts[1]);
+
+                for (; pno <= endpno; pno++) {
+                    RDBEnvSetNode(RDBEnvGetNode(env, nodeindex), host, (ub4) pno, ctxtimeout, sotimeoms, authpass);
+
+                    nodeindex++;
+                }
+            } else {
+                RDBEnvSetNode(RDBEnvGetNode(env, nodeindex), host, (ub4) atol(port), ctxtimeout, sotimeoms, authpass);
+
+                nodeindex++;
+            }
+
+            free(pnouts[0]);
+            free(pnouts[1]);
+        } while(0);
+
+        free(host);
+        free(port);
+        free(authpass);
     }
 
-    free(sbuf);
+    while (nn-- > 0) {
+        free(nodenames[nn]);
+    }
+
     return nodeindex;
 }
 
@@ -346,7 +408,7 @@ RDBAPI_RESULT RDBEnvInitAllNodes (RDBEnv env, const char *ahostport, size_t ahos
         return RDBAPI_ERR_BADARG;
     }
 
-    if (_RDBEnvNodeParseHosts(env, ahostport, ahostportlen, ctxtimeout, sotimeoms) == env->clusternodes) {
+    if (RDBEnvNodeParseHosts(env, ahostport, ahostportlen, ctxtimeout, sotimeoms) == env->clusternodes) {
         return RDBAPI_SUCCESS;
     } else {
         return RDBAPI_ERROR;
