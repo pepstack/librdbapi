@@ -673,11 +673,12 @@ RDBAPI_BOOL onParseUpdate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 
 RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len)
 {
-    /* -S"CREATE TABLE    IF NOT EXISTS  xsdb.connect     (sid       UB4     NOT NULL COMMENT '服务ID',           connfd    UB4     NOT NULL COMMENT '连接描述符',           sessionid UB8X           COMMENT '临时会话键',          port      UB4              COMMENT '客户端端口',          host      STR(30)          COMMENT '客户端IP地址',          hwaddr    STR(30)          COMMENT '网卡地址(字符串)',          agent     STR(30)          COMMENT '连接终端代理类型',          ROWKEY(sid|connfd)) COMMENT '客户端临时连接表';"
+    /* -S"redplus.exe -S"CREATE TABLE IF NOT EXISTS xsdb.connect (sid UB4 NOT NULL COMMENT '服务ID', connfd UB4 NOT NULL COMMENT '连接描述符', sessionid UB8X COMMENT '临时会话键', port UB4 COMMENT '客户端端口', host STR(30) COMMENT '客户端IP地址', hwaddr STR(30) COMMENT '网卡地址(字符串)', agent STR(30) COMMENT '连接终端代理类型', ROWKEY(sid | connfd) ) COMMENT '客户端临时连接表';"
+
         CREATE TABLE IF NOT EXISTS xsdb.connect (
           sid       UB4     NOT NULL COMMENT '服务ID',
           connfd    UB4     NOT NULL COMMENT '连接描述符',
-          sessionid UB8HEX           COMMENT '临时会话键',
+          sessionid UB8X             COMMENT '临时会话键',
           port      UB4              COMMENT '客户端端口',
           host      STR(30)          COMMENT '客户端IP地址',
           hwaddr    STR(30)          COMMENT '网卡地址(字符串)',
@@ -701,8 +702,8 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 
     datatypes[RDBVTYPE_SB2] = "SB2";
     datatypes[RDBVTYPE_UB2] = "UB2";
-    datatypes[RDBVTYPE_UB4] = "UB4";
-    datatypes[RDBVTYPE_UB4X] = "UB4X",
+    datatypes[RDBVTYPE_UB4] = "UB4";    
+    datatypes[RDBVTYPE_UB4X] = "UB4X",    
     datatypes[RDBVTYPE_SB8] = "SB8";
     datatypes[RDBVTYPE_UB8] = "UB8";
     datatypes[RDBVTYPE_UB8X] = "UB8X";
@@ -803,7 +804,8 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
                 fld = cstr_Ltrim_chr(p, 32);
                 int j = cstr_startwith_mul(fld, (int) strlen(fld), datatypes, NULL, 256);
                 if (j == -1) {
-                    // ERROR
+                    // TODO: ERROR: unknown type
+                    
                 }
 
                 fielddefs[numfields].fieldtype = (RDBValueType) j;
