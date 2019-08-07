@@ -166,6 +166,8 @@ typedef int RDBAPI_BOOL;
 #define RDB_FIELD_FLT_SCALE_MIN        (-84)
 #define RDB_FIELD_FLT_SCALE_MAX        127
 
+#define RDB_SQL_TOTAL_LEN_MAX          4000
+#define RDB_SQL_WHERE_LEN_MAX          1000
 
 /**********************************************************************
  *

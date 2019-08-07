@@ -115,7 +115,7 @@ RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQL
     int len = 0;
 
     if (sqlen == (size_t) -1) {
-        len = (int) strnlen(sql, 4096);
+        len = (int) strnlen(sql, RDB_SQL_TOTAL_LEN_MAX + 1);
     } else {
         len = (int) sqlen;
     }
@@ -126,7 +126,7 @@ RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQL
         return RDBAPI_ERR_RDBSQL;
     }
 
-    if (len > 4095) {
+    if (len > RDB_SQL_TOTAL_LEN_MAX) {
         snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_RDBSQL: sql is too long");
         RDBCTX_ERRMSG_DONE(ctx);
         return RDBAPI_ERR_RDBSQL;
@@ -549,8 +549,8 @@ RDBAPI_BOOL onParseSelect (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
     char *psz;
 
     char table[RDB_KEY_NAME_MAXLEN * 2 + 10 + 1] = {0};
-    char fields[1024] = {0};    
-    char wheres[1024] = {0};
+    char fields[RDB_SQL_TOTAL_LEN_MAX + 2] = {0};
+    char wheres[RDB_SQL_WHERE_LEN_MAX + 2] = {0};
 
     char offset[32] = {0};
     char limit[32] = {0};
@@ -564,7 +564,6 @@ RDBAPI_BOOL onParseSelect (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
     }
 
     snprintf(fields, sizeof(fields) - 1, "%.*s", (int)(_from - sql), sql);
-
     snprintf(table, sizeof(table) - 1, "%.*s", RDB_KEY_NAME_MAXLEN * 2 + 10, _from + strlen(" FROM "));
 
     psz = strstr(table, " WHERE ");

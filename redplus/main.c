@@ -271,7 +271,7 @@ int main(int argc, const char *argv[])
 
     redplus_exec_command(env, command, output);
 
-    redplus_exec_redsql(env,  redsql, output);
+    redplus_exec_redsql(env, redsql, output);
 
     RDBEnvDestroy(env);
 
