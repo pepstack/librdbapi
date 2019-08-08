@@ -345,6 +345,8 @@ int redplus_exec_redsql (RDBEnv env, const char *rdbsql, const char *output)
         RDBResultMapPrintOut(resultMap, 1);
 
         printf("table create success.\n");
+    } else if (RDBSQLParserGetStmt(sqlparser, NULL, 0) == RDBSQL_DESC_TABLE) {
+        printf("success.\n");
     }
 
     RDBResultMapClean(resultMap);

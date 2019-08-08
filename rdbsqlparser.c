@@ -43,6 +43,10 @@ typedef struct _RDBSQLParser_t
 {
     RDBSQLStmt stmt;
 
+    char *datatypes[256];
+
+    char datatypesbuf[256];
+
     union {
         struct SELECT {
             char tablespace[RDB_KEY_NAME_MAXLEN + 1];
@@ -96,6 +100,11 @@ typedef struct _RDBSQLParser_t
 
             int fail_on_exists;
         } create;
+
+        struct DESC_TABLE {
+            char tablespace[RDB_KEY_NAME_MAXLEN + 1];
+            char tablename[RDB_KEY_NAME_MAXLEN + 1];
+        } desctable;
     };
 
     int sqlen;
@@ -106,6 +115,7 @@ RDBAPI_BOOL onParseSelect (RDBSQLParser_t * parser, RDBCtx ctx, char *selsql, in
 RDBAPI_BOOL onParseDelete (RDBSQLParser_t * parser, RDBCtx ctx, char *delsql, int len);
 RDBAPI_BOOL onParseUpdate (RDBSQLParser_t * parser, RDBCtx ctx, char *updsql, int len);
 RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *cresql, int len);
+RDBAPI_BOOL onParseDesc (RDBSQLParser_t * parser, RDBCtx ctx, char *cresql, int len);
 
 
 RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQLParser *outParser)
@@ -120,7 +130,7 @@ RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQL
         len = (int) sqlen;
     }
 
-    if (len < 16) {
+    if (len < 8) {
         snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_RDBSQL: sql is too short");
         RDBCTX_ERRMSG_DONE(ctx);
         return RDBAPI_ERR_RDBSQL;
@@ -167,6 +177,11 @@ RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQL
         parseOk = onParseCreate(parser, ctx, parser->sql + strlen("CREATE TABLE "), parser->sqlen - (int)strlen("CREATE TABLE "));
         parser->stmt = parseOk? RDBSQL_CREATE : RDBSQL_INVALID;
 
+    } else if (cstr_startwith(parser->sql, parser->sqlen, "DESC ", (int)strlen("DESC "))) {
+
+        parseOk = onParseDesc(parser, ctx, parser->sql + strlen("DESC "), parser->sqlen - (int)strlen("DESC "));
+        parser->stmt = parseOk? RDBSQL_DESC_TABLE : RDBSQL_INVALID;
+
     } else {
         snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_RDBSQL: invalid sql");
         RDBCTX_ERRMSG_DONE(ctx);
@@ -181,6 +196,58 @@ RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQL
     }
 
     RDBCTX_ERRMSG_ZERO(ctx);
+
+    len = 0;
+    snprintf(parser->datatypesbuf + len, 6, "SB2");
+    parser->datatypes[RDBVT_SB2] = &parser->datatypesbuf[len];
+
+    len += 8;
+    snprintf(parser->datatypesbuf + len, 6, "UB2");
+    parser->datatypes[RDBVT_UB2] = &parser->datatypesbuf[len];
+
+    len += 8;
+    snprintf(parser->datatypesbuf + len, 6, "UB4");
+    parser->datatypes[RDBVT_UB4] = &parser->datatypesbuf[len];
+
+    len += 8;
+    snprintf(parser->datatypesbuf + len, 6, "UB4X");
+    parser->datatypes[RDBVT_UB4X] = &parser->datatypesbuf[len];
+
+    len += 8;
+    snprintf(parser->datatypesbuf + len, 6, "SB8");
+    parser->datatypes[RDBVT_SB8] = &parser->datatypesbuf[len];
+
+    len += 8;
+    snprintf(parser->datatypesbuf + len, 6, "UB8");
+    parser->datatypes[RDBVT_UB8] = &parser->datatypesbuf[len];
+
+    len += 8;
+    snprintf(parser->datatypesbuf + len, 6, "UB8X");
+    parser->datatypes[RDBVT_UB8X] = &parser->datatypesbuf[len];
+
+    len += 8;
+    snprintf(parser->datatypesbuf + len, 6, "CHAR");
+    parser->datatypes[RDBVT_CHAR] = &parser->datatypesbuf[len];
+
+    len += 8;
+    snprintf(parser->datatypesbuf + len, 6, "BYTE");
+    parser->datatypes[RDBVT_BYTE] = &parser->datatypesbuf[len];
+
+    len += 8;
+    snprintf(parser->datatypesbuf + len, 6, "STR");
+    parser->datatypes[RDBVT_STR] = &parser->datatypesbuf[len];
+
+    len += 8;
+    snprintf(parser->datatypesbuf + len, 6, "FLT64");
+    parser->datatypes[RDBVT_FLT64] = &parser->datatypesbuf[len];
+
+    len += 8;
+    snprintf(parser->datatypesbuf + len, 6, "BLOB");
+    parser->datatypes[RDBVT_BLOB] = &parser->datatypesbuf[len];
+
+    len += 8;
+    snprintf(parser->datatypesbuf + len, 6, "DEC");
+    parser->datatypes[RDBVT_DEC] = &parser->datatypesbuf[len];
 
     *outParser = parser;
     return RDBAPI_SUCCESS;
@@ -282,6 +349,40 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
                 *outResultMap = hMap;
                 return RDBAPI_SUCCESS;
             }
+        }
+    } else if (parser->stmt == RDBSQL_DESC_TABLE) {
+        int nfields = 0;
+        RDBFieldDesc fielddefs[RDBAPI_ARGV_MAXNUM + 1] = {0};
+
+        if (strcmp(parser->desctable.tablespace, RDB_SYSTEM_TABLE_PREFIX)) {
+            nfields = RDBTableDesc(ctx, parser->desctable.tablespace, parser->desctable.tablename, fielddefs);
+            if (nfields) {
+                // TODO: fill result map
+                int j;
+
+                printf("# Table: %s.%s\n", parser->desctable.tablespace, parser->desctable.tablename);
+                printf("#[     fieldname     | fieldtype | length |  scale  | rowkey | nullable | comment ]\n");
+                printf("#--------------------+-----------+--------+---------+--------+----------+----------\n");
+
+                for (j = 0; j < nfields; j++) {
+                    RDBFieldDesc *fdes = &fielddefs[j];
+
+                    printf(" %-20s| %8s  | %-6d |%8d |  %4d  |   %4d   | %s\n",
+                        fdes->fieldname,
+                        parser->datatypes[fdes->fieldtype],
+                        fdes->length,
+                        fdes->dscale,
+                        fdes->rowkey,
+                        fdes->nullable,
+                        fdes->comment);
+                }
+
+                printf("#----------------------------------------------------------------------------------\n");
+                return RDBAPI_SUCCESS;
+            }
+        } else {
+            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERROR: bad tablespace");
+            return (ub8) RDBAPI_ERROR;
         }
     }
 
@@ -689,8 +790,6 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
     */
     char table[RDB_KEY_NAME_MAXLEN * 2 + 10 + 1] = {0};
 
-    const char *datatypes[256] = {0};
-
     char * ifnex = NULL;
 
     char *leftp  = strchr(sql, '(');
@@ -700,20 +799,6 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
         snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "error CREATE TABLE grammar");
         return RDBAPI_FALSE;      
     }
-
-    datatypes[RDBVT_SB2] = "SB2";
-    datatypes[RDBVT_UB2] = "UB2";
-    datatypes[RDBVT_UB4] = "UB4";    
-    datatypes[RDBVT_UB4X] = "UB4X",    
-    datatypes[RDBVT_SB8] = "SB8";
-    datatypes[RDBVT_UB8] = "UB8";
-    datatypes[RDBVT_UB8X] = "UB8X";
-    datatypes[RDBVT_CHAR] = "CHAR";
-    datatypes[RDBVT_BYTE] = "BYTE";
-    datatypes[RDBVT_STR] = "STR";
-    datatypes[RDBVT_FLT64] = "DBL";
-    datatypes[RDBVT_BIN] = "BIN";
-    datatypes[RDBVT_DEC] = "DEC";
 
     ifnex = strstr(sql, "IF NOT EXISTS ");
     if (ifnex) {
@@ -803,7 +888,7 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
                 snprintf(fielddefs[numfields].fieldname, sizeof(fielddefs[numfields].fieldname) - 1, "%s", fld);
 
                 fld = cstr_Ltrim_chr(p, 32);
-                int j = cstr_startwith_mul(fld, (int) strlen(fld), datatypes, NULL, 256);
+                int j = cstr_startwith_mul(fld, (int) strlen(fld), parser->datatypes, NULL, 256);
                 if (j == -1) {
                     // TODO: ERROR: unknown type
                     
@@ -811,7 +896,7 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 
                 fielddefs[numfields].fieldtype = (RDBValueType) j;
 
-                if (fielddefs[numfields].fieldtype == RDBVT_STR || fielddefs[numfields].fieldtype == RDBVT_BIN) {
+                if (fielddefs[numfields].fieldtype == RDBVT_STR || fielddefs[numfields].fieldtype == RDBVT_BLOB) {
                     // STR(length)
                     char *a = strchr(fld, '(');
                     char *b = strchr(fld, ')');
@@ -879,6 +964,21 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
         }
 
         snprintf(parser->create.tablecomment, sizeof(parser->create.tablecomment) - 1, "%.*s", t2 - t1 - 1, t1 + 1);
+    }
+
+    return RDBAPI_TRUE;
+}
+
+
+RDBAPI_BOOL onParseDesc (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len)
+{
+    char table[RDB_KEY_NAME_MAXLEN * 2 + 10 + 1] = {0};
+
+    snprintf(table, sizeof(table) - 1, "%.*s", RDB_KEY_NAME_MAXLEN * 2 + 10, sql);
+
+    if (! parse_table(cstr_LRtrim_chr(table, 32), parser->desctable.tablespace, parser->desctable.tablename)) {
+        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "parse_table failed");
+        return RDBAPI_FALSE;
     }
 
     return RDBAPI_TRUE;

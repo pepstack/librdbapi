@@ -431,6 +431,22 @@ int RDBBuildKeyFormat (const char * tablespace, const char * tablename, const RD
 }
 
 
+static int RDBFieldIsRowkeyid (RDBResultMap hMap, int fieldindex)
+{
+    int k;
+
+    for (k = 1; k <= hMap->rowkeyid[0]; k++) {
+        if (fieldindex == hMap->rowkeyid[k]) {
+            // in rowkey
+            return k;
+        }
+    }
+
+    // not in rowkey
+    return 0;
+}
+
+
 RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, int numfields, const RDBFieldDesc *fielddes, ub1 *resultfields, RDBResultMap *phResultMap)
 {
     RDBResultMap hMap = (RDBResultMap) RDBMemAlloc(sizeof(RDBResultMap_t) + sizeof(RDBFieldDesc) * numfields);
@@ -445,7 +461,7 @@ RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, int numfields, const RDBFi
     rbtree_init(&hMap->rbtree, (fn_comp_func*) RDBResultRowNodeCompare);
 
     if (numfields) {
-        int i, j;
+        int i, j, k;
         RDBKeyVal fldfilter;
 
         hMap->kplen = RDBBuildKeyFormat(filter->tablespace, filter->tablename, fielddes, numfields, hMap->rowkeyid, &hMap->keyprefix);
@@ -453,15 +469,18 @@ RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, int numfields, const RDBFi
         memcpy(hMap->fielddes, fielddes, sizeof(RDBFieldDesc) * numfields);
         hMap->numfields = numfields;
 
-        hMap->resultfields = resultfields[0];
-
         // set all of result fields
-        for (i = 0; i < hMap->resultfields; i++) {
+        k = 0;
+        for (i = 0; i < resultfields[0]; i++) {
             j = resultfields[i + 1] - 1;
 
-            hMap->fetchfields[i] = hMap->fielddes[j].fieldname;
-            hMap->fieldnamelens[i] = (int) strlen(hMap->fielddes[j].fieldname);
+            if (! RDBFieldIsRowkeyid(hMap, j)) {
+                hMap->fetchfields[k] = hMap->fielddes[j].fieldname;
+                hMap->fieldnamelens[k] = (int) strlen(hMap->fielddes[j].fieldname);
+                k++;
+            }
         }
+        hMap->resultfields = k;
 
         // set all of filter fields
         i = 0;
@@ -493,29 +512,36 @@ RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, int numfields, const RDBFi
 
 void RDBResultMapFree (RDBResultMap hResultMap)
 {
-    RDBMemFree(hResultMap->keyprefix);
+    if (hResultMap) {
+        RDBMemFree(hResultMap->keyprefix);
 
-    if (hResultMap->filter) {
-        RDBTableFilterFree(hResultMap->filter);
+        if (hResultMap->filter) {
+            RDBTableFilterFree(hResultMap->filter);
+        }
+
+        RDBResultMapClean(hResultMap);
+
+        RDBMemFree(hResultMap);
     }
-
-    RDBResultMapClean(hResultMap);
-
-    RDBMemFree(hResultMap);
 }
 
 
 void RDBResultMapClean (RDBResultMap hResultMap)
 {
-    rbtree_traverse(&hResultMap->rbtree, RDBResultRowNodeDelete, (void *) hResultMap);
-
-    rbtree_clean(&hResultMap->rbtree);
+    if (hResultMap) {
+        rbtree_traverse(&hResultMap->rbtree, RDBResultRowNodeDelete, (void *) hResultMap);
+        rbtree_clean(&hResultMap->rbtree);
+    }
 }
 
 
 ub8 RDBResultMapSize (RDBResultMap hResultMap)
 {
-    return (ub8) rbtree_size(&hResultMap->rbtree);
+    if (hResultMap) {
+        return (ub8) rbtree_size(&hResultMap->rbtree);
+    } else {
+        return 0;
+    }
 }
 
 
@@ -1360,7 +1386,7 @@ int RDBTableDesc (RDBCtx ctx, const char *tablespace, const char *tablename, RDB
             RDBVT_BYTE,
             RDBVT_STR,
             RDBVT_FLT64,
-            RDBVT_BIN,
+            RDBVT_BLOB,
             RDBVT_DEC
         };
 

@@ -225,8 +225,8 @@ typedef enum
     RDBVT_CHAR  = 'c',   // character (signed char): CHAR
     RDBVT_BYTE  = 'b',   // byte (unsigned char): BYTE
     RDBVT_STR   = 's',   // utf8 encoded ascii string: STR
-    RDBVT_FLT64 = 'f',   // 64-bit double precision: DBL
-    RDBVT_BIN   = 'B',   // binary with variable size: BIN
+    RDBVT_FLT64 = 'f',   // 64-bit double precision: FLT64
+    RDBVT_BLOB  = 'B',   // binary with variable size: BLOB
     RDBVT_DEC   = 'D'    // decimal(precision, scale): DEC
 } RDBValueType;
 
@@ -253,7 +253,8 @@ typedef enum
     RDBSQL_SELECT  = 1,
     RDBSQL_DELETE  = 2,
     RDBSQL_UPDATE  = 3,
-    RDBSQL_CREATE  = 4
+    RDBSQL_CREATE  = 4,
+    RDBSQL_DESC_TABLE = 5
 } RDBSQLStmt;
 
 
