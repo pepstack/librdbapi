@@ -464,10 +464,20 @@ red_black_node_t * insert_predecessor_at(red_black_tree_t * tree,
 }
 
 /* Remove an object from the tree */
-void rbtree_remove(red_black_tree_t * tree, void * object)
+void * rbtree_remove(red_black_tree_t * tree, void * object)
 {
     red_black_node_t * node = rbtree_find(tree, object);    /* find the node */
-    rbtree_remove_at(tree, node);                         /* remove the node */
+
+    if (node) {
+        void * nodeObjectToFree = node->object;
+
+        /* remove the node */
+        rbtree_remove_at(tree, node);
+
+        return nodeObjectToFree;
+    }
+
+    return NULL;
 }
 
 /* Remove the object pointed by the given node. */

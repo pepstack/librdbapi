@@ -206,7 +206,7 @@ extern red_black_node_t * insert_predecessor_at(red_black_tree_t * tree,
  *  param object The object to be removed
  *  pre The object should be contained in the tree
  */
-extern void rbtree_remove(red_black_tree_t * tree, void * object);
+extern void * rbtree_remove(red_black_tree_t * tree, void * object);
 
 /*! Get a handle to the tree minimum [takes O(log n) operations]
  *  param tree The tree

@@ -42,13 +42,16 @@
 
 typedef struct _RDBNameReply_t
 {
-    char *name;
-
-    redisReply *nameReply;
-    redisReply *valueReply;
-
     // makes this structure hashable
     UT_hash_handle hh;
+
+    char *name;
+
+    // reply object
+    redisReply *value;
+
+    int namelen;
+    char namebuf[0];
 } RDBNameReply_t, *RDBNameReply, *RDBNameReplyMap;
 
 
@@ -455,25 +458,32 @@ RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, int numfields, const RDBFi
         // set all of result fields
         for (i = 0; i < hMap->resultfields; i++) {
             j = resultfields[i + 1] - 1;
+
             hMap->fetchfields[i] = hMap->fielddes[j].fieldname;
+            hMap->fieldnamelens[i] = (int) strlen(hMap->fielddes[j].fieldname);
         }
 
         // set all of filter fields
         i = 0;
         while ((fldfilter = hMap->filter->fldfilters[i++]) != NULL) {
-            j = 0;
+            int found = 0;
 
-            while(hMap->fetchfields[j]) {
-                if (!strcmp(fldfilter->key, hMap->fetchfields[j])) {
-                    continue;
+            for (j = 0; hMap->fetchfields[j] != NULL; j++) {
+                if (! strcmp(fldfilter->key, hMap->fetchfields[j])) {
+                    // skip existed
+                    found = 1;
+                    break;
                 }
-                j++;
             }
 
-            hMap->fetchfields[j] = fldfilter->key;
+            if (! found) {
+                hMap->fetchfields[j] = fldfilter->key;
+                hMap->fieldnamelens[j] = fldfilter->klen;
+            }
         }
 
         hMap->fetchfields[RDBAPI_ARGV_MAXNUM] = NULL;
+        hMap->fieldnamelens[RDBAPI_ARGV_MAXNUM] = 0;
     }
 
     *phResultMap = hMap;
@@ -509,25 +519,20 @@ ub8 RDBResultMapSize (RDBResultMap hResultMap)
 }
 
 
-RDBAPI_RESULT RDBResultMapInsert (RDBResultMap hResultMap, redisReply *reply, RDBFieldsMap fieldmap)
+RDBAPI_RESULT RDBResultMapInsert (RDBResultMap hResultMap, RDBResultRow rowdata)
 {
-    red_black_node_t * node;
     int is_new_node = 0;
 
-    RDBResultRow rowdata = RDBMemAlloc(sizeof(*rowdata));
+    red_black_node_t * node = rbtree_insert_unique(&hResultMap->rbtree, (void *) rowdata, &is_new_node);
 
-    rowdata->replykey = reply;
-    rowdata->fieldmap = fieldmap;
-
-    node = rbtree_insert_unique(&hResultMap->rbtree, (void *) rowdata, &is_new_node);
     if (! node) {
         // out of memory
-        RDBMemFree(rowdata);
+        RDBResultRowFree(rowdata);
         return RDBAPI_ERR_NOMEM;
     }
 
     if (! is_new_node) {
-        RDBMemFree(rowdata);
+        RDBResultRowFree(rowdata);
         return RDBAPI_ERR_EXISTED;
     }
 
@@ -537,9 +542,13 @@ RDBAPI_RESULT RDBResultMapInsert (RDBResultMap hResultMap, redisReply *reply, RD
 
 void RDBResultMapDelete (RDBResultMap hResultMap, redisReply *reply)
 {
-    rbtree_remove(&hResultMap->rbtree, reply);
+    RDBResultRow_t rowdata = {reply, NULL};
 
-    freeReplyObject(reply);
+    RDBResultRow delRow = rbtree_remove(&hResultMap->rbtree, (void *)&rowdata);
+
+    if (delRow) {
+        freeReplyObject(reply);
+    }
 }
 
 
@@ -547,15 +556,17 @@ RDBAPI_BOOL RDBResultMapExist (RDBResultMap hResultMap, redisReply *reply)
 {
     red_black_node_t * node;
 
-    node = rbtree_find(&hResultMap->rbtree, (void *) reply);
+    RDBResultRow_t rowdata = {reply, NULL};
+
+    node = rbtree_find(&hResultMap->rbtree, (void *)&rowdata);
 
     return (node? RDBAPI_TRUE : RDBAPI_FALSE);
 }
 
 
-void RDBResultMapTraverse (RDBResultMap hResultMap, void (onReplyNodeTraverseCb)(void *, void *), void *arg)
+void RDBResultMapTraverse (RDBResultMap hResultMap, void (onRowNodeCallback)(void *, void *), void *arg)
 {
-    rbtree_traverse(&hResultMap->rbtree, onReplyNodeTraverseCb, arg);
+    rbtree_traverse(&hResultMap->rbtree, onRowNodeCallback, arg);
 }
 
 
@@ -590,12 +601,12 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (int isdesc, RDBCtx ctx,
     const char *fieldnames[],
     RDBResultMap *phResultMap)
 {
-    int nodeindex;
+    int nodeindex, j, k, nfields = 0;
+
     RDBAPI_RESULT res;
     RDBResultMap resultMap = NULL;
     RDBTableFilter filter = NULL;
 
-    int nfields = 0;
     RDBFieldDesc fielddes[RDBAPI_ARGV_MAXNUM] = {0};
     ub1 resultfields[RDBAPI_ARGV_MAXNUM + 1] = {0};
 
@@ -628,8 +639,6 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (int isdesc, RDBCtx ctx,
             return RDBAPI_ERROR;
         } else {
             // get result fieldnames
-            int j, k;
-
             if (filedcount == -1) {
                 // SELECT * FROM ...
                 for (j = 0; j < nfields; j++) {
@@ -844,7 +853,7 @@ static RDBNameReplyMap RDBTableFilterReplyByField (RDBResultMap resultMap, redis
     redisReply * replyRow = NULL;
     RDBCtx ctx = resultMap->ctxh;
 
-    RDBNameReplyMap fieldmap = RDBTableFetchFields(resultMap->ctxh, resultMap->fetchfields, reply->str);
+    RDBNameReplyMap fieldmap = RDBTableFetchFields(resultMap->ctxh, resultMap->fetchfields, resultMap->fieldnamelens, reply->str);
 
     if (! resultMap->filter->fldfilters[0]) {
         // accept reply as key
@@ -868,7 +877,7 @@ static RDBNameReplyMap RDBTableFilterReplyByField (RDBResultMap resultMap, redis
             }
 
             ret = RDBExprValues(fldfilter->vtype,
-                fieldnode->valueReply->str, fieldnode->valueReply->len,  /* src */
+                fieldnode->value->str, fieldnode->value->len,  /* src */
                 fldfilter->expr, fldfilter->val, fldfilter->vlen);       /* dst */
 
             if (ret != 1) {
@@ -903,7 +912,7 @@ static RDBAPI_RESULT RDBResultMapFilterInsert (RDBResultMap resultMap, redisRepl
 
         if (fieldmap) {
             // accept
-            return RDBResultMapInsert(resultMap, reply, fieldmap);
+            return RDBResultMapInsert(resultMap, RDBResultRowNew(reply, fieldmap));
         }
     }
 
@@ -1227,16 +1236,16 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
 typedef struct {
     RDBCtx ctx;
     RDBFieldDesc *tabledes;
-} RDBTableDescCallbackArg;
+} TableDescCallbackArg;
 
 
-static void RDBTableDescCallback (void * pvReply, void *pvArg)
+static void onTableDescCallback (void * pvRow, void *pvArg)
 {
     redisReply *replyRow;
 
-    redisReply *reply = (redisReply *) pvReply;
+    redisReply *reply = ((RDBResultRow) pvRow)->replykey;
 
-    RDBTableDescCallbackArg *descarg = (RDBTableDescCallbackArg *) pvArg;
+    TableDescCallbackArg *descarg = (TableDescCallbackArg *) pvArg;
 
     const char *argv[2];
     size_t argl[2];
@@ -1377,9 +1386,9 @@ int RDBTableDesc (RDBCtx ctx, const char *tablespace, const char *tablename, RDB
             return RDBAPI_ERROR;
         }
 
-        RDBTableDescCallbackArg tdescarg = {ctx, tabledes};
+        TableDescCallbackArg tdescarg = {ctx, tabledes};
 
-        RDBResultMapTraverse(resultMap, RDBTableDescCallback, &tdescarg);
+        RDBResultMapTraverse(resultMap, onTableDescCallback, &tdescarg);
 
         RDBResultMapFree(resultMap);
 
@@ -1426,47 +1435,66 @@ int RDBTableFindField (const RDBFieldDesc fields[RDBAPI_ARGV_MAXNUM], int numfie
 }
 
 
-RDBFieldsMap RDBTableFetchFields (RDBCtx ctx, const char *fieldnames[], const char *rowkey)
+RDBFieldsMap RDBTableFetchFields (RDBCtx ctx, const char *fieldnames[], int fieldnamelens[], const char *rowkey)
 {
+    RDBFieldsMap fieldsmap = NULL;
     redisReply * replyRow = NULL;
 
     if (RedisHMGet(ctx, rowkey, fieldnames, &replyRow) == RDBAPI_SUCCESS) {
         size_t i = 0;
 
-        RDBNameReplyMap fieldsmap = NULL;
+        if (fieldnames && fieldnames[0]) {
+            while (i < replyRow->elements && fieldnames[i]) {
+                RDBNameReply replynode = (RDBNameReply) RDBMemAlloc(sizeof(RDBNameReply_t));
 
-        while (i < replyRow->elements) {
-            RDBNameReply fldnode = (RDBNameReply) mem_alloc_zero(1, sizeof(RDBNameReply_t));
+                replynode->name = (char *) fieldnames[i];
+                replynode->namelen = fieldnamelens[i];
 
-            fldnode->nameReply = replyRow->element[i];
-            replyRow->element[i++] = NULL;
+                replynode->value = replyRow->element[i];
+                replyRow->element[i] = NULL;
 
-            fldnode->valueReply = replyRow->element[i];
-            replyRow->element[i++] = NULL;
+                HASH_ADD_STR(fieldsmap, name, replynode);
 
-            fldnode->name = fldnode->nameReply->str;
+                i += 1;
+            }
+        } else {
+            while (i < replyRow->elements) {
+                redisReply *nameRep = replyRow->element[i];
 
-            HASH_ADD_STR(fieldsmap, name, fldnode);
+                RDBNameReply replynode = (RDBNameReply) RDBMemAlloc(sizeof(RDBNameReply_t) + nameRep->len + 1);
+
+                replynode->namelen = nameRep->len;
+                memcpy(replynode->namebuf, nameRep->str, nameRep->len);
+                replynode->name = replynode->namebuf;
+
+                replynode->value = replyRow->element[i+1];
+                replyRow->element[i+1] = NULL;
+
+                HASH_ADD_STR(fieldsmap, name, replynode);
+
+                i += 2;
+            }
         }
 
         RedisFreeReplyObject(&replyRow);
-
-        return fieldsmap;
     }
 
-    // key not found
-    return NULL;
+    return fieldsmap;
 }
 
 
-redisReply * RDBFieldsMapGetField (RDBFieldsMap fields, const char *fieldname)
+redisReply * RDBFieldsMapGetField (RDBFieldsMap fieldsmap, const char *fieldname, int fieldnamelen)
 {
-    RDBNameReply fieldnode = 0;
+    RDBNameReply fieldnode = NULL;
 
-    HASH_FIND_STR(fields, fieldname, fieldnode);
+    if (fieldnamelen == -1) {
+        HASH_FIND_STR(fieldsmap, fieldname, fieldnode);
+    } else {
+        HASH_FIND_STR_LEN(fieldsmap, fieldname, fieldnamelen, fieldnode);
+    }
 
     if (fieldnode) {
-        return fieldnode->valueReply;
+        return fieldnode->value;
     }
 
     return NULL;
@@ -1479,12 +1507,11 @@ void RDBFieldsMapFree (RDBFieldsMap fields)
         RDBNameReply curnode, tmpnode;
 
         HASH_ITER(hh, fields, curnode, tmpnode) {
-            RedisFreeReplyObject(&curnode->nameReply);
-            RedisFreeReplyObject(&curnode->valueReply);
+            RedisFreeReplyObject(&curnode->value);
 
             HASH_DEL(fields, curnode);
 
-            mem_free(curnode);
+            RDBMemFree(curnode);
         }
     }
 }
@@ -1534,53 +1561,51 @@ static int ResultMapParseRowkeyValues (RDBResultMap resultMap, const char *rowke
 }
 
 
-static void RDBResultMapPrintOutCallback (void *result, void *_arg)
+static void RDBResultRowPrintCallback (void * _row, void * _map)
 {
     int i;
     int num;
 
-    RDBResultMap resultMap = (RDBResultMap)_arg;
+    RDBResultRow resultRow = (RDBResultRow)_row;
+    RDBResultMap resultMap = (RDBResultMap)_map;
 
-    redisReply *reply = (redisReply *) result;
+    redisReply *rowkey = resultRow->replykey;
 
-    RDBFieldsMap fieldsamp = RDBTableFetchFields(resultMap->ctxh, NULL, reply->str);
+    RDBFieldsMap fieldmap = resultRow->fieldmap;
 
-    num = ResultMapParseRowkeyValues(resultMap, reply->str, reply->len);
+    // print rowkey values
+    num = ResultMapParseRowkeyValues(resultMap, rowkey->str, rowkey->len);
     for (i = 0; i < num; i++) {
         if (i > 0) {
-            printf("%c%.*s", resultMap->delimiter, resultMap->rowkey_lens[i], reply->str + resultMap->rowkey_offs[i]);
+            printf("%c%.*s", resultMap->delimiter, resultMap->rowkey_lens[i], rowkey->str + resultMap->rowkey_offs[i]);
         } else {
-            printf("%.*s", resultMap->rowkey_lens[i], reply->str + resultMap->rowkey_offs[i]);
+            printf("%.*s", resultMap->rowkey_lens[i], rowkey->str + resultMap->rowkey_offs[i]);
         }
     }
 
-    num = 0;
-    for (i = 0; i < resultMap->numfields; i++) {
-        if (! resultMap->fielddes[i].rowkey) {
-            // print value for fields
-            redisReply * fieldValue = RDBFieldsMapGetField(fieldsamp, resultMap->fielddes[i].fieldname);
+    // print field values
+    for (i = 0; i < resultMap->resultfields; i++) {
+        // print value for fields
+        redisReply * fieldValue = RDBFieldsMapGetField(fieldmap, resultMap->fetchfields[i], resultMap->fieldnamelens[i]);
 
-            if (num) {
-                if (fieldValue && fieldValue->str) {
-                    printf("%c%.*s", resultMap->delimiter, fieldValue->len, fieldValue->str);
-                } else {
-                    printf("%c(null)", resultMap->delimiter);
-                }
+        if (num) {
+            if (fieldValue && fieldValue->str) {
+                printf("%c%.*s", resultMap->delimiter, fieldValue->len, fieldValue->str);
             } else {
-                if (fieldValue && fieldValue->str) {
-                    printf("%.*s", fieldValue->len, fieldValue->str);
-                } else {
-                    printf("(null)");
-                }
+                printf("%c(null)", resultMap->delimiter);
             }
-
-            num++;
+        } else {
+            if (fieldValue && fieldValue->str) {
+                printf("%.*s", fieldValue->len, fieldValue->str);
+            } else {
+                printf("(null)");
+            }
         }
+
+        num++;
     }
 
     printf("\n");
-
-    RDBFieldsMapFree(fieldsamp);
 }
 
 
@@ -1617,6 +1642,7 @@ void RDBResultMapPrintOut (RDBResultMap resultMap, RDBAPI_BOOL withHead)
 
         printf("\n");
 
+        // print names for key
         for (i = 1; i <= resultMap->rowkeyid[0]; i++) {
             int j = resultMap->rowkeyid[i];
 
@@ -1629,16 +1655,17 @@ void RDBResultMapPrintOut (RDBResultMap resultMap, RDBAPI_BOOL withHead)
             len += strlen(resultMap->fielddes[j].fieldname) + 4;
         }
 
-        for (i = 0; i < resultMap->numfields; i++) {
-            if (! resultMap->fielddes[i].rowkey) {
-                if (! len) {
-                    printf("#[ %s", resultMap->fielddes[i].fieldname);
-                } else {
-                    printf(" %c %s", resultMap->delimiter, resultMap->fielddes[i].fieldname);
-                }
-
-                len += strlen(resultMap->fielddes[i].fieldname) + 3;
+        // print names for fields
+        for (i = 0; i < resultMap->resultfields; i++) {
+            if (! len) {
+                // fieldname
+                printf("#[ %.*s", resultMap->fieldnamelens[i], resultMap->fetchfields[i]);
+            } else {
+                // | fieldname
+                printf(" %c %.*s", resultMap->delimiter, resultMap->fieldnamelens[i], resultMap->fetchfields[i]);
             }
+
+            len += resultMap->fieldnamelens[i] + 3;
         }
         printf(" ]\n#--");
 
@@ -1649,5 +1676,26 @@ void RDBResultMapPrintOut (RDBResultMap resultMap, RDBAPI_BOOL withHead)
         printf("\n");
     }
 
-    RDBResultMapTraverse(resultMap, RDBResultMapPrintOutCallback, resultMap);
+    RDBResultMapTraverse(resultMap, RDBResultRowPrintCallback, resultMap);
+}
+
+
+RDBResultRow RDBResultRowNew (redisReply *replyKey, RDBFieldsMap fieldValues)
+{
+    RDBResultRow_t *row = (RDBResultRow_t *) RDBMemAlloc(sizeof(*row));
+
+    row->replykey = replyKey;
+    row->fieldmap = fieldValues;
+
+    return row;
+}
+
+
+void RDBResultRowFree (RDBResultRow row)
+{
+    if (row) {
+        freeReplyObject(row->replykey);
+        RDBFieldsMapFree(row->fieldmap);
+        RDBMemFree(row);
+    }
 }

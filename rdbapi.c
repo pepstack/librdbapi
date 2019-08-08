@@ -1045,12 +1045,13 @@ RDBAPI_RESULT RedisHMSetLen (RDBCtx ctx, const char *key, size_t keylen, const c
  */
 RDBAPI_RESULT RedisHMGet (RDBCtx ctx, const char * key, const char * fields[], redisReply **outReply)
 {
-    redisReply *reply;
-    int i, argc = 0;
+    redisReply *reply = NULL;
 
-    if (fields) {
-        const char *argv[RDBAPI_ARGV_MAXNUM + 4];
-        size_t argvlen[RDBAPI_ARGV_MAXNUM + 4];
+    if (fields && fields[0]) {
+        int i, argc = 0;
+
+        const char *argv[RDBAPI_ARGV_MAXNUM + 4] = {0};
+        size_t argvlen[RDBAPI_ARGV_MAXNUM + 4] = {0};
 
         const char *fld;
 
@@ -1078,6 +1079,24 @@ RDBAPI_RESULT RedisHMGet (RDBCtx ctx, const char * key, const char * fields[], r
         }
 
         reply = RedisExecCommand(ctx, argc, argv, argvlen);
+        if (! reply) {
+            ctx->errmsg[0] = 0;
+            return RDBAPI_ERROR;
+        }
+
+        if (reply->type != REDIS_REPLY_ARRAY) {
+            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
+
+            RedisFreeReplyObject(&reply);
+            return RDBAPI_ERR_TYPE;
+        }
+
+        if (reply->elements != argc - 2) {
+            // bad reply elements
+            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_APP: reply elements(%"PRIu64"). required(%d).", reply->elements, argc);
+            RedisFreeReplyObject(&reply);
+            return RDBAPI_ERR_APP;
+        }
     } else {
         const char *argv[2];
         size_t argl[2];
@@ -1089,26 +1108,17 @@ RDBAPI_RESULT RedisHMGet (RDBCtx ctx, const char * key, const char * fields[], r
         argl[1] = strlen(key);
 
         reply = RedisExecCommand(ctx, 2, argv, argl);
-    }
+        if (! reply) {
+            ctx->errmsg[0] = 0;
+            return RDBAPI_ERROR;
+        }
 
-    if (! reply) {
-        ctx->errmsg[0] = 0;
-        return RDBAPI_ERROR;
-    }
+        if (reply->type != REDIS_REPLY_ARRAY) {
+            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
 
-    if (reply->type != REDIS_REPLY_ARRAY) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
-
-        RedisFreeReplyObject(&reply);
-        return RDBAPI_ERR_TYPE;
-    }
-
-    if (fields && reply->elements != argc - 2) {
-        // bad reply elements
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_APP: reply elements(%"PRIu64"). required(%d).", reply->elements, argc);
-
-        RedisFreeReplyObject(&reply);
-        return RDBAPI_ERR_APP;
+            RedisFreeReplyObject(&reply);
+            return RDBAPI_ERR_TYPE;
+        }
     }
 
     // all is ok

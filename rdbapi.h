@@ -599,9 +599,9 @@ extern int RDBTableDesc (RDBCtx ctx, const char *tablespace, const char *tablena
 
 extern int RDBTableFindField (const RDBFieldDesc fields[RDBAPI_ARGV_MAXNUM], int numfields, const char *fieldname, int fieldnamelen);
 
-extern RDBFieldsMap RDBTableFetchFields (RDBCtx ctx, const char *fieldnames[], const char *rowkey);
+extern RDBFieldsMap RDBTableFetchFields (RDBCtx ctx, const char *fieldnames[], int fieldnamelens[], const char *rowkey);
 
-extern redisReply * RDBFieldsMapGetField (RDBFieldsMap fields, const char *fieldname);
+extern redisReply * RDBFieldsMapGetField (RDBFieldsMap fields, const char *fieldname, int fieldnamelen);
 
 extern void RDBFieldsMapFree (RDBFieldsMap fields);
 
@@ -617,19 +617,23 @@ extern void RDBResultMapClean (RDBResultMap hResultMap);
 
 extern ub8 RDBResultMapSize (RDBResultMap hResultMap);
 
-extern RDBAPI_RESULT RDBResultMapInsert (RDBResultMap hResultMap, redisReply *replyKey, RDBFieldsMap fieldValues);
+extern RDBAPI_RESULT RDBResultMapInsert (RDBResultMap hResultMap, RDBResultRow row);
 
 extern void RDBResultMapDelete (RDBResultMap hResultMap, redisReply *reply);
 
 extern RDBAPI_BOOL RDBResultMapExist (RDBResultMap hResultMap, redisReply *reply);
 
-extern void RDBResultMapTraverse (RDBResultMap hResultMap, void (onReplyNodeTraverseCb)(void *, void *), void *arg);
+extern void RDBResultMapTraverse (RDBResultMap hResultMap, void (onRowNodeCallback)(void *, void *), void *arg);
 
 extern ub8 RDBResultMapGetOffset (RDBResultMap hResultMap);
 
 extern char RDBResultMapSetDelimiter (RDBResultMap hResultMap, char delimiter);
 
 extern void RDBResultMapPrintOut (RDBResultMap hResultMap, RDBAPI_BOOL withHead);
+
+extern RDBResultRow RDBResultRowNew (redisReply *replyKey, RDBFieldsMap fieldValues);
+
+extern void RDBResultRowFree (RDBResultRow row);
 
 
 /**********************************************************************

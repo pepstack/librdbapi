@@ -222,6 +222,9 @@ typedef struct _RDBResultMap_t
     // which fields to fetch
     char *fetchfields[RDBAPI_ARGV_MAXNUM + 1];
 
+    // length of fieldname
+    int fieldnamelens[RDBAPI_ARGV_MAXNUM + 1];
+
     int numfields;
     RDBFieldDesc fielddes[0];
 } RDBResultMap_t;
