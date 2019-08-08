@@ -51,13 +51,13 @@ typedef struct _RDBSQLParser_t
             // fields filter
             int numfields;
             char      *fields[RDBAPI_ARGV_MAXNUM];
-            RDBSqlExpr fieldexprs[RDBAPI_ARGV_MAXNUM];
+            RDBFilterExpr fieldexprs[RDBAPI_ARGV_MAXNUM];
             char      *fieldvals[RDBAPI_ARGV_MAXNUM];
 
             // keys filter
             int numkeys;
             char *keys[RDBAPI_ARGV_MAXNUM];
-            RDBSqlExpr keyexprs[RDBAPI_ARGV_MAXNUM];
+            RDBFilterExpr keyexprs[RDBAPI_ARGV_MAXNUM];
             char *keyvals[RDBAPI_ARGV_MAXNUM];
 
             // result fields
@@ -75,13 +75,13 @@ typedef struct _RDBSQLParser_t
             // fields filter
             int numfields;
             char      *fields[RDBAPI_ARGV_MAXNUM];
-            RDBSqlExpr fieldexprs[RDBAPI_ARGV_MAXNUM];
+            RDBFilterExpr fieldexprs[RDBAPI_ARGV_MAXNUM];
             char      *fieldvals[RDBAPI_ARGV_MAXNUM];
 
             // keys filter
             int numkeys;
             char *keys[RDBAPI_ARGV_MAXNUM];
-            RDBSqlExpr keyexprs[RDBAPI_ARGV_MAXNUM];
+            RDBFilterExpr keyexprs[RDBAPI_ARGV_MAXNUM];
             char *keyvals[RDBAPI_ARGV_MAXNUM];
         } delfrom;
 
@@ -237,6 +237,8 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
                 parser->select.fieldvals,
                 NULL,
                 NULL,
+                parser->select.count,
+                parser->select.resultfields,
                 &resultMap);
 
         if (res == RDBAPI_SUCCESS) {
@@ -420,7 +422,7 @@ static char * CheckNewFieldValue (const char *value)
 
 // WHERE cretime > 123456 AND cretime < 999999
 static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
-    RDBSqlExpr fieldexprs[RDBAPI_ARGV_MAXNUM],
+    RDBFilterExpr fieldexprs[RDBAPI_ARGV_MAXNUM],
     char *fieldvalues[RDBAPI_ARGV_MAXNUM])
 {
     int i, num, k = 0;
@@ -438,7 +440,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a <> b
         if (cstr_split_substr(substrs[i], "<>", 2, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = RDBSQLEX_NOT_EQUAL;
+            fieldexprs[k] = FILEX_NOT_EQUAL;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -447,7 +449,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a != b
         if (cstr_split_substr(substrs[i], "!=", 2, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = RDBSQLEX_NOT_EQUAL;
+            fieldexprs[k] = FILEX_NOT_EQUAL;
             fieldvalues[k] = strdup(pair[1]);
             k++;
             continue;
@@ -456,7 +458,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a >= b
         if (cstr_split_substr(substrs[i], ">=", 2, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = RDBSQLEX_GREAT_EQUAL;
+            fieldexprs[k] = FILEX_GREAT_EQUAL;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -465,7 +467,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a <= b
         if (cstr_split_substr(substrs[i], "<=", 2, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = RDBSQLEX_LESS_EQUAL;
+            fieldexprs[k] = FILEX_LESS_EQUAL;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -474,7 +476,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a = b
         if (cstr_split_substr(substrs[i], "=", 1, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = RDBSQLEX_EQUAL;
+            fieldexprs[k] = FILEX_EQUAL;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -483,7 +485,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a > b
         if (cstr_split_substr(substrs[i], ">", 1, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = RDBSQLEX_GREAT_THAN;
+            fieldexprs[k] = FILEX_GREAT_THAN;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -492,7 +494,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a < b
         if (cstr_split_substr(substrs[i], "<", 1, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = RDBSQLEX_LESS_THAN;
+            fieldexprs[k] = FILEX_LESS_THAN;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -501,7 +503,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a LLIKE b
         if (cstr_split_substr(substrs[i], " LLIKE ", 7, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = RDBSQLEX_LEFT_LIKE;
+            fieldexprs[k] = FILEX_LEFT_LIKE;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -510,7 +512,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a RLIKE b
         if (cstr_split_substr(substrs[i], " RLIKE ", 7, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = RDBSQLEX_RIGHT_LIKE;
+            fieldexprs[k] = FILEX_RIGHT_LIKE;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -519,7 +521,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a LIKE b
         if (cstr_split_substr(substrs[i], " LIKE ", 6, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = RDBSQLEX_LIKE;
+            fieldexprs[k] = FILEX_LIKE;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -528,7 +530,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a MATCH b
         if (cstr_split_substr(substrs[i], " MATCH ", 7, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = RDBSQLEX_REG_MATCH;
+            fieldexprs[k] = FILEX_REG_MATCH;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -699,19 +701,19 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
         return RDBAPI_FALSE;      
     }
 
-    datatypes[RDBVTYPE_SB2] = "SB2";
-    datatypes[RDBVTYPE_UB2] = "UB2";
-    datatypes[RDBVTYPE_UB4] = "UB4";    
-    datatypes[RDBVTYPE_UB4X] = "UB4X",    
-    datatypes[RDBVTYPE_SB8] = "SB8";
-    datatypes[RDBVTYPE_UB8] = "UB8";
-    datatypes[RDBVTYPE_UB8X] = "UB8X";
-    datatypes[RDBVTYPE_CHAR] = "CHAR";
-    datatypes[RDBVTYPE_BYTE] = "BYTE";
-    datatypes[RDBVTYPE_STR] = "STR";
-    datatypes[RDBVTYPE_FLT64] = "DBL";
-    datatypes[RDBVTYPE_BIN] = "BIN";
-    datatypes[RDBVTYPE_DEC] = "DEC";
+    datatypes[RDBVT_SB2] = "SB2";
+    datatypes[RDBVT_UB2] = "UB2";
+    datatypes[RDBVT_UB4] = "UB4";    
+    datatypes[RDBVT_UB4X] = "UB4X",    
+    datatypes[RDBVT_SB8] = "SB8";
+    datatypes[RDBVT_UB8] = "UB8";
+    datatypes[RDBVT_UB8X] = "UB8X";
+    datatypes[RDBVT_CHAR] = "CHAR";
+    datatypes[RDBVT_BYTE] = "BYTE";
+    datatypes[RDBVT_STR] = "STR";
+    datatypes[RDBVT_FLT64] = "DBL";
+    datatypes[RDBVT_BIN] = "BIN";
+    datatypes[RDBVT_DEC] = "DEC";
 
     ifnex = strstr(sql, "IF NOT EXISTS ");
     if (ifnex) {
@@ -809,7 +811,7 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 
                 fielddefs[numfields].fieldtype = (RDBValueType) j;
 
-                if (fielddefs[numfields].fieldtype == RDBVTYPE_STR || fielddefs[numfields].fieldtype == RDBVTYPE_BIN) {
+                if (fielddefs[numfields].fieldtype == RDBVT_STR || fielddefs[numfields].fieldtype == RDBVT_BIN) {
                     // STR(length)
                     char *a = strchr(fld, '(');
                     char *b = strchr(fld, ')');
@@ -830,7 +832,7 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
                         // error
 
                     }
-                } else if (fielddefs[numfields].fieldtype == RDBVTYPE_DEC) {
+                } else if (fielddefs[numfields].fieldtype == RDBVT_DEC) {
                     // DEC(length|dscale)
                     // error: not support now
                 }

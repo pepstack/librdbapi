@@ -82,7 +82,7 @@ int main(int argc, const char *argv[])
     RDBFieldDesc fielddefs[] = {
         {
             {"sid"}
-            ,RDBVTYPE_UB8
+            ,RDBVT_UB8
             ,0
             ,0
             ,1
@@ -91,7 +91,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"uid"}
-            ,RDBVTYPE_UB8
+            ,RDBVT_UB8
             ,0
             ,0
             ,2
@@ -100,7 +100,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"entrykey"}
-            ,RDBVTYPE_STR
+            ,RDBVT_STR
             ,32
             ,0
             ,3
@@ -109,7 +109,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"status"}
-            ,RDBVTYPE_UB4
+            ,RDBVT_UB4
             ,0
             ,0
             ,0
@@ -118,7 +118,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"addtime"}
-            ,RDBVTYPE_UB4
+            ,RDBVT_UB4
             ,0
             ,0
             ,0
@@ -127,7 +127,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"speed_low"}
-            ,RDBVTYPE_UB4
+            ,RDBVT_UB4
             ,0
             ,0
             ,0
@@ -136,7 +136,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"speed_high"}
-            ,RDBVTYPE_UB4
+            ,RDBVT_UB4
             ,0
             ,0
             ,0
@@ -145,7 +145,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"updtime"}
-            ,RDBVTYPE_UB8
+            ,RDBVT_UB8
             ,0
             ,0
             ,0
@@ -154,7 +154,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"filetime"}
-            ,RDBVTYPE_UB8
+            ,RDBVT_UB8
             ,0
             ,0
             ,0
@@ -163,7 +163,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"entryid"}
-            ,RDBVTYPE_UB8X
+            ,RDBVT_UB8X
             ,0
             ,0
             ,0
@@ -172,7 +172,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"filesize"}
-            ,RDBVTYPE_UB8
+            ,RDBVT_UB8
             ,0
             ,0
             ,0
@@ -181,7 +181,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"cretime"}
-            ,RDBVTYPE_UB8
+            ,RDBVT_UB8
             ,0
             ,0
             ,0
@@ -190,7 +190,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"position"}
-            ,RDBVTYPE_UB8
+            ,RDBVT_UB8
             ,0
             ,0
             ,0
@@ -199,7 +199,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"pathid"}
-            ,RDBVTYPE_STR
+            ,RDBVT_STR
             ,0
             ,0
             ,0
@@ -208,7 +208,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"logmd5"}
-            ,RDBVTYPE_STR
+            ,RDBVT_STR
             ,0
             ,0
             ,0
@@ -217,7 +217,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"logfile"}
-            ,RDBVTYPE_STR
+            ,RDBVT_STR
             ,0
             ,0
             ,0
@@ -226,7 +226,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"logstash"}
-            ,RDBVTYPE_STR
+            ,RDBVT_STR
             ,0
             ,0
             ,0
@@ -235,7 +235,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"filemd5"}
-            ,RDBVTYPE_STR
+            ,RDBVT_STR
             ,0
             ,0
             ,0
@@ -244,7 +244,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"route"}
-            ,RDBVTYPE_STR
+            ,RDBVT_STR
             ,0
             ,0
             ,0
@@ -283,10 +283,10 @@ int main(int argc, const char *argv[])
         "status"
     };
 
-    RDBSqlExpr fieldexprs[] = {
-        RDBSQLEX_LESS_THAN,
-        RDBSQLEX_GREAT_THAN,
-        RDBSQLEX_EQUAL
+    RDBFilterExpr fieldexprs[] = {
+        FILEX_LESS_THAN,
+        FILEX_GREAT_THAN,
+        FILEX_EQUAL
     };
 
     const char * fieldvals[] = {
@@ -298,7 +298,7 @@ int main(int argc, const char *argv[])
     ub8 offset = 0;
     ub8 total = 0;
 
-    res = RDBTableScanFirst(ctx, "xsdb", "logentry", 0, 0, 0, 0, 0, fields, fieldexprs, fieldvals, 0, 0, &resultMap);
+    res = RDBTableScanFirst(ctx, "xsdb", "logentry", 0, 0, 0, 0, 0, fields, fieldexprs, fieldvals, 0, 0, -1, NULL, &resultMap);
     if (res == RDBAPI_SUCCESS) {
         while ((offset = RDBTableScanNext(resultMap, offset, 20)) != RDB_ERROR_OFFSET) {
             RDBResultMapPrintOut(resultMap, 1);

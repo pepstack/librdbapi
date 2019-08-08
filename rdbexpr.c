@@ -46,65 +46,65 @@
 
 // src $expr dst ? true(1) : false(0)
 //
-int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBSqlExpr expr, const char *dst, int dlen)
+int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBFilterExpr expr, const char *dst, int dlen)
 {
     // error
     int result = -1;
     int cmp;
 
-    if (expr == RDBSQLEX_IGNORE) {
+    if (expr == FILEX_IGNORE) {
         // always accept if expr not given
         return 1;
     }
 
-    if (vt == RDBVTYPE_STR || ! vt) {
+    if (vt == RDBVT_STR || ! vt) {
         cmp = cstr_compare_len(src, slen, dst, dlen);
 
         switch (expr) {
-        case RDBSQLEX_EQUAL:
+        case FILEX_EQUAL:
             result = (!cmp? 1 : 0);
             break;
 
-        case RDBSQLEX_NOT_EQUAL:
+        case FILEX_NOT_EQUAL:
             result = (!cmp? 0 : 1);
             break;
 
-        case RDBSQLEX_GREAT_THAN:
+        case FILEX_GREAT_THAN:
             result = (cmp > 0? 1 : 0);
             break;
 
-        case RDBSQLEX_LESS_THAN:
+        case FILEX_LESS_THAN:
             result = (cmp < 0? 1 : 0);
             break;
 
-        case RDBSQLEX_GREAT_EQUAL:
+        case FILEX_GREAT_EQUAL:
             result = (cmp >= 0? 1 : 0);
             break;
 
-        case RDBSQLEX_LESS_EQUAL:
+        case FILEX_LESS_EQUAL:
             result = (cmp <= 0? 1 : 0);
             break;
 
-        case RDBSQLEX_LEFT_LIKE:
+        case FILEX_LEFT_LIKE:
             // a like 'left%'
             //   src="aaaaB"
             //   dst="aaaaBBBB"    
             result = cstr_startwith(dst, dlen, src, slen);
             break;
 
-        case RDBSQLEX_RIGHT_LIKE:
+        case FILEX_RIGHT_LIKE:
             // a like '%right'
             //   src="aBBBB"            
             //   dst="aaaaBBBB" 
             result = cstr_endwith(dst, dlen, src, slen);
             break;
 
-        case RDBSQLEX_LIKE:
+        case FILEX_LIKE:
             // a like 'left%' or '%mid%' or '%right'
             result = cstr_containwith(dst, dlen, src, slen);
             break;
 
-        case RDBSQLEX_REG_MATCH:
+        case FILEX_REG_MATCH:
             if (re_match(dst, src) == -1) {
                 result = 0;
             } else {
@@ -116,10 +116,10 @@ int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBSqlExpr expr, 
         return result;
     }
 
-    if (vt == RDBVTYPE_SB8 ||
-        vt == RDBVTYPE_SB4 ||
-        vt == RDBVTYPE_SB2 ||
-        vt == RDBVTYPE_CHAR) {
+    if (vt == RDBVT_SB8 ||
+        vt == RDBVT_SB4 ||
+        vt == RDBVT_SB2 ||
+        vt == RDBVT_CHAR) {
         sb8 s8src, s8dst;
         if (cstr_to_sb8(10, src, slen, &s8src) > 0 && cstr_to_sb8(10, dst, dlen, &s8dst) > 0) {
             cmp = RDBEXPR_SGN(s8src, s8dst);
@@ -127,10 +127,10 @@ int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBSqlExpr expr, 
             // error
             return (-1);
         }
-    } else if (vt == RDBVTYPE_UB8 ||
-        vt == RDBVTYPE_UB4 ||
-        vt == RDBVTYPE_UB2 ||
-        vt == RDBVTYPE_BYTE) {
+    } else if (vt == RDBVT_UB8 ||
+        vt == RDBVT_UB4 ||
+        vt == RDBVT_UB2 ||
+        vt == RDBVT_BYTE) {
         ub8 u8src, u8dst;
         if (cstr_to_ub8(10, src, slen, &u8src) > 0 && cstr_to_ub8(10, dst, dlen, &u8dst) > 0) {
             cmp = RDBEXPR_SGN(u8src, u8dst);
@@ -138,8 +138,8 @@ int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBSqlExpr expr, 
             // error
             return (-1);
         }
-    } else if (vt == RDBVTYPE_UB8X ||
-        vt == RDBVTYPE_UB4X) {
+    } else if (vt == RDBVT_UB8X ||
+        vt == RDBVT_UB4X) {
         ub8 u8src, u8dst;
         if (cstr_to_ub8(16, src, slen, &u8src) > 0 && cstr_to_ub8(16, dst, dlen, &u8dst) > 0) {
             cmp = RDBEXPR_SGN(u8src, u8dst);
@@ -147,7 +147,7 @@ int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBSqlExpr expr, 
             // error
             return (-1);
         }
-    } else if (vt == RDBVTYPE_FLT64) {
+    } else if (vt == RDBVT_FLT64) {
         double dblsrc, dbldst;
         if (cstr_to_dbl(src, slen, &dblsrc) > 0 && cstr_to_dbl(dst, dlen, &dbldst) > 0) {
             cmp = RDBEXPR_SGN(dblsrc, dbldst);
@@ -160,27 +160,27 @@ int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBSqlExpr expr, 
     }
 
     switch (expr) {
-    case RDBSQLEX_EQUAL:
+    case FILEX_EQUAL:
         result = (!cmp? 1 : 0);
         break;
 
-    case RDBSQLEX_NOT_EQUAL:
+    case FILEX_NOT_EQUAL:
         result = (! cmp? 0 : 1);
         break;
 
-    case RDBSQLEX_GREAT_THAN:
+    case FILEX_GREAT_THAN:
         result = (cmp > 0? 1 : 0);
         break;
 
-    case RDBSQLEX_LESS_THAN:
+    case FILEX_LESS_THAN:
         result = (cmp < 0? 1 : 0);
         break;
 
-    case RDBSQLEX_GREAT_EQUAL:
+    case FILEX_GREAT_EQUAL:
         result = (cmp >= 0? 1 : 0);
         break;
 
-    case RDBSQLEX_LESS_EQUAL:
+    case FILEX_LESS_EQUAL:
         result = (cmp <= 0? 1 : 0);
         break;
     }

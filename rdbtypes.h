@@ -200,7 +200,7 @@ typedef struct _RDBResultMap_t
 {
     RDBCtx ctxh;
 
-    RDBTableSql rdbsql;
+    RDBTableFilter filter;
 
     char delimiter;
 
@@ -216,14 +216,27 @@ typedef struct _RDBResultMap_t
     int kplen;
     char *keyprefix;
 
+    // count for result fields
+    int resultfields;
+
+    // which fields to fetch
+    char *fetchfields[RDBAPI_ARGV_MAXNUM + 1];
+
     int numfields;
     RDBFieldDesc fielddes[0];
 } RDBResultMap_t;
 
 
+typedef struct _RDBResultRow_t
+{
+    redisReply *replykey;
+    RDBFieldsMap fieldmap;
+} RDBResultRow_t;
+
+
 int RDBBuildKeyFormat (const char * tablespace, const char * tablename, const RDBFieldDesc *fielddes, int numfields, int *rowkeyid, char **keyformat);
 
-RDBAPI_RESULT RDBResultMapNew (RDBTableSql rdbsql, int numfields, const RDBFieldDesc *fielddes, RDBResultMap *phResultMap);
+RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, int numfields, const RDBFieldDesc *fielddes, ub1 *resultfields, RDBResultMap *phResultMap);
 
 #if defined(__cplusplus)
 }

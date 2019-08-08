@@ -175,57 +175,59 @@ typedef int RDBAPI_BOOL;
  *
  *********************************************************************/
 
-typedef struct _RDBEnv_t       * RDBEnv;
-typedef struct _RDBEnvNode_t   * RDBEnvNode;
+typedef struct _RDBEnv_t         * RDBEnv;
+typedef struct _RDBEnvNode_t     * RDBEnvNode;
 
-typedef struct _RDBCtx_t       * RDBCtx;
-typedef struct _RDBCtxNode_t   * RDBCtxNode;
+typedef struct _RDBCtx_t         * RDBCtx;
+typedef struct _RDBCtxNode_t     * RDBCtxNode;
 
-typedef struct _RDBACtx_t      * RDBACtx;
-typedef struct _RDBACtxNode_t  * RDBACtxNode;
+typedef struct _RDBACtx_t        * RDBACtx;
+typedef struct _RDBACtxNode_t    * RDBACtxNode;
 
-typedef struct _RDBTableSql_t  * RDBTableSql;
-typedef struct _RDBResultMap_t * RDBResultMap;
-typedef struct _RDBFieldDef_t  * RDBFieldDef;
-typedef struct _RDBNameReply_t * RDBFieldsMap;
+typedef struct _RDBTableFilter_t * RDBTableFilter;
+typedef struct _RDBResultMap_t   * RDBResultMap;
+typedef struct _RDBResultRow_t   * RDBResultRow;
 
-typedef struct _RDBThreadCtx_t * RDBThreadCtx;
+typedef struct _RDBFieldDef_t    * RDBFieldDef;
+typedef struct _RDBNameReply_t   * RDBFieldsMap;
 
-typedef struct _RDBSQLParser_t * RDBSQLParser;
+typedef struct _RDBThreadCtx_t   * RDBThreadCtx;
 
-
-typedef enum
-{
-    RDBSQLEX_IGNORE = 0,  // *
-    RDBSQLEX_EQUAL,       // a = b
-    RDBSQLEX_NOT_EQUAL,   // a != b
-    RDBSQLEX_GREAT_THAN,  // a > b
-    RDBSQLEX_LESS_THAN,   // a < b
-    RDBSQLEX_GREAT_EQUAL, // a >= b
-    RDBSQLEX_LESS_EQUAL,  // a <= b
-    RDBSQLEX_LEFT_LIKE,   // a like 'left%'
-    RDBSQLEX_RIGHT_LIKE,  // a like '%right'
-    RDBSQLEX_LIKE,        // a like '%mid%' or 'left%' or '%right'
-    RDBSQLEX_REG_MATCH    // a regmatch(pattern)
-} RDBSqlExpr;
+typedef struct _RDBSQLParser_t   * RDBSQLParser;
 
 
 typedef enum
 {
-    RDBVTYPE_SB2    = 'j',   // 16-bit signed int: SB2
-    RDBVTYPE_UB2    = 'v',   // 16-bit unsigned int: UB2
-    RDBVTYPE_SB4    = 'i',   // 32-bit signed int: SB4
-    RDBVTYPE_UB4    = 'u',   // 32-bit unsigned int: UB4
-    RDBVTYPE_UB4X   = 'x',   // 32-bit unsigned int (hex encoded): UB4X
-    RDBVTYPE_SB8    = 'I',   // 64-bit signed int: SB8
-    RDBVTYPE_UB8    = 'U',   // 64-bit unsigned int: UB8
-    RDBVTYPE_UB8X   = 'X',   // 64-bit unsigned int (hex encoded): UB8X
-    RDBVTYPE_CHAR   = 'c',   // character (signed char): CHAR
-    RDBVTYPE_BYTE   = 'b',   // byte (unsigned char): BYTE
-    RDBVTYPE_STR    = 's',   // utf8 encoded ascii string: STR
-    RDBVTYPE_FLT64  = 'f',   // 64-bit double precision: DBL
-    RDBVTYPE_BIN    = 'B',   // binary with variable size: BIN
-    RDBVTYPE_DEC    = 'D'    // decimal(precision, scale): DEC
+    FILEX_IGNORE = 0,    // *
+    FILEX_EQUAL,         // a = b
+    FILEX_NOT_EQUAL,     // a != b
+    FILEX_GREAT_THAN,    // a > b
+    FILEX_LESS_THAN,     // a < b
+    FILEX_GREAT_EQUAL,   // a >= b
+    FILEX_LESS_EQUAL,    // a <= b
+    FILEX_LEFT_LIKE,     // a like 'left%'
+    FILEX_RIGHT_LIKE,    // a like '%right'
+    FILEX_LIKE,          // a like '%mid%' or 'left%' or '%right'
+    FILEX_REG_MATCH      // a regmatch(pattern)
+} RDBFilterExpr;
+
+
+typedef enum
+{
+    RDBVT_SB2   = 'j',   // 16-bit signed int: SB2
+    RDBVT_UB2   = 'v',   // 16-bit unsigned int: UB2
+    RDBVT_SB4   = 'i',   // 32-bit signed int: SB4
+    RDBVT_UB4   = 'u',   // 32-bit unsigned int: UB4
+    RDBVT_UB4X  = 'x',   // 32-bit unsigned int (hex encoded): UB4X
+    RDBVT_SB8   = 'I',   // 64-bit signed int: SB8
+    RDBVT_UB8   = 'U',   // 64-bit unsigned int: UB8
+    RDBVT_UB8X  = 'X',   // 64-bit unsigned int (hex encoded): UB8X
+    RDBVT_CHAR  = 'c',   // character (signed char): CHAR
+    RDBVT_BYTE  = 'b',   // byte (unsigned char): BYTE
+    RDBVT_STR   = 's',   // utf8 encoded ascii string: STR
+    RDBVT_FLT64 = 'f',   // 64-bit double precision: DBL
+    RDBVT_BIN   = 'B',   // binary with variable size: BIN
+    RDBVT_DEC   = 'D'    // decimal(precision, scale): DEC
 } RDBValueType;
 
 
@@ -307,7 +309,7 @@ extern void * RDBMemAlloc (size_t sizeb);
 
 extern void RDBMemFree (void *addr);
 
-extern int RDBExprValues (RDBValueType vt, const char *val1, int len1, RDBSqlExpr expr, const char *val2, int len2);
+extern int RDBExprValues (RDBValueType vt, const char *val1, int len1, RDBFilterExpr expr, const char *val2, int len2);
 
 
 /**********************************************************************
@@ -574,16 +576,18 @@ extern RDBAPI_RESULT RedisIncrFloatField (RDBCtx ctx, const char *key, const cha
 extern RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
     const char *tablespace,
     const char *tablename,
-    int numkeys,
-    const char *keys[],
-    const RDBSqlExpr keyexprs[],
-    const char *keyvals[],
-    int numfields,
-    const char *fields[],
-    const RDBSqlExpr fieldexprs[],
-    const char *fieldvals[],
+    int filter_numkeys,
+    const char *filter_keys[],
+    const RDBFilterExpr filter_keyexprs[],
+    const char *filter_keyvals[],
+    int filter_numfields,
+    const char *filter_fields[],
+    const RDBFilterExpr filter_fieldexprs[],
+    const char *filter_fieldvals[],
     const char *groupby[],    // Not Supported Now!
     const char *orderby[],    // Not Supported Now!
+    int result_filedcount,
+    const char *result_fieldnames[],
     RDBResultMap *phResultMap);
 
 
@@ -595,7 +599,7 @@ extern int RDBTableDesc (RDBCtx ctx, const char *tablespace, const char *tablena
 
 extern int RDBTableFindField (const RDBFieldDesc fields[RDBAPI_ARGV_MAXNUM], int numfields, const char *fieldname, int fieldnamelen);
 
-extern RDBFieldsMap RDBTableFetchFields (RDBCtx ctx, const char *rowkey);
+extern RDBFieldsMap RDBTableFetchFields (RDBCtx ctx, const char *fieldnames[], const char *rowkey);
 
 extern redisReply * RDBFieldsMapGetField (RDBFieldsMap fields, const char *fieldname);
 
@@ -613,7 +617,7 @@ extern void RDBResultMapClean (RDBResultMap hResultMap);
 
 extern ub8 RDBResultMapSize (RDBResultMap hResultMap);
 
-extern RDBAPI_RESULT RDBResultMapInsert (RDBResultMap hResultMap, redisReply *reply);
+extern RDBAPI_RESULT RDBResultMapInsert (RDBResultMap hResultMap, redisReply *replyKey, RDBFieldsMap fieldValues);
 
 extern void RDBResultMapDelete (RDBResultMap hResultMap, redisReply *reply);
 
