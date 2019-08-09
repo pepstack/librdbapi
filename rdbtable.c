@@ -37,7 +37,6 @@
 
 #define RDBTABLE_FILTER_ACCEPT    1
 #define RDBTABLE_FILTER_REJECT    0
-#define RDBTABLE_FILTER_FAILED  (-1)
 
 
 typedef struct _RDBNameReply_t
@@ -941,7 +940,62 @@ static RDBAPI_RESULT RDBTableScanOnNode (RDBCtxNode ctxnode, RDBTableCursor node
 }
 
 
-static int RDBTableFilterReplyByKey (RDBResultMap resultMap, redisReply * reply)
+static int RDBTableFilterRowReply (RDBResultMap resultMap, redisReply * reply, RDBNameReplyMap *outfieldmap)
+{
+    // TODO: filter by key
+
+
+    redisReply * replyRow = NULL;
+    RDBCtx ctx = resultMap->ctxh;
+
+    RDBNameReplyMap fieldmap = RDBTableFetchFields(resultMap->ctxh, resultMap->fetchfields, resultMap->fieldnamelens, reply->str);
+
+    if (! resultMap->filter->fldfilters[0]) {
+        // accept row
+        *outfieldmap = fieldmap;
+        return RDBTABLE_FILTER_ACCEPT;
+    } else if (fieldmap) {
+        // filter fields
+        int i, ret;
+        RDBKeyVal fldfilter;
+
+        i = 0;
+        fldfilter = resultMap->filter->fldfilters[i++];
+        while (fldfilter) {
+            RDBNameReply fieldnode = 0;
+
+            HASH_FIND_STR(fieldmap, fldfilter->key, fieldnode);
+
+            if (! fieldnode) {
+                // reject row if required field not found
+                RDBFieldsMapFree(fieldmap);
+                return RDBTABLE_FILTER_REJECT;
+            }
+
+            ret = RDBExprValues(fldfilter->vtype,
+                fieldnode->value->str, fieldnode->value->len,  /* src */
+                fldfilter->expr, fldfilter->val, fldfilter->vlen);       /* dst */
+
+            if (ret != 1) {
+                // reject row on failed expr: required field not found
+                RDBFieldsMapFree(fieldmap);
+                return RDBTABLE_FILTER_REJECT;
+            }
+
+            fldfilter = resultMap->filter->fldfilters[i++];
+        }
+
+        // accept row: all fileds ok
+        *outfieldmap = fieldmap;
+        return RDBTABLE_FILTER_ACCEPT;
+    }
+
+    // reject row
+    return RDBTABLE_FILTER_REJECT;
+}
+
+
+static int RDBTableFilterKey (RDBResultMap resultMap, redisReply * reply)
 {
     if (resultMap->filter->keyfilters[0]) {
         // accept row
@@ -953,7 +1007,7 @@ static int RDBTableFilterReplyByKey (RDBResultMap resultMap, redisReply * reply)
 }
 
 
-static RDBNameReplyMap RDBTableFilterReplyByField (RDBResultMap resultMap, redisReply * reply)
+static RDBNameReplyMap RDBTableFilterField (RDBResultMap resultMap, redisReply * reply)
 {
     redisReply * replyRow = NULL;
     RDBCtx ctx = resultMap->ctxh;
@@ -1002,23 +1056,13 @@ static RDBNameReplyMap RDBTableFilterReplyByField (RDBResultMap resultMap, redis
 }
 
 
-static void RDBTableFilterCallback (void *object, void *arg)
-{
-    // RDBTableFilterReplyByKey((RDBResultMap) arg, (redisReply *) object);
-
-    // RDBTableFilterReplyByField((RDBResultMap) arg, (redisReply *) object);
-}
-
-
 static RDBAPI_RESULT RDBResultMapFilterInsert (RDBResultMap resultMap, redisReply *reply)
 {
-    if (RDBTableFilterReplyByKey(resultMap, reply) == RDBTABLE_FILTER_ACCEPT) {
-        RDBNameReplyMap fieldmap = RDBTableFilterReplyByField(resultMap, reply);
+    RDBNameReplyMap fieldmap = NULL;
 
-        if (fieldmap) {
-            // accept
-            return RDBResultMapInsert(resultMap, RDBResultRowNew(reply, fieldmap));
-        }
+    if (RDBTableFilterRowReply(resultMap, reply, &fieldmap) == RDBTABLE_FILTER_ACCEPT) {
+        // accept
+        return RDBResultMapInsert(resultMap, RDBResultRowNew(reply, fieldmap));
     }
 
     // rejected
@@ -1046,6 +1090,8 @@ ub8 RDBTableScanNext (RDBResultMap hResultMap, ub8 OffRows, ub4 limit)
     RDBTableCursor  nodestate;
     redisReply     *replyRows;
 
+    RDBCtx ctx;
+
     int numMasters = 0;
     int finMasters = 0;
 
@@ -1054,6 +1100,8 @@ ub8 RDBTableScanNext (RDBResultMap hResultMap, ub8 OffRows, ub4 limit)
 
     // number of rows we fetched
     ub8 NumRows = 0;
+
+    ub8 LastOffs;
 
     int nodeindex;
 
@@ -1069,10 +1117,10 @@ ub8 RDBTableScanNext (RDBResultMap hResultMap, ub8 OffRows, ub4 limit)
     }
 
     // redis context
-    RDBCtx ctx = hResultMap->ctxh;
+    ctx = hResultMap->ctxh;
 
     // get rows from all nodes
-    ub8 LastOffs = RDBResultMapGetOffset(hResultMap);
+    LastOffs = RDBResultMapGetOffset(hResultMap);
     if (LastOffs >= OffRows + LmtRows) {
         return LastOffs;
     }
@@ -1123,7 +1171,12 @@ ub8 RDBTableScanNext (RDBResultMap hResultMap, ub8 OffRows, ub4 limit)
                 CurRows = LmtRows - NumRows;
             }
 
-            result = RDBTableScanOnNode(ctxnode, nodestate, &hResultMap->filter->patternblob, (ub4) CurRows, &replyRows);
+            if (CurRows > 0) {
+                result = RDBTableScanOnNode(ctxnode, nodestate, &hResultMap->filter->patternblob, (ub4) CurRows, &replyRows);
+            } else {
+                LastOffs = RDBResultMapGetOffset(hResultMap);
+                goto return_offset;
+            }
 
             if (result == RDBAPI_SUCCESS) {
                 LastOffs = RDBResultMapGetOffset(hResultMap);
@@ -1153,6 +1206,7 @@ ub8 RDBTableScanNext (RDBResultMap hResultMap, ub8 OffRows, ub4 limit)
         }
     }
 
+return_offset:
     return LastOffs;
 }
 

@@ -38,25 +38,27 @@
 
 RDBAPI_RESULT RDBEnvCreate (ub4 flags, ub2 clusternodes, RDBEnv *outenv)
 {
+    int i;
+    RDBEnv env;
+
     if (clusternodes < 1 || clusternodes > RDB_CLUSTER_NODES_MAX) {
         // too many nodes for redis cluster
         return RDBAPI_ERR_NODES;
     }
 
-    RDBEnv env = (RDBEnv_t *) RDBMemAlloc(sizeof(RDBEnv_t) + (int) clusternodes * sizeof(RDBEnvNode_t));
+    env = (RDBEnv_t *) RDBMemAlloc(sizeof(RDBEnv_t) + (int) clusternodes * sizeof(RDBEnvNode_t));
 
     env->flags = flags;
     env->clusternodes = clusternodes;
     env->nodemap = NULL;
 
-    do {
-        int i = 0;
-        for (; i < (int) clusternodes; i++) {
-            env->nodes[i].env = env;            
-            env->nodes[i].index = i;
-        }
-    } while (0);
+    for (i = 0; i < (int) clusternodes; i++) {
+        env->nodes[i].env = env;            
+        env->nodes[i].index = i;
+    }
 
+    // initialize global readonly config
+    //
     env->valtype_chk_table[RDBVT_SB2] = 1;
     env->valtype_chk_table[RDBVT_UB2] = 1;
     env->valtype_chk_table[RDBVT_SB4] = 1;
@@ -71,6 +73,58 @@ RDBAPI_RESULT RDBEnvCreate (ub4 flags, ub2 clusternodes, RDBEnv *outenv)
     env->valtype_chk_table[RDBVT_FLT64] = 1;
     env->valtype_chk_table[RDBVT_BLOB] = 1;
     env->valtype_chk_table[RDBVT_DEC] = 1;
+
+    i = 0;
+    snprintf(env->_valtypenamebuf + i, 6, "SB2");
+    env->valtypenames[RDBVT_SB2] = &env->_valtypenamebuf[i];
+
+    i += 8;
+    snprintf(env->_valtypenamebuf + i, 6, "UB2");
+    env->valtypenames[RDBVT_UB2] = &env->_valtypenamebuf[i];
+
+    i += 8;
+    snprintf(env->_valtypenamebuf + i, 6, "UB4");
+    env->valtypenames[RDBVT_UB4] = &env->_valtypenamebuf[i];
+
+    i += 8;
+    snprintf(env->_valtypenamebuf + i, 6, "UB4X");
+    env->valtypenames[RDBVT_UB4X] = &env->_valtypenamebuf[i];
+
+    i += 8;
+    snprintf(env->_valtypenamebuf + i, 6, "SB8");
+    env->valtypenames[RDBVT_SB8] = &env->_valtypenamebuf[i];
+
+    i += 8;
+    snprintf(env->_valtypenamebuf + i, 6, "UB8");
+    env->valtypenames[RDBVT_UB8] = &env->_valtypenamebuf[i];
+
+    i += 8;
+    snprintf(env->_valtypenamebuf + i, 6, "UB8X");
+    env->valtypenames[RDBVT_UB8X] = &env->_valtypenamebuf[i];
+
+    i += 8;
+    snprintf(env->_valtypenamebuf + i, 6, "CHAR");
+    env->valtypenames[RDBVT_CHAR] = &env->_valtypenamebuf[i];
+
+    i += 8;
+    snprintf(env->_valtypenamebuf + i, 6, "BYTE");
+    env->valtypenames[RDBVT_BYTE] = &env->_valtypenamebuf[i];
+
+    i += 8;
+    snprintf(env->_valtypenamebuf + i, 6, "STR");
+    env->valtypenames[RDBVT_STR] = &env->_valtypenamebuf[i];
+
+    i += 8;
+    snprintf(env->_valtypenamebuf + i, 6, "FLT64");
+    env->valtypenames[RDBVT_FLT64] = &env->_valtypenamebuf[i];
+
+    i += 8;
+    snprintf(env->_valtypenamebuf + i, 6, "BLOB");
+    env->valtypenames[RDBVT_BLOB] = &env->_valtypenamebuf[i];
+
+    i += 8;
+    snprintf(env->_valtypenamebuf + i, 6, "DEC");
+    env->valtypenames[RDBVT_DEC] = &env->_valtypenamebuf[i];
 
     *outenv = env;
     return RDBAPI_SUCCESS;

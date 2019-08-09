@@ -43,10 +43,6 @@ typedef struct _RDBSQLParser_t
 {
     RDBSQLStmt stmt;
 
-    char *datatypes[256];
-
-    char datatypesbuf[256];
-
     union {
         struct SELECT {
             char tablespace[RDB_KEY_NAME_MAXLEN + 1];
@@ -197,58 +193,6 @@ RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQL
 
     RDBCTX_ERRMSG_ZERO(ctx);
 
-    len = 0;
-    snprintf(parser->datatypesbuf + len, 6, "SB2");
-    parser->datatypes[RDBVT_SB2] = &parser->datatypesbuf[len];
-
-    len += 8;
-    snprintf(parser->datatypesbuf + len, 6, "UB2");
-    parser->datatypes[RDBVT_UB2] = &parser->datatypesbuf[len];
-
-    len += 8;
-    snprintf(parser->datatypesbuf + len, 6, "UB4");
-    parser->datatypes[RDBVT_UB4] = &parser->datatypesbuf[len];
-
-    len += 8;
-    snprintf(parser->datatypesbuf + len, 6, "UB4X");
-    parser->datatypes[RDBVT_UB4X] = &parser->datatypesbuf[len];
-
-    len += 8;
-    snprintf(parser->datatypesbuf + len, 6, "SB8");
-    parser->datatypes[RDBVT_SB8] = &parser->datatypesbuf[len];
-
-    len += 8;
-    snprintf(parser->datatypesbuf + len, 6, "UB8");
-    parser->datatypes[RDBVT_UB8] = &parser->datatypesbuf[len];
-
-    len += 8;
-    snprintf(parser->datatypesbuf + len, 6, "UB8X");
-    parser->datatypes[RDBVT_UB8X] = &parser->datatypesbuf[len];
-
-    len += 8;
-    snprintf(parser->datatypesbuf + len, 6, "CHAR");
-    parser->datatypes[RDBVT_CHAR] = &parser->datatypesbuf[len];
-
-    len += 8;
-    snprintf(parser->datatypesbuf + len, 6, "BYTE");
-    parser->datatypes[RDBVT_BYTE] = &parser->datatypesbuf[len];
-
-    len += 8;
-    snprintf(parser->datatypesbuf + len, 6, "STR");
-    parser->datatypes[RDBVT_STR] = &parser->datatypesbuf[len];
-
-    len += 8;
-    snprintf(parser->datatypesbuf + len, 6, "FLT64");
-    parser->datatypes[RDBVT_FLT64] = &parser->datatypesbuf[len];
-
-    len += 8;
-    snprintf(parser->datatypesbuf + len, 6, "BLOB");
-    parser->datatypes[RDBVT_BLOB] = &parser->datatypesbuf[len];
-
-    len += 8;
-    snprintf(parser->datatypesbuf + len, 6, "DEC");
-    parser->datatypes[RDBVT_DEC] = &parser->datatypesbuf[len];
-
     *outParser = parser;
     return RDBAPI_SUCCESS;
 }
@@ -289,6 +233,8 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
     RDBAPI_RESULT res;
 
     *outResultMap = NULL;
+
+    const char **vtnames = ctx->env->valtypenames;
 
     if (parser->stmt == RDBSQL_SELECT) {
         RDBResultMap resultMap;
@@ -372,7 +318,7 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
 
                 printf(" %-20s| %8s  | %-6d |%8d |  %4d  |   %4d   | %s\n",
                     fdes->fieldname,
-                    parser->datatypes[fdes->fieldtype],
+                    vtnames[fdes->fieldtype],
                     fdes->length,
                     fdes->dscale,
                     fdes->rowkey,
@@ -810,6 +756,8 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
     char *leftp  = strchr(sql, '(');
     char *rightp = strrchr(sql, ')');
 
+    const char **vtnames = ctx->env->valtypenames;
+
     if (!leftp || !rightp || (rightp - leftp) < 16) {
         snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "error CREATE TABLE grammar");
         return RDBAPI_FALSE;      
@@ -903,7 +851,7 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
                 snprintf(fielddefs[numfields].fieldname, sizeof(fielddefs[numfields].fieldname) - 1, "%s", fld);
 
                 fld = cstr_Ltrim_chr(p, 32);
-                int j = cstr_startwith_mul(fld, (int) strlen(fld), parser->datatypes, NULL, 256);
+                int j = cstr_startwith_mul(fld, (int) strlen(fld), vtnames, NULL, 256);
                 if (j == -1) {
                     // TODO: ERROR: unknown type
                     

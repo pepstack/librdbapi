@@ -130,6 +130,8 @@ typedef struct _RDBEnv_t
 
     // readonly check table for RDBValueType: 0 - bad; 1 - good
     char valtype_chk_table[256];
+    char *valtypenames[256];
+    char _valtypenamebuf[256];
 
     RDBEnvNodeMap nodemap;
 
