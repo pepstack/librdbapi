@@ -79,7 +79,7 @@ int main(int argc, const char *argv[])
         printf("cluster_enabled:%s\n", buf);
     }
 
-    RDBFieldDesc fielddefs[] = {
+    RDBFieldDes_t fielddefs[] = {
         {
             {"sid"}
             ,RDBVT_UB8

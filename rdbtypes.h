@@ -128,6 +128,9 @@ typedef struct _RDBEnv_t
 {
     ub4 flags;
 
+    // readonly check table for RDBValueType: 0 - bad; 1 - good
+    char valtype_chk_table[256];
+
     RDBEnvNodeMap nodemap;
 
     int maxclusternodes;
@@ -226,7 +229,7 @@ typedef struct _RDBResultMap_t
     int fieldnamelens[RDBAPI_ARGV_MAXNUM + 1];
 
     int numfields;
-    RDBFieldDesc fielddes[0];
+    RDBFieldDes_t fielddes[0];
 } RDBResultMap_t;
 
 
@@ -237,9 +240,9 @@ typedef struct _RDBResultRow_t
 } RDBResultRow_t;
 
 
-int RDBBuildKeyFormat (const char * tablespace, const char * tablename, const RDBFieldDesc *fielddes, int numfields, int *rowkeyid, char **keyformat);
+int RDBBuildKeyFormat (const char * tablespace, const char * tablename, const RDBFieldDes_t *fielddes, int numfields, int *rowkeyid, char **keyformat);
 
-RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, int numfields, const RDBFieldDesc *fielddes, ub1 *resultfields, RDBResultMap *phResultMap);
+RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap);
 
 #if defined(__cplusplus)
 }

@@ -94,7 +94,7 @@ typedef struct _RDBSQLParser_t
             char tablename[RDB_KEY_NAME_MAXLEN + 1];
 
             int numfields;
-            RDBFieldDesc fielddefs[RDBAPI_ARGV_MAXNUM];
+            RDBFieldDes_t fielddefs[RDBAPI_ARGV_MAXNUM];
 
             char tablecomment[RDB_KEY_VALUE_SIZE];
 
@@ -320,10 +320,10 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
             return 0;
         }
     } else if (parser->stmt == RDBSQL_CREATE) {
-        RDBFieldDesc fielddes[RDBAPI_ARGV_MAXNUM] = {0};
-        int nfields = RDBTableDesc(ctx, parser->create.tablespace, parser->create.tablename, fielddes);
+        RDBTableDes_t tabledes = {0};
+        res = RDBTableDescribe(ctx, parser->create.tablespace, parser->create.tablename, &tabledes);
 
-        if (nfields && parser->create.fail_on_exists) {
+        if (res == RDBAPI_SUCCESS && parser->create.fail_on_exists) {
             snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERROR: table already existed");
             return (ub8) RDBAPI_ERROR;
         }
@@ -331,18 +331,19 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
         res = RDBTableCreate(ctx, parser->create.tablespace, parser->create.tablename, parser->create.tablecomment, parser->create.numfields, parser->create.fielddefs);
 
         if (res == RDBAPI_SUCCESS) {
-            bzero(fielddes, sizeof(fielddes));
-            nfields = RDBTableDesc(ctx, parser->create.tablespace, parser->create.tablename, fielddes);
+            bzero(&tabledes, sizeof(tabledes));
 
-            if (nfields == parser->create.numfields) {
-                RDBResultMap hMap = (RDBResultMap) RDBMemAlloc(sizeof(RDBResultMap_t) + sizeof(RDBFieldDesc) * nfields);
+            res = RDBTableDescribe(ctx, parser->create.tablespace, parser->create.tablename, &tabledes);
+
+            if (res == RDBAPI_SUCCESS && tabledes.nfields == parser->create.numfields) {
+                RDBResultMap hMap = (RDBResultMap) RDBMemAlloc(sizeof(RDBResultMap_t) + sizeof(RDBFieldDes_t) * tabledes.nfields);
 
                 RDBResultMapSetDelimiter(hMap, RDB_TABLE_DELIMITER_CHAR);
 
-                hMap->kplen = RDBBuildKeyFormat(parser->create.tablespace, parser->create.tablename, fielddes, nfields, hMap->rowkeyid, &hMap->keyprefix);
+                hMap->kplen = RDBBuildKeyFormat(parser->create.tablespace, parser->create.tablename, tabledes.fielddes, tabledes.nfields, hMap->rowkeyid, &hMap->keyprefix);
 
-                memcpy(hMap->fielddes, fielddes, sizeof(fielddes[0]) * nfields);
-                hMap->numfields = nfields;
+                memcpy(hMap->fielddes, tabledes.fielddes, sizeof(tabledes.fielddes[0]) * tabledes.nfields);
+                hMap->numfields = tabledes.nfields;
 
                 hMap->ctxh = ctx;
 
@@ -351,38 +352,37 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
             }
         }
     } else if (parser->stmt == RDBSQL_DESC_TABLE) {
-        int nfields = 0;
-        RDBFieldDesc fielddefs[RDBAPI_ARGV_MAXNUM + 1] = {0};
+        RDBTableDes_t tabledes = {0};
 
-        if (strcmp(parser->desctable.tablespace, RDB_SYSTEM_TABLE_PREFIX)) {
-            nfields = RDBTableDesc(ctx, parser->desctable.tablespace, parser->desctable.tablename, fielddefs);
-            if (nfields) {
-                // TODO: fill result map
-                int j;
-
-                printf("# Table: %s.%s\n", parser->desctable.tablespace, parser->desctable.tablename);
-                printf("#[     fieldname     | fieldtype | length |  scale  | rowkey | nullable | comment ]\n");
-                printf("#--------------------+-----------+--------+---------+--------+----------+----------\n");
-
-                for (j = 0; j < nfields; j++) {
-                    RDBFieldDesc *fdes = &fielddefs[j];
-
-                    printf(" %-20s| %8s  | %-6d |%8d |  %4d  |   %4d   | %s\n",
-                        fdes->fieldname,
-                        parser->datatypes[fdes->fieldtype],
-                        fdes->length,
-                        fdes->dscale,
-                        fdes->rowkey,
-                        fdes->nullable,
-                        fdes->comment);
-                }
-
-                printf("#----------------------------------------------------------------------------------\n");
-                return RDBAPI_SUCCESS;
-            }
-        } else {
-            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERROR: bad tablespace");
+        if (RDBTableDescribe(ctx, parser->desctable.tablespace, parser->desctable.tablename, &tabledes) != RDBAPI_SUCCESS) {
             return (ub8) RDBAPI_ERROR;
+        } else {
+            // TODO: fill result map
+            int j;
+
+            printf("# table key: %s\n", tabledes.table_rowkey);
+            printf("# timestamp: %"PRIu64"\n", tabledes.table_timestamp);
+            printf("# create dt: %s\n", tabledes.table_datetime);
+            printf("# comment  : %s\n", tabledes.table_comment);
+            printf("#[     fieldname     | fieldtype | length |  scale  | rowkey | nullable | comment ]\n");
+            printf("#--------------------+-----------+--------+---------+--------+----------+----------\n");
+
+            for (j = 0; j < tabledes.nfields; j++) {
+                RDBFieldDes_t *fdes = &tabledes.fielddes[j];
+
+                printf(" %-20s| %8s  | %-6d |%8d |  %4d  |   %4d   | %s\n",
+                    fdes->fieldname,
+                    parser->datatypes[fdes->fieldtype],
+                    fdes->length,
+                    fdes->dscale,
+                    fdes->rowkey,
+                    fdes->nullable,
+                    fdes->comment);
+            }
+
+            printf("#----------------------------------------------------------------------------------\n");
+
+            return RDBAPI_SUCCESS;
         }
     }
 
@@ -398,15 +398,30 @@ static int RDBSQLNameValidate (const char *name, int len, int maxlen)
         maxlen = RDB_KEY_NAME_MAXLEN;
     }
 
-    if (!name || len < 1 || len > maxlen) {
-        // non name
+    if (!name || len < 1) {
+        printf("(%s:%d) empty name.\n", __FILE__, __LINE__);
+        return 0;
+    }
+
+    if (len > maxlen) {
+        printf("(%s:%d) name is too long: %.*s\n", __FILE__, __LINE__, len, name);
+        return 0;
+    }
+
+    if (isdigit(*name)) {
+        printf("(%s:%d) start with number ('%c'): %.*s\n", __FILE__, __LINE__, name[0], len, name);
         return 0;
     }
 
     pch = name;
-
     while (pch - name < len) {
-        if (! islower(*pch) && *pch != '_') {
+        if (! isalnum(*pch) && *pch != '_') {
+            printf("(%s:%d) illegal char ('%c') in: %.*s\n", __FILE__, __LINE__, *pch, len, name);
+            return 0;
+        }
+
+        if ( isalpha(*pch) && ! islower(*pch) ) {
+            printf("(%s:%d) not a lower char ('%c') in: %.*s\n", __FILE__, __LINE__, *pch, len, name);
             return 0;
         }
 
@@ -631,7 +646,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a MATCH b
         if (cstr_split_substr(substrs[i], " MATCH ", 7, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = FILEX_REG_MATCH;
+            fieldexprs[k] = FILEX_MATCH;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -711,7 +726,7 @@ RDBAPI_BOOL onParseSelect (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 
     parser->select.count = parse_fields(cstr_LRtrim_chr(fields, 32), parser->select.resultfields);
     if (! parser->select.count) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "parse_fields failed");
+        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "(%s:%d) parse_fields failed", __FILE__, __LINE__);
         return RDBAPI_FALSE;
     }
   
@@ -817,7 +832,7 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
     }
 
     do {
-        RDBFieldDesc fielddefs[RDBAPI_ARGV_MAXNUM] = {0};
+        RDBFieldDes_t fielddefs[RDBAPI_ARGV_MAXNUM] = {0};
         int numfields = 0;
 
         int n, nflds;

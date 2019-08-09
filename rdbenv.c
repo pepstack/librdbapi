@@ -57,6 +57,21 @@ RDBAPI_RESULT RDBEnvCreate (ub4 flags, ub2 clusternodes, RDBEnv *outenv)
         }
     } while (0);
 
+    env->valtype_chk_table[RDBVT_SB2] = 1;
+    env->valtype_chk_table[RDBVT_UB2] = 1;
+    env->valtype_chk_table[RDBVT_SB4] = 1;
+    env->valtype_chk_table[RDBVT_UB4] = 1;
+    env->valtype_chk_table[RDBVT_UB4X] = 1;
+    env->valtype_chk_table[RDBVT_SB8] = 1;
+    env->valtype_chk_table[RDBVT_UB8] = 1;
+    env->valtype_chk_table[RDBVT_UB8X] = 1;
+    env->valtype_chk_table[RDBVT_CHAR] = 1;
+    env->valtype_chk_table[RDBVT_BYTE] = 1;
+    env->valtype_chk_table[RDBVT_STR] = 1;
+    env->valtype_chk_table[RDBVT_FLT64] = 1;
+    env->valtype_chk_table[RDBVT_BLOB] = 1;
+    env->valtype_chk_table[RDBVT_DEC] = 1;
+
     *outenv = env;
     return RDBAPI_SUCCESS;
 }

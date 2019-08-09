@@ -52,6 +52,7 @@ RDBAPI_RESULT RDBCtxCreate (RDBEnv env, RDBCtx *outctx)
     }
 
     if (RedisClusterCheck(ctx) != RDBAPI_SUCCESS) {
+        printf("RedisClusterCheck failed: %s\n", ctx->errmsg);
         RDBMemFree(ctx);
         return RDBAPI_ERROR;
     }

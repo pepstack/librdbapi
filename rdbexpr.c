@@ -104,7 +104,7 @@ int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBFilterExpr exp
             result = cstr_containwith(dst, dlen, src, slen);
             break;
 
-        case FILEX_REG_MATCH:
+        case FILEX_MATCH:
             if (re_match(dst, src) == -1) {
                 result = 0;
             } else {

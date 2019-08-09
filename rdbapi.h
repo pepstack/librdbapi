@@ -41,6 +41,8 @@ extern "C"
 {
 #endif
 
+#define RDBAPI_VERSION  "1.0.0"
+
 #include "unitypes.h"
 
 #include <hiredis/hiredis.h>
@@ -100,10 +102,10 @@ typedef int RDBAPI_BOOL;
  *
  *********************************************************************/
 
-#define RDBAPI_SUCCESS      0
-#define RDBAPI_NOERROR      RDBAPI_SUCCESS
+#define RDBAPI_SUCCESS         0
+#define RDBAPI_NOERROR         RDBAPI_SUCCESS
 
-#define RDBAPI_CONTINUE     1
+#define RDBAPI_CONTINUE        1
 
 #define RDBAPI_ERROR         (-1)
 
@@ -128,6 +130,7 @@ typedef int RDBAPI_BOOL;
  *
  *********************************************************************/
 #define RDBAPI_ARGV_MAXNUM         252
+#define RDBAPI_KEYS_MAXNUM         10
 
 #define RDBAPI_SLAVES_MAXNUM       9
 
@@ -139,7 +142,7 @@ typedef int RDBAPI_BOOL;
 #define RDBAPI_KEY_NOTFOUND        0
 
 #define RDBAPI_SQL_PATTERN_SIZE    256
-#define RDBAPI_SQL_KEYS_MAX        10
+#define RDBAPI_SQL_KEYS_MAX        RDBAPI_KEYS_MAXNUM
 #define RDBAPI_SQL_FIELDS_MAX      RDBAPI_ARGV_MAXNUM
 
 /**********************************************************************
@@ -157,6 +160,8 @@ typedef int RDBAPI_BOOL;
 
 #define RDB_KEY_NAME_MAXLEN            32
 #define RDB_KEY_VALUE_SIZE             256
+
+#define RDB_ROWKEY_MAX_SIZE            4096
 
 #define RDB_ERROR_OFFSET               ((ub8)(-1))
 
@@ -198,22 +203,24 @@ typedef struct _RDBSQLParser_t   * RDBSQLParser;
 
 typedef enum
 {
-    FILEX_IGNORE = 0,    // *
-    FILEX_EQUAL,         // a = b
-    FILEX_NOT_EQUAL,     // a != b
-    FILEX_GREAT_THAN,    // a > b
-    FILEX_LESS_THAN,     // a < b
-    FILEX_GREAT_EQUAL,   // a >= b
-    FILEX_LESS_EQUAL,    // a <= b
-    FILEX_LEFT_LIKE,     // a like 'left%'
-    FILEX_RIGHT_LIKE,    // a like '%right'
-    FILEX_LIKE,          // a like '%mid%' or 'left%' or '%right'
-    FILEX_REG_MATCH      // a regmatch(pattern)
+    // DO NOT CHANGE !
+    FILEX_IGNORE       = 0     // *
+    ,FILEX_EQUAL       = 1     // a = b
+    ,FILEX_LEFT_LIKE   = 2     // a like 'left%'
+    ,FILEX_RIGHT_LIKE  = 3     // a like '%right'
+    ,FILEX_LIKE        = 4     // a like '%mid%' or 'left%' or '%right'
+    ,FILEX_MATCH       = 5     // a regmatch(pattern)
+    ,FILEX_NOT_EQUAL   = 6     // a != b
+    ,FILEX_GREAT_THAN  = 7     // a > b
+    ,FILEX_LESS_THAN   = 8     // a < b
+    ,FILEX_GREAT_EQUAL = 9     // a >= b
+    ,FILEX_LESS_EQUAL  = 10    // a <= b
 } RDBFilterExpr;
 
 
 typedef enum
 {
+    RDBVT_ERROR = 0,     // type is error
     RDBVT_SB2   = 'j',   // 16-bit signed int: SB2
     RDBVT_UB2   = 'v',   // 16-bit unsigned int: UB2
     RDBVT_SB4   = 'i',   // 32-bit signed int: SB4
@@ -258,7 +265,7 @@ typedef enum
 } RDBSQLStmt;
 
 
-typedef struct
+typedef struct _RDBFieldDes_t
 {
     char fieldname[RDB_KEY_NAME_MAXLEN + 1];
 
@@ -271,7 +278,20 @@ typedef struct
     int nullable;
 
     char comment[RDB_KEY_VALUE_SIZE];
-} RDBFieldDesc;
+} RDBFieldDes_t;
+
+
+typedef struct _RDBTableDes_t
+{
+    char table_rowkey[256];
+
+    ub8 table_timestamp;
+    char table_datetime[20];
+    char table_comment[RDB_KEY_VALUE_SIZE];
+
+    int nfields;
+    RDBFieldDes_t fielddes[RDBAPI_ARGV_MAXNUM];
+} RDBTableDes_t;
 
 
 typedef struct _RDBBlob_t
@@ -579,11 +599,11 @@ extern RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
     const char *tablename,
     int filter_numkeys,
     const char *filter_keys[],
-    const RDBFilterExpr filter_keyexprs[],
+    RDBFilterExpr filter_keyexprs[],
     const char *filter_keyvals[],
     int filter_numfields,
     const char *filter_fields[],
-    const RDBFilterExpr filter_fieldexprs[],
+    RDBFilterExpr filter_fieldexprs[],
     const char *filter_fieldvals[],
     const char *groupby[],    // Not Supported Now!
     const char *orderby[],    // Not Supported Now!
@@ -594,11 +614,11 @@ extern RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
 
 extern ub8 RDBTableScanNext (RDBResultMap hResultMap, ub8 offset, ub4 limit);
 
-extern RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *tablename, const char *tablecomment, int numfields, RDBFieldDesc fielddes[]);
+extern RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *tablename, const char *tablecomment, int numfields, RDBFieldDes_t fielddes[]);
 
-extern int RDBTableDesc (RDBCtx ctx, const char *tablespace, const char *tablename, RDBFieldDesc tabledes[RDBAPI_ARGV_MAXNUM]);
+extern RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *tablename, RDBTableDes_t *tabledes);
 
-extern int RDBTableFindField (const RDBFieldDesc fields[RDBAPI_ARGV_MAXNUM], int numfields, const char *fieldname, int fieldnamelen);
+extern int RDBTableFindField (const RDBFieldDes_t fields[RDBAPI_ARGV_MAXNUM], int numfields, const char *fieldname, int fieldnamelen);
 
 extern RDBFieldsMap RDBTableFetchFields (RDBCtx ctx, const char *fieldnames[], int fieldnamelens[], const char *rowkey);
 

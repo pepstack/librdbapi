@@ -38,9 +38,12 @@
 
 #endif
 
-
 #include <common/cstrutil.h>
 
+
+#define REDISCLUSTER_NUMNODES      9
+#define REDISCLUSTER_TIMEOUT       0
+#define REDISCLUSTER_SOTIMEOMS     12000
 
 #ifndef __WINDOWS__
 /**
@@ -176,9 +179,9 @@ int main(int argc, const char *argv[])
 
     char appcfg[260] = {0};
 
-    int numnodes = 9;
-    int ctxtimeout = 0;         // seconds
-    int sotimeoms = 12000;      // milliseconds
+    int numnodes = REDISCLUSTER_NUMNODES;
+    int ctxtimeout = REDISCLUSTER_TIMEOUT;       // seconds
+    int sotimeoms = REDISCLUSTER_SOTIMEOMS;      // milliseconds
 
     char *nodenames[RDB_CLUSTER_NODES_MAX] = {0};
 
@@ -293,9 +296,9 @@ void redplus_print_usage()
     printf("Options:\n");
     printf("  -h, --help               Display help info\n");
     printf("  -V, --version            Show version info\n\n");
-    printf("  -N, --numnodes=NUMBER    Number of redis cluster nodes. (9 default)\n");
+    printf("  -N, --numnodes=NUMBER    Number of redis cluster nodes. (%d default)\n", REDISCLUSTER_NUMNODES);
     printf("  -R, --rediscluster=HOSTS Redis cluster host nodes. (example: 'authpass@127.0.0.1:7001-7009')\n");
-    printf("  -C, --command=REDISCMD   Redis command to call\033[0m\n");
+    printf("  -C, --command=REDISCMD   Redis command to call.\n");
     printf("  -S, --rdbsql=RDBSQL      SQL to execute on redisdb. (example: SELECT * FROM a.t WHERE ...)\n");
     printf("  -O, --output=PATHFILE    Pathfile to store output result map\n\n");
 }

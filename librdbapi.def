@@ -91,7 +91,7 @@ EXPORTS
 	RDBTableScanFirst
 	RDBTableScanNext
 	RDBTableCreate
-	RDBTableDesc
+	RDBTableDescribe
 	RDBTableFindField
 	RDBTableFetchFields
 	RDBFieldsMapGetField
