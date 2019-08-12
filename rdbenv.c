@@ -36,25 +36,142 @@
 #include "rdbtypes.h"
 
 
-RDBAPI_RESULT RDBEnvCreate (ub4 flags, ub2 clusternodes, RDBEnv *outenv)
+/**
+ * ahostport:
+ *   - 127.0.0.1:7001-7009
+ *   - 127.0.0.1:7001,127.0.0.1:7002-7005,...
+ *   - 192.168.22.11:7001-7003,192.168.22.12:7001-7003,...
+ *   - authpass@host:port,...
+ * 
+ * returns:
+ *   number of nodes
+ */
+typedef struct _RDBNodeCfg_t
 {
-    int i;
-    RDBEnv env;
+    ub4 port;
 
-    if (clusternodes < 1 || clusternodes > RDB_CLUSTER_NODES_MAX) {
-        // too many nodes for redis cluster
-        return RDBAPI_ERR_NODES;
+    ub4 ctxtimeout;
+    ub4 sotimeo_ms;
+
+    char host[RDB_HOSTADDR_MAXLEN + 1];
+    char authpass[RDB_AUTHPASS_MAXLEN + 1];
+} RDBNodeCfg_t, *RDBNodeCfg;
+
+
+static int RDBParseClusterNodes (const char *hosts, size_t hostslen, ub4 ctxtimeout, ub4 sotimeo_ms, RDBNodeCfg nodecfgs[RDB_CLUSTER_NODES_MAX])
+{
+    char *nodenames[RDB_CLUSTER_NODES_MAX] = {0};
+
+    int nn = cstr_slpit_chr(hosts, (int) hostslen, ',', nodenames, RDB_CLUSTER_NODES_MAX);
+
+    int nodeindex = 0;
+
+    while (nodeindex < RDB_CLUSTER_NODES_MAX && nodenames[nodeindex]) {
+        // pass@host:port
+        char *authpass = NULL;
+        char *host = NULL;
+        char *port = NULL;
+
+        char *outs[2] = {0};
+
+        int flds = cstr_slpit_chr(nodenames[nodeindex], (int)strlen(nodenames[nodeindex]), '@', outs, 2);
+
+        if (flds == 1) {
+            // no pass
+            char *hpouts[2] = {0};
+
+            if (cstr_slpit_chr(nodenames[nodeindex], (int)strlen(nodenames[nodeindex]), ':', hpouts, 2) == 2) {
+                if (cstr_slpit_chr(outs[1], (int)strlen(outs[1]), ':', hpouts, 2) == 2) {
+                    host = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[0], 32), '\''));
+                    port = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[1], 32), '\''));
+                }
+
+                free(hpouts[0]);
+                free(hpouts[1]);
+            }
+        } else if (flds == 2) {
+            char *hpouts[2] = {0};
+
+            authpass = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(outs[0], 32), '\''));
+
+            if (cstr_slpit_chr(outs[1], (int)strlen(outs[1]), ':', hpouts, 2) == 2) {
+                host = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[0], 32), '\''));
+                port = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[1], 32), '\''));
+            }
+
+            free(hpouts[0]);
+            free(hpouts[1]);
+        }
+
+        free(outs[0]);
+        free(outs[1]);
+
+        if (! host || !port) {
+            free(host);
+            free(port);
+            free(authpass);
+
+            break;
+        }
+
+        do {
+            char *pnouts[2] = {0};
+
+            if (cstr_slpit_chr(port, (int) strlen(port), '-', pnouts, 2) == 2) {
+                int pno = atoi(pnouts[0]);
+                int endpno = atoi(pnouts[1]);
+
+                for (; pno <= endpno; pno++) {
+                    RDBNodeCfg nodecfg = (RDBNodeCfg) RDBMemAlloc(sizeof(RDBNodeCfg_t));
+
+                    snprintf(nodecfg->host, RDB_HOSTADDR_MAXLEN, "%s", host);
+                    snprintf(nodecfg->authpass, RDB_AUTHPASS_MAXLEN, "%s", authpass);
+
+                    nodecfg->port = (ub4) pno;
+                    nodecfg->ctxtimeout = ctxtimeout;
+                    nodecfg->sotimeo_ms = sotimeo_ms;
+
+                    nodecfgs[nodeindex++] = nodecfg;
+                }
+            } else {
+                RDBNodeCfg nodecfg = (RDBNodeCfg) RDBMemAlloc(sizeof(RDBNodeCfg_t));
+
+                snprintf(nodecfg->host, RDB_HOSTADDR_MAXLEN, "%s", host);
+                snprintf(nodecfg->authpass, RDB_AUTHPASS_MAXLEN, "%s", authpass);
+
+                nodecfg->port = (ub4) atol(port);
+                nodecfg->ctxtimeout = ctxtimeout;
+                nodecfg->sotimeo_ms = sotimeo_ms;
+                
+                nodecfgs[nodeindex++] = nodecfg;
+            }
+
+            free(pnouts[0]);
+            free(pnouts[1]);
+        } while(0);
+
+        free(host);
+        free(port);
+        free(authpass);
     }
 
-    env = (RDBEnv_t *) RDBMemAlloc(sizeof(RDBEnv_t) + (int) clusternodes * sizeof(RDBEnvNode_t));
+    while (nn-- > 0) {
+        free(nodenames[nn]);
+    }
 
-    env->flags = flags;
-    env->clusternodes = clusternodes;
-    env->nodemap = NULL;
+    return nodeindex;
+}
 
-    for (i = 0; i < (int) clusternodes; i++) {
+
+static void RDBEnvInitInternal (RDBEnv env, RDBNodeCfg nodecfgs[])
+{
+    int i;
+
+    for (i = 0; i < (int) env->clusternodes; i++) {
         env->nodes[i].env = env;            
         env->nodes[i].index = i;
+        
+        RDBEnvSetNode(&(env->nodes[i]), nodecfgs[i]->host, nodecfgs[i]->port, nodecfgs[i]->ctxtimeout, nodecfgs[i]->sotimeo_ms, nodecfgs[i]->authpass);
     }
 
     // initialize global readonly config
@@ -125,100 +242,146 @@ RDBAPI_RESULT RDBEnvCreate (ub4 flags, ub2 clusternodes, RDBEnv *outenv)
     i += 8;
     snprintf(env->_valtypenamebuf + i, 6, "DEC");
     env->valtypenames[RDBVT_DEC] = &env->_valtypenamebuf[i];
-
-    *outenv = env;
-    return RDBAPI_SUCCESS;
 }
 
 
-RDBAPI_RESULT RDBEnvCreateInit (const char *appcfg, RDBEnv *outenv)
+static size_t RDBEnvLoadCfgfile (const char *cfgfile, char **outCluster, int *ioCtxtimeout, int *ioSotimeo_ms)
 {
+    RDBAPI_RESULT res;
+
     int numnodes = 0;
 
-    int ctxtimeout = 0;
-    int sotimeoms = 12000;
+    int ctxtimeout = *ioCtxtimeout;
+    int sotimeo_ms = *ioSotimeo_ms;
 
-    char *nodenames[RDB_CLUSTER_NODES_MAX] = {0};
+    RDBEnv env = NULL;
 
     FILE *fp;
 
-    if ((fp = fopen(appcfg, "r")) != NULL) {
-        int nn = 0;
-        int nnlen = 0;
+    if ((fp = fopen(cfgfile, "r")) != NULL) {
+        int n, len;
+
+        char *line;
+        char rdbuf[128];
+        char *cols[10] = {0};
+
+        int maxsz = 256;
+
+        size_t nnlen = 0;
+
+        char *cluster = RDBMemAlloc(maxsz);
 
         numnodes = 0;
 
-        while (!feof(fp) && nn < RDB_CLUSTER_NODES_MAX) {
-            char rdbuf[256] = {0};
+        cstr_readline(fp, rdbuf, 127);
+        line = cstr_trim_chr(rdbuf, 32);
 
-            fgets(rdbuf, 255, fp);
+        n = cstr_slpit_chr(line, (int) strnlen(line, 127), ',', cols, 3);
 
-            if (! numnodes) {
-                char *outs[20] = {0};
-
-                int n = cstr_slpit_chr(rdbuf, (int) strnlen(rdbuf, 255), ',', outs, 3);
-                if (n >= 1) {
-                    numnodes = atoi(outs[0]);
-                    free(outs[0]);
-                }
-                if (n >= 2) {
-                    ctxtimeout = atoi(outs[1]);
-                    free(outs[1]);
-                }
-                if (n == 3) {
-                    sotimeoms = atoi(outs[2]);
-                    free(outs[2]);
-                }
-            } else {
-                nodenames[nn] = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(cstr_LRtrim_chr(rdbuf, '\r'), '\n'), 32));
-                nnlen += (int) strlen(nodenames[nn]);
-                nn++;
-            }
-        }
-
-        fclose(fp);
-
-        if (! nn || ! numnodes || nnlen + numnodes > 4095) {
-            while(nn-- > 0) {
-                free(nodenames[nn]);
-            }
+        if (n != 3) {
+            printf("RDBAPI_ERROR: (%s:%d) fail on read config: %s\n", __FILE__, __LINE__, cfgfile);
             return RDBAPI_ERROR;
         }
 
-        do {
-            int n = 1;
-            char cluster[4096] = {0};
+        numnodes = atoi(cols[0]);
 
-            strcat(cluster, nodenames[0]);
+        ctxtimeout = atoi(cols[1]);
+        sotimeo_ms = atoi(cols[2]);
 
-            while (n++ < nn) {
-                strcat(cluster, ",");
-                strcat(cluster, nodenames[nn]);
+        free(cols[0]);
+        free(cols[1]);
+        free(cols[2]);
+
+        for (n = 0; n < numnodes; n++) {
+            cstr_readline(fp, rdbuf, 127);
+
+            // test@192.168.39.111:7009
+            line = cstr_trim_chr(rdbuf, 32);
+
+            len = strlen(line);
+            if (len < 16 || len > 120) {
+                printf("RDBAPI_ERROR: (%s:%d) bad node(%d) config: %s\n", __FILE__, __LINE__, n+1, line);
+                return RDBAPI_ERROR;
             }
 
-            cluster[nnlen + numnodes] = 0;
-        
-            RDBEnv env;
-            if (RDBEnvCreate(0, numnodes, &env) == RDBAPI_SUCCESS) {
-                if (RDBEnvInitAllNodes(env, cluster, -1, ctxtimeout, sotimeoms) == RDBAPI_SUCCESS) {
-                    *outenv = env;
+            if ( nnlen + len + 4 > maxsz ) {
+                maxsz += 256;
 
-                    while(nn-- > 0) {
-                        free(nodenames[nn]);
-                    }
-                    return RDBAPI_SUCCESS;
+                cluster = realloc(cluster, maxsz);
+                if (! cluster) {
+                    printf("RDBAPI_ERROR: (%s:%d) no memory to realloc size(%d).\n", __FILE__, __LINE__, maxsz);
+                    exit(EXIT_FAILURE);
                 }
-
-                RDBEnvDestroy(env);
             }
-        } while(0);
-
-        while(nn-- > 0) {
-            free(nodenames[nn]);
+            
+            if (! nnlen) {
+                len = snprintf(cluster, maxsz, "%.*s", len, line);
+            } else {
+                len = snprintf(cluster + nnlen, maxsz, ",%.*s", len, line);
+            }
+            nnlen += len;
         }
+
+        cluster[nnlen] = 0;
+
+        fclose(fp);
+
+        *outCluster = cluster;
+        *ioCtxtimeout = ctxtimeout;
+        *ioSotimeo_ms = sotimeo_ms;
+
+        // success
+        return nnlen;
     }
 
-    return RDBAPI_ERROR;
+    printf("RDBAPI_ERROR: (%s:%d) fopen failed: %s\n", __FILE__, __LINE__, cfgfile);
+    return 0;
+}
+
+
+RDBAPI_RESULT RDBEnvCreate (const char *cluster, size_t clusterlen, int ctxtimeout, int sotimeo_ms, RDBEnv *outenv)
+{
+    if (! clusterlen) {
+        int ret;
+        char *clustnodes = NULL;
+
+        clusterlen = RDBEnvLoadCfgfile(cluster, &clustnodes, &ctxtimeout, &sotimeo_ms);
+        if (! clusterlen) {
+            return RDBAPI_ERROR;
+        }
+
+        ret = RDBEnvCreate(clustnodes, clusterlen, ctxtimeout, sotimeo_ms, outenv);
+
+        free(clustnodes);
+
+        return ret;
+    } else {
+        RDBEnv env;
+
+        int numnodes;
+        RDBNodeCfg nodecfgs[RDB_CLUSTER_NODES_MAX] = {0};
+
+        numnodes = RDBParseClusterNodes(cluster, clusterlen, ctxtimeout, sotimeo_ms, nodecfgs);
+
+        if (numnodes < 1) {
+            printf("(%s:%d) invalid clusternodes: %.*s", __FILE__, __LINE__, clusterlen, cluster);
+            return RDBAPI_ERR_NODES;
+        }
+
+        env = (RDBEnv_t *) RDBMemAlloc(sizeof(RDBEnv_t) + (int) numnodes * sizeof(RDBEnvNode_t));
+
+        env->nodemap = NULL;
+        env->clusternodes = numnodes;
+
+        RDBEnvInitInternal(env, nodecfgs);
+
+        while(numnodes-- > 0) {
+            RDBMemFree(nodecfgs[numnodes]);
+        }
+
+        *outenv = env;
+        return RDBAPI_SUCCESS;
+    }
 }
 
 
@@ -365,123 +528,6 @@ ub4 RDBEnvNodeSotimeo (RDBEnvNode envnode)
 const char * RDBEnvNodeHostPort (RDBEnvNode envnode)
 {
     return envnode->key;
-}
-
-
-/**
- * ahostport:
- *   - 127.0.0.1:7001-7009
- *   - 127.0.0.1:7001,127.0.0.1:7002-7005,...
- *   - 192.168.22.11:7001-7003,192.168.22.12:7001-7003,...
- *   - authpass@host:port,...
- */
-static int RDBEnvNodeParseHosts (RDBEnv_t *env, const char *hosts, size_t hostslen, ub4 ctxtimeout, ub4 sotimeoms)
-{
-    char *nodenames[RDB_CLUSTER_NODES_MAX] = {0};
-    int nn = cstr_slpit_chr(hosts, (int) hostslen, ',', nodenames, RDB_CLUSTER_NODES_MAX);
-
-    int nodeindex = 0;
-
-    while (nodeindex < RDB_CLUSTER_NODES_MAX && nodenames[nodeindex]) {
-        // pass@host:port
-        char *authpass = NULL;
-        char *host = NULL;
-        char *port = NULL;
-
-        char *outs[2] = {0};
-
-        int flds = cstr_slpit_chr(nodenames[nodeindex], (int)strlen(nodenames[nodeindex]), '@', outs, 2);
-
-        if (flds == 1) {
-            // no pass
-            char *hpouts[2] = {0};
-
-            if (cstr_slpit_chr(nodenames[nodeindex], (int)strlen(nodenames[nodeindex]), ':', hpouts, 2) == 2) {
-                if (cstr_slpit_chr(outs[1], (int)strlen(outs[1]), ':', hpouts, 2) == 2) {
-                    host = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[0], 32), '\''));
-                    port = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[1], 32), '\''));
-                }
-
-                free(hpouts[0]);
-                free(hpouts[1]);
-            }
-        } else if (flds == 2) {
-            char *hpouts[2] = {0};
-
-            authpass = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(outs[0], 32), '\''));
-
-            if (cstr_slpit_chr(outs[1], (int)strlen(outs[1]), ':', hpouts, 2) == 2) {
-                host = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[0], 32), '\''));
-                port = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[1], 32), '\''));
-            }
-
-            free(hpouts[0]);
-            free(hpouts[1]);
-        }
-
-        free(outs[0]);
-        free(outs[1]);
-
-        if (! host || !port) {
-            free(host);
-            free(port);
-            free(authpass);
-
-            break;
-        }
-
-        do {
-            char *pnouts[2] = {0};
-
-            if (cstr_slpit_chr(port, (int) strlen(port), '-', pnouts, 2) == 2) {
-                int pno = atoi(pnouts[0]);
-                int endpno = atoi(pnouts[1]);
-
-                for (; pno <= endpno; pno++) {
-                    RDBEnvSetNode(RDBEnvGetNode(env, nodeindex), host, (ub4) pno, ctxtimeout, sotimeoms, authpass);
-
-                    nodeindex++;
-                }
-            } else {
-                RDBEnvSetNode(RDBEnvGetNode(env, nodeindex), host, (ub4) atol(port), ctxtimeout, sotimeoms, authpass);
-
-                nodeindex++;
-            }
-
-            free(pnouts[0]);
-            free(pnouts[1]);
-        } while(0);
-
-        free(host);
-        free(port);
-        free(authpass);
-    }
-
-    while (nn-- > 0) {
-        free(nodenames[nn]);
-    }
-
-    return nodeindex;
-}
-
-
-RDBAPI_RESULT RDBEnvInitAllNodes (RDBEnv env, const char *ahostport, size_t ahostportlen, ub4 ctxtimeout, ub4 sotimeoms)
-{
-    size_t ahplenmax = env->clusternodes * (RDB_HOSTADDR_MAXLEN + RDB_AUTHPASS_MAXLEN + 12);
-
-    if (ahostportlen == (size_t) -1) {
-        ahostportlen = strnlen(ahostport, ahplenmax);
-    }
-
-    if (ahostportlen > ahplenmax) {
-        return RDBAPI_ERR_BADARG;
-    }
-
-    if (RDBEnvNodeParseHosts(env, ahostport, ahostportlen, ctxtimeout, sotimeoms) == env->clusternodes) {
-        return RDBAPI_SUCCESS;
-    } else {
-        return RDBAPI_ERROR;
-    }
 }
 
 

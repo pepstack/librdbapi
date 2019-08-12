@@ -15,7 +15,6 @@ EXPORTS
 	RDBThreadCtxFree
 
     RDBEnvCreate
-	RDBEnvCreateInit
     RDBEnvDestroy
     RDBEnvNumNodes
 	RDBEnvNumMasterNodes
@@ -28,7 +27,6 @@ EXPORTS
     RDBEnvNodeTimeout
     RDBEnvNodeSotimeo
     RDBEnvNodeHostPort
-    RDBEnvInitAllNodes
 	RDBEnvNodeGetMaster
 	RDBEnvNodeGetSlaves
 

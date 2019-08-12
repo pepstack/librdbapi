@@ -101,6 +101,7 @@ typedef struct _RDBEnvNode_t
 {
     // constants
     RDBEnv env;
+
     int index;
 
     int port;
@@ -126,8 +127,6 @@ typedef struct _RDBEnvNode_t
 
 typedef struct _RDBEnv_t
 {
-    ub4 flags;
-
     // readonly check table for RDBValueType: 0 - bad; 1 - good
     char valtype_chk_table[256];
     char *valtypenames[256];

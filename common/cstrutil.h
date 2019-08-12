@@ -121,7 +121,7 @@ static char * cstr_replace_chr (char * str, char ch, char rpl)
 }
 
 
-static int cstr_slpit_chr (const char * str, int len, char delim, char **outs, int numouts)
+static int cstr_slpit_chr (const char * str, int len, char delim, char **outstrs, int maxoutnum)
 {
     char *p;
     const char *s = str;
@@ -135,30 +135,37 @@ static int cstr_slpit_chr (const char * str, int len, char delim, char **outs, i
         n++;
     }
 
-    if (! outs) {
+    if (! outstrs) {
+        // only to get count
         return n;
     }
 
     if (n > 0) {
+        char *sb;
+
         char *s0 = malloc(len + 1);
+
         memcpy(s0, str, len);
+
         s0[len] = 0;
 
-        s = s0;
-        while (s && (p = strchr(s, delim))) {
+        sb = s0;
+        while (sb && (p = strchr(sb, delim))) {
             *p++ = 0;
 
-            if (i < numouts) {
-                outs[i++] = strdup(s);
+            if (i < maxoutnum) {
+                // remove whitespaces
+                outstrs[i++] = strdup(cstr_LRtrim_chr(sb, 32));
             } else {
+                // overflow than maxoutnum
                 break;
-            }            
+            }
 
-            s = p;
+            sb = p;
         }
 
-        if (i < numouts) {
-            outs[i++] = strdup(s);
+        if (i < maxoutnum) {
+            outstrs[i++] = strdup(cstr_LRtrim_chr(sb, 32));
         }
 
         free(s0);
@@ -533,6 +540,27 @@ static int cstr_findstr_in (const char *str, int count, const char *dests[], int
     }
 
     return (-1);
+}
+
+
+static int cstr_readline (FILE *fp, char line[], size_t maxlen)
+{
+    int ch, len = 0;
+    
+    while ((ch = fgetc(fp)) != EOF) {
+        if (len < maxlen) {
+            if (ch != '\r' && ch != '\n') {
+                line[len++] = ch;
+            }
+        }
+
+        if (ch == '\n') {
+            break;
+        }
+    }
+
+    line[len] = 0;
+    return len;
 }
 
 

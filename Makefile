@@ -89,7 +89,7 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = x86_64-unknown-linux-gnu
 host_triplet = x86_64-unknown-linux-gnu
-noinst_PROGRAMS = test$(EXEEXT)
+noinst_PROGRAMS = redplus$(EXEEXT)
 subdir = src/librdbapi
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
@@ -114,14 +114,15 @@ librdbapi_a_DEPENDENCIES = $(top_srcdir)/libs/lib/libhiredis.a
 am__dirstamp = $(am__leading_dot)dirstamp
 am_librdbapi_a_OBJECTS = common/red_black_tree.$(OBJEXT) \
 	common/tiny-regex-c/re.$(OBJEXT) rdbactx.$(OBJEXT) \
-	rdbcol.$(OBJEXT) rdbctx.$(OBJEXT) rdbenv.$(OBJEXT) \
-	rdbmapr.$(OBJEXT) rdbparam.$(OBJEXT) rdbstmt.$(OBJEXT) \
-	rdbtable.$(OBJEXT) rdbexpr.$(OBJEXT) rdbapi.$(OBJEXT)
+	rdbctx.$(OBJEXT) rdbenv.$(OBJEXT) rdbmapr.$(OBJEXT) \
+	rdbparam.$(OBJEXT) rdbstmt.$(OBJEXT) rdbtable.$(OBJEXT) \
+	rdbexpr.$(OBJEXT) rdbsqlparser.$(OBJEXT) rdbapi.$(OBJEXT)
 librdbapi_a_OBJECTS = $(am_librdbapi_a_OBJECTS)
 PROGRAMS = $(noinst_PROGRAMS)
-am_test_OBJECTS = test.$(OBJEXT)
-test_OBJECTS = $(am_test_OBJECTS)
-test_DEPENDENCIES = ./librdbapi.a $(top_srcdir)/libs/lib/libhiredis.a
+am_redplus_OBJECTS = redplus-src/main.$(OBJEXT)
+redplus_OBJECTS = $(am_redplus_OBJECTS)
+redplus_DEPENDENCIES = ./librdbapi.a \
+	$(top_srcdir)/libs/lib/libhiredis.a
 AM_V_lt = $(am__v_lt_$(V))
 am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
 am__v_lt_0 = --silent
@@ -160,8 +161,8 @@ AM_V_CCLD = $(am__v_CCLD_$(V))
 am__v_CCLD_ = $(am__v_CCLD_$(AM_DEFAULT_VERBOSITY))
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(librdbapi_a_SOURCES) $(test_SOURCES)
-DIST_SOURCES = $(librdbapi_a_SOURCES) $(test_SOURCES)
+SOURCES = $(librdbapi_a_SOURCES) $(redplus_SOURCES)
+DIST_SOURCES = $(librdbapi_a_SOURCES) $(redplus_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -319,7 +320,6 @@ noinst_LIBRARIES = librdbapi.a
 librdbapi_a_SOURCES = common/red_black_tree.c \
 	common/tiny-regex-c/re.c \
     rdbactx.c \
-    rdbcol.c \
     rdbctx.c \
     rdbenv.c \
     rdbmapr.c \
@@ -327,8 +327,11 @@ librdbapi_a_SOURCES = common/red_black_tree.c \
     rdbstmt.c \
     rdbtable.c \
     rdbexpr.c \
+    rdbsqlparser.c \
     rdbapi.c
 
+
+# static link to hiredis
 librdbapi_a_LIBADD = $(top_srcdir)/libs/lib/libhiredis.a
 AM_CPPFLAGS = -I$(top_srcdir)/src \
     -I$(top_srcdir)/src/librdbapi \
@@ -336,8 +339,8 @@ AM_CPPFLAGS = -I$(top_srcdir)/src \
     -I$(top_srcdir)/src/librdbapi/uthash \
     -I$(top_srcdir)/libs/include
 
-test_SOURCES = test.c
-test_LDADD = ./librdbapi.a \
+redplus_SOURCES = redplus-src/main.c
+redplus_LDADD = ./librdbapi.a \
 	$(top_srcdir)/libs/lib/libhiredis.a \
     -lm \
     -lrt \
@@ -410,32 +413,41 @@ clean-noinstPROGRAMS:
 	list=`for p in $$list; do echo "$$p"; done | sed 's/$(EXEEXT)$$//'`; \
 	echo " rm -f" $$list; \
 	rm -f $$list
+redplus-src/$(am__dirstamp):
+	@$(MKDIR_P) redplus-src
+	@: > redplus-src/$(am__dirstamp)
+redplus-src/$(DEPDIR)/$(am__dirstamp):
+	@$(MKDIR_P) redplus-src/$(DEPDIR)
+	@: > redplus-src/$(DEPDIR)/$(am__dirstamp)
+redplus-src/main.$(OBJEXT): redplus-src/$(am__dirstamp) \
+	redplus-src/$(DEPDIR)/$(am__dirstamp)
 
-test$(EXEEXT): $(test_OBJECTS) $(test_DEPENDENCIES) $(EXTRA_test_DEPENDENCIES) 
-	@rm -f test$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(test_OBJECTS) $(test_LDADD) $(LIBS)
+redplus$(EXEEXT): $(redplus_OBJECTS) $(redplus_DEPENDENCIES) $(EXTRA_redplus_DEPENDENCIES) 
+	@rm -f redplus$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(redplus_OBJECTS) $(redplus_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
 	-rm -f common/*.$(OBJEXT)
 	-rm -f common/tiny-regex-c/*.$(OBJEXT)
+	-rm -f redplus-src/*.$(OBJEXT)
 
 distclean-compile:
 	-rm -f *.tab.c
 
 include ./$(DEPDIR)/rdbactx.Po
 include ./$(DEPDIR)/rdbapi.Po
-include ./$(DEPDIR)/rdbcol.Po
 include ./$(DEPDIR)/rdbctx.Po
 include ./$(DEPDIR)/rdbenv.Po
 include ./$(DEPDIR)/rdbexpr.Po
 include ./$(DEPDIR)/rdbmapr.Po
 include ./$(DEPDIR)/rdbparam.Po
+include ./$(DEPDIR)/rdbsqlparser.Po
 include ./$(DEPDIR)/rdbstmt.Po
 include ./$(DEPDIR)/rdbtable.Po
-include ./$(DEPDIR)/test.Po
 include common/$(DEPDIR)/red_black_tree.Po
 include common/tiny-regex-c/$(DEPDIR)/re.Po
+include redplus-src/$(DEPDIR)/main.Po
 
 .c.o:
 	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -583,6 +595,8 @@ distclean-generic:
 	-rm -f common/$(am__dirstamp)
 	-rm -f common/tiny-regex-c/$(DEPDIR)/$(am__dirstamp)
 	-rm -f common/tiny-regex-c/$(am__dirstamp)
+	-rm -f redplus-src/$(DEPDIR)/$(am__dirstamp)
+	-rm -f redplus-src/$(am__dirstamp)
 
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
@@ -593,7 +607,7 @@ clean-am: clean-generic clean-libtool clean-noinstLIBRARIES \
 	clean-noinstPROGRAMS mostlyclean-am
 
 distclean: distclean-am
-	-rm -rf ./$(DEPDIR) common/$(DEPDIR) common/tiny-regex-c/$(DEPDIR)
+	-rm -rf ./$(DEPDIR) common/$(DEPDIR) common/tiny-regex-c/$(DEPDIR) redplus-src/$(DEPDIR)
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
 	distclean-tags
@@ -639,7 +653,7 @@ install-ps-am:
 installcheck-am:
 
 maintainer-clean: maintainer-clean-am
-	-rm -rf ./$(DEPDIR) common/$(DEPDIR) common/tiny-regex-c/$(DEPDIR)
+	-rm -rf ./$(DEPDIR) common/$(DEPDIR) common/tiny-regex-c/$(DEPDIR) redplus-src/$(DEPDIR)
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
 

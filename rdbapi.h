@@ -60,6 +60,14 @@ extern "C"
 # define RDB_CLUSTER_NODES_MAX     255
 #endif
 
+#ifndef RDB_CLUSTER_CTX_TIMEOUT
+# define RDB_CLUSTER_CTX_TIMEOUT   0     // never
+#endif
+
+#ifndef RDB_CLUSTER_SOTIMEO_MS
+# define RDB_CLUSTER_SOTIMEO_MS    12000 // 12 seconds
+#endif
+
 #ifndef RDB_TABLE_LIMIT_MAX
 # define RDB_TABLE_LIMIT_MAX       10000
 #endif
@@ -67,7 +75,6 @@ extern "C"
 #ifndef RDB_TABLE_LIMIT_MIN
 # define RDB_TABLE_LIMIT_MIN       10
 #endif
-
 
 /**********************************************************************
  *
@@ -360,14 +367,12 @@ extern void RDBThreadCtxFree (RDBThreadCtx thrctx);
 
 /**
  * RDBEnvCreate
- *  clusternodes - number of cluster nodes
+ *  cluster - string for redis cluster nodes ("test@127.0.0.1:7001-7009") if clusterlen > 0 or
+ *            pathfile to cfgfile if clusterlen is 0.
  *  ctxtimeout - timeout in seconds for connection context
- *  sotimeoms - timeout in milliseconds for SO_SNDTIMEO and SO_RCVTIMEO
+ *  sotimeo_ms - timeout in milliseconds for SO_SNDTIMEO and SO_RCVTIMEO
  */
-
-extern RDBAPI_RESULT RDBEnvCreate (ub4 flags, ub2 clusternodes, RDBEnv *outenv);
-
-extern RDBAPI_RESULT RDBEnvCreateInit (const char *cfgfile, RDBEnv *outenv);
+extern RDBAPI_RESULT RDBEnvCreate (const char *cluster, size_t clusterlen, int ctxtimeout, int sotimeo_ms, RDBEnv *outenv);
 
 extern void RDBEnvDestroy (RDBEnv env);
 
@@ -377,7 +382,7 @@ extern int RDBEnvNumMasterNodes (RDBEnv env);
 
 extern RDBEnvNode RDBEnvGetNode (RDBEnv env, int nodeindex);
 
-extern void RDBEnvSetNode (RDBEnvNode node, const char *host, ub4 port, ub4 ctxtimeout, ub4 sotimeoms, const char *authpass);
+extern void RDBEnvSetNode (RDBEnvNode node, const char *host, ub4 port, ub4 ctxtimeout, ub4 sotimeo_ms, const char *authpass);
 
 extern RDBEnvNode RDBEnvFindNode (RDBEnv env, const char *host, ub4 port);
 

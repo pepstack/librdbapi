@@ -85,16 +85,16 @@ static int realfilepath (const char * file, char * rpdirbuf, size_t maxlen)
 #endif
 
 
-static int get_app_path (const char *argv0, char apppath[256])
+static int get_app_path (const char *argv0, char apppath[], size_t sz)
 {
-    bzero(apppath, sizeof(apppath));
+    bzero(apppath, sizeof(apppath[0]) * sz);
 
 #ifdef __WINDOWS__
 # define PATH_SEPARATOR_CHAR  '\\'
 
-    GetModuleFileNameA(NULL, apppath, 256);
+    GetModuleFileNameA(NULL, apppath, sz);
 
-    if (strnlen(apppath, 256) == 256) {
+    if (strnlen(apppath, sz) == sz) {
         printf("app path too long: %s\n", argv0);
         return (-1);
     }
@@ -111,7 +111,7 @@ static int get_app_path (const char *argv0, char apppath[256])
 #else
 # define PATH_SEPARATOR_CHAR  '/'
 
-    int ret = realfilepath(argv0, apppath, 255);
+    int ret = realfilepath(argv0, apppath, sz - 1);
 
     if (ret <= 0) {
         fprintf(stderr, "\033[1;31m[error]\033[0m %s\n", apppath);
@@ -123,10 +123,17 @@ static int get_app_path (const char *argv0, char apppath[256])
         return (-1);
     }
 
-    if (ret > 255) {
+    if (ret >= sz) {
         fprintf(stderr, "\033[1;31m[error]\033[0m path is too long: %s\n", apppath);
         return (-1);
     }
+
+    if (! strrchr(apppath, PATH_SEPARATOR_CHAR)) {
+        printf("invalid path: %s\n", apppath);
+        return (-1);
+    }
+
+    *strrchr(apppath, PATH_SEPARATOR_CHAR) = 0;
 
     return ret;
 #endif
@@ -193,13 +200,13 @@ int main(int argc, const char *argv[])
     startTime = RDBCurrentTime(1, ts);
     printf("# %s-%s start : %s\n", APPNAME, APPVER, ts);
 
-    ch = get_app_path(argv[0], appcfg);
+    ch = get_app_path(argv[0], appcfg, 256);
     if (ch == -1) {
         exit(-1);
     }
 
-    appcfg[ch++] = PATH_SEPARATOR_CHAR;
-    snprintf(appcfg + ch, 260 - ch - 1, "%s.cfg", APPNAME);
+    snprintf(appcfg + ch - 1, strlen(APPNAME) + 6, "%c%s.cfg", PATH_SEPARATOR_CHAR, APPNAME);
+    appcfg[sizeof(appcfg) - 1] = 0;
 
     while ((ch = getopt_long_only(argc, (char *const *) argv, "hVR:C:S:O:", lopts, &index)) != -1) {
         switch (ch) {
@@ -208,7 +215,7 @@ int main(int argc, const char *argv[])
             exit(-1);
 
         case 0:
-            // flag ²»Îª 0
+            // flag not used
             switch (index) {
             case 1:
             case 2:
@@ -218,7 +225,7 @@ int main(int argc, const char *argv[])
             break;
 
         case 'R':
-            snprintf(cluster, sizeof(cluster), "%s", optarg);
+            snprintf(cluster, sizeof(cluster) - 1, "%s", optarg);
             break;
 
         case 'N':
@@ -226,15 +233,15 @@ int main(int argc, const char *argv[])
             break;
 
         case 'C':
-            snprintf(command, sizeof(command), "%s", optarg);
+            snprintf(command, sizeof(command) - 1, "%s", optarg);
             break;
 
         case 'S':
-            snprintf(redsql, sizeof(redsql), "%s", optarg);
+            snprintf(redsql, sizeof(redsql) - 1, "%s", optarg);
             break;
 
         case 'O':
-            snprintf(output, sizeof(output), "%s", optarg);
+            snprintf(output, sizeof(output) - 1, "%s", optarg);
             break;
 
         case 'h':
@@ -249,22 +256,14 @@ int main(int argc, const char *argv[])
         }
     }
 
-    cluster[1023] = 0;
-    command[1023] = 0;
-    redsql[2047] = 0;
-    output[255] = 0;
-
     if (cluster[0]) {
         printf("# redis cluster: %s\n", cluster);
-        if (RDBEnvCreate(0, numnodes, &env) == RDBAPI_SUCCESS) {
-            if (RDBEnvInitAllNodes(env, cluster, -1, ctxtimeout, sotimeoms) != RDBAPI_SUCCESS) {
-                RDBEnvDestroy(env);
-                env = NULL;
-            }
-        }
+
+        RDBEnvCreate(cluster, strlen(cluster), ctxtimeout, sotimeoms, &env);
     } else {
         printf("# load config: %s\n", appcfg);
-        RDBEnvCreateInit(appcfg, &env);
+
+        RDBEnvCreate(appcfg, 0, ctxtimeout, sotimeoms, &env);
     }
 
     if (! env) {

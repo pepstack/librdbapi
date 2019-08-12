@@ -11,9 +11,10 @@ librdbapi_a_SOURCES = common/red_black_tree.c \
     rdbstmt.c \
     rdbtable.c \
     rdbexpr.c \
+    rdbsqlparser.c \
     rdbapi.c
 
-
+# static link to hiredis
 librdbapi_a_LIBADD = $(top_srcdir)/libs/lib/libhiredis.a
 
 
@@ -27,12 +28,12 @@ AM_CPPFLAGS = -I$(top_srcdir)/src \
     -I$(top_srcdir)/libs/include
 
 
-#### test c app
-noinst_PROGRAMS = test
+#### redisplus app
+noinst_PROGRAMS = redplus
 
-test_SOURCES = test.c
+redplus_SOURCES = redplus-src/main.c
 
-test_LDADD = ./librdbapi.a \
+redplus_LDADD = ./librdbapi.a \
 	$(top_srcdir)/libs/lib/libhiredis.a \
     -lm \
     -lrt \

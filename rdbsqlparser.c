@@ -736,19 +736,19 @@ RDBAPI_BOOL onParseUpdate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 
 RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len)
 {
-    /* -S"redplus.exe -S"CREATE TABLE IF NOT EXISTS xsdb.connect (sid UB4 NOT NULL COMMENT '服务ID', connfd UB4 NOT NULL COMMENT '连接描述符', sessionid UB8X COMMENT '临时会话键', port UB4 COMMENT '客户端端口', host STR(30) COMMENT '客户端IP地址', hwaddr STR(30) COMMENT '网卡地址(字符串)', agent STR(30) COMMENT '连接终端代理类型', ROWKEY(sid | connfd) ) COMMENT '客户端临时连接表';"
-
-        CREATE TABLE IF NOT EXISTS xsdb.connect (
-          sid       UB4     NOT NULL COMMENT '服务ID',
-          connfd    UB4     NOT NULL COMMENT '连接描述符',
-          sessionid UB8X             COMMENT '临时会话键',
-          port      UB4              COMMENT '客户端端口',
-          host      STR(30)          COMMENT '客户端IP地址',
-          hwaddr    STR(30)          COMMENT '网卡地址(字符串)',
-          agent     STR(30)          COMMENT '连接终端代理类型',
-          ROWKEY(sid | connfd)
-        ) COMMENT '客户端临时连接表';
-    */
+    /**
+     * redplus.exe -S"CREATE TABLE IF NOT EXISTS xsdb.connect (sid UB4 NOT NULL COMMENT 'server id', connfd UB4 NOT NULL COMMENT 'connect socket fd', sessionid UB8X COMMENT 'session id', port UB4 COMMENT 'client port', host STR(30) COMMENT 'client host ip', hwaddr STR(30) COMMENT 'mac addr', agent STR(30) COMMENT 'client agent', ROWKEY(sid | connfd) ) COMMENT 'log file entry';"
+     *
+     *   CREATE TABLE IF NOT EXISTS xsdb.connect (
+     *      sid UB4 NOT NULL COMMENT 'server id',
+     *      connfd UB4 NOT NULL COMMENT 'connect socket fd',
+     *      sessionid UB8X COMMENT 'session id',
+     *      port UB4 COMMENT 'client port', host STR(30) COMMENT 'client host ip',
+     *      hwaddr STR(30) COMMENT 'mac addr',
+     *      agent STR(30) COMMENT 'client agent',
+     *      ROWKEY(sid | connfd)
+     *   ) COMMENT 'log file entry';"
+     */
     char table[RDB_KEY_NAME_MAXLEN * 2 + 10 + 1] = {0};
 
     char * ifnex = NULL;
@@ -800,6 +800,7 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
         }
 
         nflds = cstr_slpit_chr(leftp + 1, (int)(rightp - leftp - 1), ',', flds, n);
+
         for (n = 0; n < nflds; n++) {
             char *pfn = flds[n];
             char *fld = cstr_LRtrim_chr(pfn, 32);
@@ -815,10 +816,12 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 
                 if (lp && rp && rp > lp) {
                     k = cstr_slpit_chr(lp + 1, (int)(rp - lp - 1), '|', 0, 0);
+
                     if (! k) {
                         snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "ROWKEY not found");
                         return RDBAPI_FALSE;
                     }
+
                     if (k > RDBAPI_SQL_KEYS_MAX) {
                         snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "ROWKEY too many");
                         return RDBAPI_FALSE;
@@ -826,6 +829,8 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 
                     rk = cstr_slpit_chr(lp + 1, (int)(rp - lp - 1), '|', rowkeys, k);
                 }
+
+                break;
             }
         }
 
@@ -910,11 +915,12 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
             free(flds[n]);
         }
 
-        for (n = 0; n < RDBAPI_SQL_KEYS_MAX; n++) {
-            free(rowkeys[n]);
+        for (k = 0; k < rk; k++) {
+            free(rowkeys[k]);
         }
 
         memcpy(parser->create.fielddefs, fielddefs, numfields * sizeof(fielddefs[0]));
+
         parser->create.numfields = numfields;
     } while (0);
 
