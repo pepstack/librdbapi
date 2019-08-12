@@ -79,6 +79,7 @@ int main(int argc, const char *argv[])
     RDBFieldDes_t fielddefs[] = {
         {
             {"sid"}
+            ,3
             ,RDBVT_UB8
             ,0
             ,0
@@ -88,6 +89,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"uid"}
+            ,3
             ,RDBVT_UB8
             ,0
             ,0
@@ -97,6 +99,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"entrykey"}
+            ,8
             ,RDBVT_STR
             ,32
             ,0
@@ -106,6 +109,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"status"}
+            ,6
             ,RDBVT_UB4
             ,0
             ,0
@@ -115,6 +119,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"addtime"}
+            ,7
             ,RDBVT_UB4
             ,0
             ,0
@@ -124,6 +129,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"speed_low"}
+            ,9
             ,RDBVT_UB4
             ,0
             ,0
@@ -133,6 +139,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"speed_high"}
+            ,10
             ,RDBVT_UB4
             ,0
             ,0
@@ -142,6 +149,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"updtime"}
+            ,7
             ,RDBVT_UB8
             ,0
             ,0
@@ -151,6 +159,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"filetime"}
+            ,8
             ,RDBVT_UB8
             ,0
             ,0
@@ -160,6 +169,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"entryid"}
+            ,7
             ,RDBVT_UB8X
             ,0
             ,0
@@ -169,6 +179,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"filesize"}
+            ,8
             ,RDBVT_UB8
             ,0
             ,0
@@ -178,6 +189,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"cretime"}
+            ,7
             ,RDBVT_UB8
             ,0
             ,0
@@ -187,6 +199,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"position"}
+            ,8
             ,RDBVT_UB8
             ,0
             ,0
@@ -196,6 +209,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"pathid"}
+            ,6
             ,RDBVT_STR
             ,0
             ,0
@@ -205,6 +219,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"logmd5"}
+            ,6
             ,RDBVT_STR
             ,0
             ,0
@@ -214,6 +229,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"logfile"}
+            ,7
             ,RDBVT_STR
             ,0
             ,0
@@ -223,6 +239,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"logstash"}
+            ,8
             ,RDBVT_STR
             ,0
             ,0
@@ -232,6 +249,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"filemd5"}
+            ,7
             ,RDBVT_STR
             ,0
             ,0
@@ -241,6 +259,7 @@ int main(int argc, const char *argv[])
         },
         {
             {"route"}
+            ,5
             ,RDBVT_STR
             ,0
             ,0
@@ -281,9 +300,9 @@ int main(int argc, const char *argv[])
     };
 
     RDBFilterExpr fieldexprs[] = {
-        FILEX_LESS_THAN,
-        FILEX_GREAT_THAN,
-        FILEX_EQUAL
+        RDBFIL_LESS_THAN,
+        RDBFIL_GREAT_THAN,
+        RDBFIL_EQUAL
     };
 
     const char * fieldvals[] = {

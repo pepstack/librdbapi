@@ -52,7 +52,7 @@ int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBFilterExpr exp
     int result = -1;
     int cmp;
 
-    if (expr == FILEX_IGNORE) {
+    if (expr == RDBFIL_IGNORE) {
         // always accept if expr not given
         return 1;
     }
@@ -61,50 +61,50 @@ int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBFilterExpr exp
         cmp = cstr_compare_len(src, slen, dst, dlen);
 
         switch (expr) {
-        case FILEX_EQUAL:
+        case RDBFIL_EQUAL:
             result = (!cmp? 1 : 0);
             break;
 
-        case FILEX_NOT_EQUAL:
+        case RDBFIL_NOT_EQUAL:
             result = (!cmp? 0 : 1);
             break;
 
-        case FILEX_GREAT_THAN:
+        case RDBFIL_GREAT_THAN:
             result = (cmp > 0? 1 : 0);
             break;
 
-        case FILEX_LESS_THAN:
+        case RDBFIL_LESS_THAN:
             result = (cmp < 0? 1 : 0);
             break;
 
-        case FILEX_GREAT_EQUAL:
+        case RDBFIL_GREAT_EQUAL:
             result = (cmp >= 0? 1 : 0);
             break;
 
-        case FILEX_LESS_EQUAL:
+        case RDBFIL_LESS_EQUAL:
             result = (cmp <= 0? 1 : 0);
             break;
 
-        case FILEX_LEFT_LIKE:
+        case RDBFIL_LEFT_LIKE:
             // a like 'left%'
             //   src="aaaaB"
             //   dst="aaaaBBBB"    
             result = cstr_startwith(dst, dlen, src, slen);
             break;
 
-        case FILEX_RIGHT_LIKE:
+        case RDBFIL_RIGHT_LIKE:
             // a like '%right'
             //   src="aBBBB"            
             //   dst="aaaaBBBB" 
             result = cstr_endwith(dst, dlen, src, slen);
             break;
 
-        case FILEX_LIKE:
+        case RDBFIL_LIKE:
             // a like 'left%' or '%mid%' or '%right'
             result = cstr_containwith(dst, dlen, src, slen);
             break;
 
-        case FILEX_MATCH:
+        case RDBFIL_MATCH:
             if (re_match(dst, src) == -1) {
                 result = 0;
             } else {
@@ -160,27 +160,27 @@ int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBFilterExpr exp
     }
 
     switch (expr) {
-    case FILEX_EQUAL:
+    case RDBFIL_EQUAL:
         result = (!cmp? 1 : 0);
         break;
 
-    case FILEX_NOT_EQUAL:
+    case RDBFIL_NOT_EQUAL:
         result = (! cmp? 0 : 1);
         break;
 
-    case FILEX_GREAT_THAN:
+    case RDBFIL_GREAT_THAN:
         result = (cmp > 0? 1 : 0);
         break;
 
-    case FILEX_LESS_THAN:
+    case RDBFIL_LESS_THAN:
         result = (cmp < 0? 1 : 0);
         break;
 
-    case FILEX_GREAT_EQUAL:
+    case RDBFIL_GREAT_EQUAL:
         result = (cmp >= 0? 1 : 0);
         break;
 
-    case FILEX_LESS_EQUAL:
+    case RDBFIL_LESS_EQUAL:
         result = (cmp <= 0? 1 : 0);
         break;
     }

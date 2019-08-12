@@ -286,7 +286,7 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
 
                 RDBResultMapSetDelimiter(hMap, RDB_TABLE_DELIMITER_CHAR);
 
-                hMap->kplen = RDBBuildKeyFormat(parser->create.tablespace, parser->create.tablename, tabledes.fielddes, tabledes.nfields, hMap->rowkeyid, &hMap->keyprefix);
+                hMap->kplen = RDBBuildRowkeyPattern(parser->create.tablespace, parser->create.tablename, tabledes.fielddes, tabledes.nfields, hMap->rowkeyid, &hMap->keypattern);
 
                 memcpy(hMap->fielddes, tabledes.fielddes, sizeof(tabledes.fielddes[0]) * tabledes.nfields);
                 hMap->numfields = tabledes.nfields;
@@ -502,7 +502,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a <> b
         if (cstr_split_substr(substrs[i], "<>", 2, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = FILEX_NOT_EQUAL;
+            fieldexprs[k] = RDBFIL_NOT_EQUAL;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -511,7 +511,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a != b
         if (cstr_split_substr(substrs[i], "!=", 2, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = FILEX_NOT_EQUAL;
+            fieldexprs[k] = RDBFIL_NOT_EQUAL;
             fieldvalues[k] = strdup(pair[1]);
             k++;
             continue;
@@ -520,7 +520,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a >= b
         if (cstr_split_substr(substrs[i], ">=", 2, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = FILEX_GREAT_EQUAL;
+            fieldexprs[k] = RDBFIL_GREAT_EQUAL;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -529,7 +529,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a <= b
         if (cstr_split_substr(substrs[i], "<=", 2, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = FILEX_LESS_EQUAL;
+            fieldexprs[k] = RDBFIL_LESS_EQUAL;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -538,7 +538,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a = b
         if (cstr_split_substr(substrs[i], "=", 1, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = FILEX_EQUAL;
+            fieldexprs[k] = RDBFIL_EQUAL;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -547,7 +547,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a > b
         if (cstr_split_substr(substrs[i], ">", 1, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = FILEX_GREAT_THAN;
+            fieldexprs[k] = RDBFIL_GREAT_THAN;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -556,7 +556,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a < b
         if (cstr_split_substr(substrs[i], "<", 1, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = FILEX_LESS_THAN;
+            fieldexprs[k] = RDBFIL_LESS_THAN;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -565,7 +565,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a LLIKE b
         if (cstr_split_substr(substrs[i], " LLIKE ", 7, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = FILEX_LEFT_LIKE;
+            fieldexprs[k] = RDBFIL_LEFT_LIKE;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -574,7 +574,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a RLIKE b
         if (cstr_split_substr(substrs[i], " RLIKE ", 7, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = FILEX_RIGHT_LIKE;
+            fieldexprs[k] = RDBFIL_RIGHT_LIKE;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -583,7 +583,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a LIKE b
         if (cstr_split_substr(substrs[i], " LIKE ", 6, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = FILEX_LIKE;
+            fieldexprs[k] = RDBFIL_LIKE;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;
@@ -592,7 +592,7 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
         // a MATCH b
         if (cstr_split_substr(substrs[i], " MATCH ", 7, pair, 2) == 2) {
             fieldnames[k] = CheckNewFieldName(pair[0]);
-            fieldexprs[k] = FILEX_MATCH;
+            fieldexprs[k] = RDBFIL_MATCH;
             fieldvalues[k] = CheckNewFieldValue(pair[1]);
             k++;
             continue;

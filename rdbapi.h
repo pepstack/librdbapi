@@ -168,7 +168,7 @@ typedef int RDBAPI_BOOL;
 #define RDB_KEY_NAME_MAXLEN            32
 #define RDB_KEY_VALUE_SIZE             256
 
-#define RDB_ROWKEY_MAX_SIZE            4096
+#define RDB_ROWKEY_MAX_SIZE            1024
 
 #define RDB_ERROR_OFFSET               ((ub8)(-1))
 
@@ -211,37 +211,38 @@ typedef struct _RDBSQLParser_t   * RDBSQLParser;
 typedef enum
 {
     // DO NOT CHANGE !
-    FILEX_IGNORE       = 0     // *
-    ,FILEX_EQUAL       = 1     // a = b
-    ,FILEX_LEFT_LIKE   = 2     // a like 'left%'
-    ,FILEX_RIGHT_LIKE  = 3     // a like '%right'
-    ,FILEX_LIKE        = 4     // a like '%mid%' or 'left%' or '%right'
-    ,FILEX_MATCH       = 5     // a regmatch(pattern)
-    ,FILEX_NOT_EQUAL   = 6     // a != b
-    ,FILEX_GREAT_THAN  = 7     // a > b
-    ,FILEX_LESS_THAN   = 8     // a < b
-    ,FILEX_GREAT_EQUAL = 9     // a >= b
-    ,FILEX_LESS_EQUAL  = 10    // a <= b
+    RDBFIL_IGNORE       = 0    // *
+    ,RDBFIL_EQUAL       = 1    // a = b
+    ,RDBFIL_LEFT_LIKE   = 2    // a like 'left%'
+    ,RDBFIL_RIGHT_LIKE  = 3    // a like '%right'
+    ,RDBFIL_LIKE        = 4    // a like '%mid%' or 'left%' or '%right'
+    ,RDBFIL_MATCH       = 5    // a regmatch(pattern)
+    ,RDBFIL_NOT_EQUAL   = 6    // a != b
+    ,RDBFIL_GREAT_THAN  = 7    // a > b
+    ,RDBFIL_LESS_THAN   = 8    // a < b
+    ,RDBFIL_GREAT_EQUAL = 9    // a >= b
+    ,RDBFIL_LESS_EQUAL  = 10   // a <= b
 } RDBFilterExpr;
 
 
 typedef enum
 {
-    RDBVT_ERROR = 0,     // type is error
-    RDBVT_SB2   = 'j',   // 16-bit signed int: SB2
-    RDBVT_UB2   = 'v',   // 16-bit unsigned int: UB2
-    RDBVT_SB4   = 'i',   // 32-bit signed int: SB4
-    RDBVT_UB4   = 'u',   // 32-bit unsigned int: UB4
-    RDBVT_UB4X  = 'x',   // 32-bit unsigned int (hex encoded): UB4X
-    RDBVT_SB8   = 'I',   // 64-bit signed int: SB8
-    RDBVT_UB8   = 'U',   // 64-bit unsigned int: UB8
-    RDBVT_UB8X  = 'X',   // 64-bit unsigned int (hex encoded): UB8X
-    RDBVT_CHAR  = 'c',   // character (signed char): CHAR
-    RDBVT_BYTE  = 'b',   // byte (unsigned char): BYTE
-    RDBVT_STR   = 's',   // utf8 encoded ascii string: STR
-    RDBVT_FLT64 = 'f',   // 64-bit double precision: FLT64
-    RDBVT_BLOB  = 'B',   // binary with variable size: BLOB
-    RDBVT_DEC   = 'D'    // decimal(precision, scale): DEC
+    // DO NOT CHANGE !
+    RDBVT_ERROR = 0           // type is error
+    ,RDBVT_SB2   = 'j'        // 16-bit signed int: SB2
+    ,RDBVT_UB2   = 'v'        // 16-bit unsigned int: UB2
+    ,RDBVT_SB4   = 'i'        // 32-bit signed int: SB4
+    ,RDBVT_UB4   = 'u'        // 32-bit unsigned int: UB4
+    ,RDBVT_UB4X  = 'x'        // 32-bit unsigned int (hex encoded): UB4X
+    ,RDBVT_SB8   = 'I'        // 64-bit signed int: SB8
+    ,RDBVT_UB8   = 'U'        // 64-bit unsigned int: UB8
+    ,RDBVT_UB8X  = 'X'        // 64-bit unsigned int (hex encoded): UB8X
+    ,RDBVT_CHAR  = 'c'        // character (signed char): CHAR
+    ,RDBVT_BYTE  = 'b'        // byte (unsigned char): BYTE
+    ,RDBVT_STR   = 's'        // utf8 encoded ascii string: STR
+    ,RDBVT_FLT64 = 'f'        // 64-bit double precision: FLT64
+    ,RDBVT_BLOB  = 'B'        // binary with variable size: BLOB
+    ,RDBVT_DEC   = 'D'        // decimal(precision, scale): DEC
 } RDBValueType;
 
 
@@ -275,6 +276,7 @@ typedef enum
 typedef struct _RDBFieldDes_t
 {
     char fieldname[RDB_KEY_NAME_MAXLEN + 1];
+    int namelen;
 
     RDBValueType fieldtype;
 
@@ -615,7 +617,7 @@ extern RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const
 
 extern int RDBTableFindField (const RDBFieldDes_t fields[RDBAPI_ARGV_MAXNUM], int numfields, const char *fieldname, int fieldnamelen);
 
-extern RDBFieldsMap RDBTableFetchFields (RDBCtx ctx, const char *fieldnames[], int fieldnamelens[], const char *rowkey);
+extern RDBFieldsMap RDBTableFetchFields (RDBCtx ctx, RDBFieldsMap fields, const char *fieldnames[], int fieldnamelens[], const char *rowkey);
 
 extern redisReply * RDBFieldsMapGetField (RDBFieldsMap fields, const char *fieldname, int fieldnamelen);
 
@@ -633,7 +635,7 @@ extern void RDBResultMapClean (RDBResultMap hResultMap);
 
 extern ub8 RDBResultMapSize (RDBResultMap hResultMap);
 
-extern RDBAPI_RESULT RDBResultMapInsert (RDBResultMap hResultMap, RDBResultRow row);
+extern RDBAPI_RESULT RDBResultMapInsert (RDBResultMap hResultMap, redisReply *reply);
 
 extern void RDBResultMapDelete (RDBResultMap hResultMap, redisReply *reply);
 
@@ -646,10 +648,6 @@ extern ub8 RDBResultMapGetOffset (RDBResultMap hResultMap);
 extern char RDBResultMapSetDelimiter (RDBResultMap hResultMap, char delimiter);
 
 extern void RDBResultMapPrintOut (RDBResultMap hResultMap, RDBAPI_BOOL withHead);
-
-extern RDBResultRow RDBResultRowNew (redisReply *replyKey, RDBFieldsMap fieldValues);
-
-extern void RDBResultRowFree (RDBResultRow row);
 
 
 /**********************************************************************

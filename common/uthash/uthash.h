@@ -497,7 +497,7 @@ do {                                                                            
 
 #define HASH_FIND_STR_LEN(head,findstr,findstrlen,out)                           \
 do {                                                                             \
-    unsigned _uthash_hfstr_keylen = (unsigned) findstrlen;                       \
+    unsigned _uthash_hfstr_keylen = (unsigned)(findstrlen);                      \
     HASH_FIND(hh, head, findstr, _uthash_hfstr_keylen, out);                     \
 } while (0)
 
@@ -507,6 +507,13 @@ do {                                                                            
     unsigned _uthash_hastr_keylen = (unsigned)uthash_strlen((add)->strfield);    \
     HASH_ADD(hh, head, strfield[0], _uthash_hastr_keylen, add);                  \
 } while (0)
+
+#define HASH_ADD_STR_LEN(head,strfield,fieldlen,add)                             \
+do {                                                                             \
+    unsigned _uthash_hastr_keylen = (unsigned)(fieldlen);                        \
+    HASH_ADD(hh, head, strfield[0], _uthash_hastr_keylen, add);                  \
+} while (0)
+
 #define HASH_REPLACE_STR(head,strfield,add,replaced)                             \
 do {                                                                             \
     unsigned _uthash_hrstr_keylen = (unsigned)uthash_strlen((add)->strfield);    \

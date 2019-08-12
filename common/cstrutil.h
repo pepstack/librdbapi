@@ -1,5 +1,5 @@
 /***********************************************************************
-* Copyright (c) 2008-2080 syna-tech.com, pepstack.com, 350137278@qq.com
+* Copyright (c) 2008-2080 syna-tech.com, pepstack.com, 350137278@qq.comcstr_replace_new
 *
 * ALL RIGHTS RESERVED.
 *
@@ -175,7 +175,7 @@ static int cstr_slpit_chr (const char * str, int len, char delim, char **outstrs
 }
 
 
-static char * cstr_replace_new (const char *original, const char *pattern, const char *replacement)
+static int cstr_replace_new (const char *original, const char *pattern, const char *replacement, char **outresult)
 {
     size_t const replen = strlen(replacement);
     size_t const patlen = strlen(pattern);
@@ -185,6 +185,8 @@ static char * cstr_replace_new (const char *original, const char *pattern, const
 
     const char * oriptr;
     const char * patloc;
+
+    *outresult = 0;
 
     // find how many times the pattern occurs in the original string
     for (oriptr = original; patloc = strstr(oriptr, pattern); oriptr = patloc + patlen) {
@@ -218,10 +220,11 @@ static char * cstr_replace_new (const char *original, const char *pattern, const
             strcpy(retptr, oriptr);
         }
 
-        return result;
+        *outresult = result;
+        return (int) len;
     }
 
-    return NULL;
+    return 0;
 }
     
 

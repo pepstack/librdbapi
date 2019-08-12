@@ -208,17 +208,14 @@ typedef struct _RDBResultMap_t
 
     char delimiter;
 
+    // store reply rows
     red_black_tree_t  rbtree;
 
-    // temp variables
-    int rowkey_offs[RDBAPI_SQL_KEYS_MAX];
-    int rowkey_lens[RDBAPI_SQL_KEYS_MAX];
-
-    // constants
+    // constants: rowkeyid[0] is count for keys
     int rowkeyid[RDBAPI_SQL_KEYS_MAX + 1];
 
     int kplen;
-    char *keyprefix;
+    char *keypattern;
 
     // count for result fields
     int resultfields;
@@ -236,14 +233,25 @@ typedef struct _RDBResultMap_t
 
 typedef struct _RDBResultRow_t
 {
+    // rowkeys value
     redisReply *replykey;
+
+    // field values including rowkeys
     RDBFieldsMap fieldmap;
 } RDBResultRow_t;
 
 
-int RDBBuildKeyFormat (const char * tablespace, const char * tablename, const RDBFieldDes_t *fielddes, int numfields, int *rowkeyid, char **keyformat);
-
 RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap);
+
+
+int RDBBuildRowkeyPattern (const char * tablespace, const char * tablename,
+    const RDBFieldDes_t *fielddes, int numfields,
+    int rowkeyid[RDBAPI_KEYS_MAXNUM + 1],
+    char **outRowkeyPattern);
+
+
+int RDBFinishRowkeyPattern (const RDBFieldDes_t *tabledes, int nfielddes, const int rowkeyid[RDBAPI_KEYS_MAXNUM + 1], char **pattern);
+
 
 #if defined(__cplusplus)
 }
