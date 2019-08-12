@@ -496,7 +496,7 @@ int RDBBuildRowkeyPattern (const char * tablespace, const char * tablename,
 }
 
 
-int RDBFinishRowkeyPattern (const RDBFieldDes_t *tabledes, int nfielddes, const int rowkeyid[RDBAPI_KEYS_MAXNUM + 1], char **rowkeypattern)
+int RDBFinishRowkeyPattern (const RDBFieldDes_t *fielddes, int nfielddes, const int rowkeyid[RDBAPI_KEYS_MAXNUM + 1], char **rowkeypattern)
 {
     int i, j, l, len = 0;
     char *result;
@@ -507,7 +507,8 @@ int RDBFinishRowkeyPattern (const RDBFieldDes_t *tabledes, int nfielddes, const 
     for (i = 1; i <= rowkeyid[0]; i++) {
         j = rowkeyid[i];
 
-        snprintf(pattern, RDB_KEY_NAME_MAXLEN + 1, "$%s", tabledes[j].fieldname);
+        //DEBUG
+        snprintf(pattern, RDB_KEY_NAME_MAXLEN + 1, "$%.*s", fielddes[j].namelen, fielddes[j].fieldname);
 
         l = cstr_replace_new(rowkey, pattern, "*", &result);
         if (l) {
@@ -688,7 +689,7 @@ RDBAPI_RESULT RDBResultMapInsert (RDBResultMap resultMap, redisReply *reply)
     }
 
     // filter by fields
-    fieldmap = RDBTableFetchFields(resultMap->ctxh, fieldmap, resultMap->fetchfields, resultMap->fieldnamelens, reply->str);
+    fieldmap = RDBTableFetchFields(resultMap->ctxh, fieldmap, (const char **) resultMap->fetchfields, resultMap->fieldnamelens, reply->str);
     if (! fieldmap) {
         return RDBAPI_ERROR;
     }
@@ -1532,26 +1533,27 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
     bzero(tabledes, sizeof(*tabledes));
 
     if (! strcmp(tablespace, RDB_SYSTEM_TABLE_PREFIX)) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERROR: system tablespace: %s", tablespace);
+        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "(%s:%d) RDBAPI_ERROR: system tablespace: %s", __FILE__, __LINE__, tablespace);
         return RDBAPI_ERROR;
     }
 
     snprintf(tabledes->table_rowkey, sizeof(tabledes->table_rowkey) - 1, "{%s::%s:%s}", RDB_SYSTEM_TABLE_PREFIX, tablespace, tablename);
     if (RedisHMGet(ctx, tabledes->table_rowkey, tablefields, &tableReply) != RDBAPI_SUCCESS) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERROR: table key not found: %s", tabledes->table_rowkey);
+        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "(%s:%d) RDBAPI_ERROR: table key not found: %.*s", __FILE__, __LINE__,
+            cstr_length(tabledes->table_rowkey, RDB_ERROR_MSG_LEN), tabledes->table_rowkey);
         return RDBAPI_ERROR;
     }
 
     if (cstr_to_ub8(10, tableReply->element[0]->str, tableReply->element[0]->len, &tabledes->table_timestamp) != 1) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERROR: bad field value: ct='%.*s'", tableReply->element[0]->len, tableReply->element[0]->str);
+        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "(%s:%d) RDBAPI_ERROR: bad field value: ct='%.*s'", __FILE__, __LINE__, (int) tableReply->element[0]->len, tableReply->element[0]->str);
         RedisFreeReplyObject(&tableReply);        
         return RDBAPI_ERROR;
     }
 
-    snprintf(tabledes->table_datetime, sizeof(tabledes->table_datetime), "%.*s", tableReply->element[1]->len, tableReply->element[1]->str);
+    snprintf(tabledes->table_datetime, sizeof(tabledes->table_datetime), "%.*s", (int)tableReply->element[1]->len, tableReply->element[1]->str);
     tabledes->table_datetime[sizeof(tabledes->table_datetime) - 1] = 0;
 
-    snprintf(tabledes->table_comment, sizeof(tabledes->table_comment), "%.*s", tableReply->element[2]->len, tableReply->element[2]->str);
+    snprintf(tabledes->table_comment, sizeof(tabledes->table_comment), "%.*s", (int)tableReply->element[2]->len, tableReply->element[2]->str);
     tabledes->table_comment[sizeof(tabledes->table_comment) - 1] = 0;
 
     RedisFreeReplyObject(&tableReply);
@@ -1750,13 +1752,13 @@ static void RDBResultRowPrintCallback (void * _row, void * _map)
 
         if (cols) {
             if (kvnode->value) {
-                printf("%c%.*s", resultMap->delimiter, kvnode->value->len, kvnode->value->str);
+                printf("%c%.*s", resultMap->delimiter, (int)kvnode->value->len, kvnode->value->str);
             } else {
                 printf("%c(null)", resultMap->delimiter);
             }
         } else {
             if (kvnode->value) {
-                printf("%.*s", kvnode->value->len, kvnode->value->str);
+                printf("%.*s", (int)kvnode->value->len, kvnode->value->str);
             } else {
                 printf("(null)");
             }

@@ -100,10 +100,6 @@ static int get_app_path (const char *argv0, char apppath[], size_t sz)
         return (-1);
     }
 
-    *strrchr(apppath, PATH_SEPARATOR_CHAR) = 0;
-
-    return (int) strlen(apppath);
-
 #else
 # define PATH_SEPARATOR_CHAR  '/'
 
@@ -129,10 +125,11 @@ static int get_app_path (const char *argv0, char apppath[], size_t sz)
         return (-1);
     }
 
+#endif
+
     *strrchr(apppath, PATH_SEPARATOR_CHAR) = 0;
 
-    return ret;
-#endif
+    return (int) strlen(apppath);
 }
 
 
@@ -198,7 +195,7 @@ int main(int argc, const char *argv[])
         exit(-1);
     }
 
-    snprintf(appcfg + 7 + ch, strlen(APPNAME) + 6, "%c%s.cfg", PATH_SEPARATOR_CHAR, APPNAME);
+    snprintf(appcfg+7+ch, strlen(APPNAME) + 6, "%c%s.cfg", PATH_SEPARATOR_CHAR, APPNAME);
     appcfg[sizeof(appcfg) - 1] = 0;
 
     while ((ch = getopt_long_only(argc, (char *const *) argv, "hVR:C:S:O:", lopts, &index)) != -1) {
@@ -246,11 +243,11 @@ int main(int argc, const char *argv[])
     }
 
     if (cluster[0]) {
-        printf("# redis cluster: %s\n", cluster);
+        printf("# (%s:%d) redis cluster: %s\n", __FILE__, __LINE__, cluster);
 
         RDBEnvCreate(cluster, 0, 0, &env);
     } else {
-        printf("# load config: %s\n", appcfg);
+        printf("# (%s:%d) load config: %s\n", __FILE__, __LINE__, appcfg);
 
         RDBEnvCreate(appcfg, 0, 0, &env);
     }

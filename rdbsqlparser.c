@@ -85,6 +85,10 @@ typedef struct _RDBSQLParser_t
             char tablespace[RDB_KEY_NAME_MAXLEN + 1];
             char tablename[RDB_KEY_NAME_MAXLEN + 1];
         } desctable;
+
+        struct INFO_SECTION {
+            RDBNodeInfoSection section;
+        } info;
     };
 
     int sqlen;
@@ -96,6 +100,7 @@ RDBAPI_BOOL onParseDelete (RDBSQLParser_t * parser, RDBCtx ctx, char *delsql, in
 RDBAPI_BOOL onParseUpdate (RDBSQLParser_t * parser, RDBCtx ctx, char *updsql, int len);
 RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *cresql, int len);
 RDBAPI_BOOL onParseDesc (RDBSQLParser_t * parser, RDBCtx ctx, char *cresql, int len);
+RDBAPI_BOOL onParseInfo (RDBSQLParser_t * parser, RDBCtx ctx, char *cresql, int len);
 
 
 RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQLParser *outParser)
@@ -110,7 +115,7 @@ RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQL
         len = (int) sqlen;
     }
 
-    if (len < 8) {
+    if (len < 4) {
         snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_RDBSQL: sql is too short");
         RDBCTX_ERRMSG_DONE(ctx);
         return RDBAPI_ERR_RDBSQL;
@@ -161,6 +166,11 @@ RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQL
 
         parseOk = onParseDesc(parser, ctx, parser->sql + strlen("DESC "), parser->sqlen - (int)strlen("DESC "));
         parser->stmt = parseOk? RDBSQL_DESC_TABLE : RDBSQL_INVALID;
+
+    } else if (cstr_startwith(parser->sql, parser->sqlen, "INFO", (int)strlen("INFO"))) {
+
+        parseOk = onParseInfo(parser, ctx, parser->sql + strlen("INFO"), parser->sqlen - (int)strlen("INFO"));
+        parser->stmt = parseOk? RDBSQL_INFO_SECTION : RDBSQL_INVALID;
 
     } else {
         snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_RDBSQL: invalid sql");
@@ -218,7 +228,7 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
 
     *outResultMap = NULL;
 
-    const char **vtnames = ctx->env->valtypenames;
+    const char **vtnames = (const char **) ctx->env->valtypenames;
 
     if (parser->stmt == RDBSQL_SELECT || parser->stmt == RDBSQL_DELETE) {
         RDBResultMap resultMap;
@@ -227,17 +237,17 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
                 parser->stmt,
                 parser->select.tablespace, parser->select.tablename,
                 parser->select.numkeys,
-                parser->select.keys,
+                (const char **) parser->select.keys,
                 parser->select.keyexprs,
-                parser->select.keyvals,
+                (const char **) parser->select.keyvals,
                 parser->select.numfields,
-                parser->select.fields,
+                (const char **) parser->select.fields,
                 parser->select.fieldexprs,
-                parser->select.fieldvals,
+                (const char **) parser->select.fieldvals,
                 NULL,
                 NULL,
                 parser->select.count,
-                parser->select.resultfields,
+                (const char **) parser->select.resultfields,
                 &resultMap);
 
         if (res == RDBAPI_SUCCESS) {
@@ -314,6 +324,13 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
 
             printf("#----------------------------------------------------------------------------------\n");
 
+            return RDBAPI_SUCCESS;
+        }
+    } else if (parser->stmt == RDBSQL_INFO_SECTION) {
+        // TODO: resultmap
+        if (RDBCtxCheckInfo(ctx, parser->info.section) == RDBAPI_SUCCESS) {
+            RDBCtxPrintInfo(ctx, -1);
+            
             return RDBAPI_SUCCESS;
         }
     }
@@ -786,7 +803,7 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
     char *leftp  = strchr(sql, '(');
     char *rightp = strrchr(sql, ')');
 
-    const char **vtnames = ctx->env->valtypenames;
+    const char **vtnames = (const char **) ctx->env->valtypenames;
 
     if (!leftp || !rightp || (rightp - leftp) < 16) {
         snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "error CREATE TABLE grammar");
@@ -908,7 +925,7 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
                         // error
                     }
 
-                    snprintf(valbuf, sizeof(valbuf) - 1, "%.*s", b - a - 1, a + 1);
+                    snprintf(valbuf, sizeof(valbuf) - 1, "%.*s", (int)(b - a - 1), a + 1);
 
                     fielddefs[numfields].length = atoi(cstr_LRtrim_chr(valbuf, 32));
                     if (fielddefs[numfields].length <= 0) {
@@ -920,7 +937,7 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
                     // error: not support now
                 }
 
-                fielddefs[numfields].rowkey = 1 + cstr_findstr_in(fielddefs[numfields].fieldname, (int)strlen(fielddefs[numfields].fieldname), rowkeys, rk);
+                fielddefs[numfields].rowkey = 1 + cstr_findstr_in(fielddefs[numfields].fieldname, (int)strlen(fielddefs[numfields].fieldname), (const char **)rowkeys, rk);
 
                 if (strstr(fld, " NOT NULL")) {
                     fielddefs[numfields].nullable = 0;
@@ -936,7 +953,7 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
                         // error
                     }
 
-                    snprintf(fielddefs[numfields].comment, sizeof(fielddefs[numfields].comment) - 1, "%.*s", c2 - c1 - 1, c1 + 1);
+                    snprintf(fielddefs[numfields].comment, sizeof(fielddefs[numfields].comment) - 1, "%.*s", (int)(c2 - c1 - 1), c1 + 1);
                 }
 
                 numfields++;
@@ -962,7 +979,7 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
             // error
         }
 
-        snprintf(parser->create.tablecomment, sizeof(parser->create.tablecomment) - 1, "%.*s", t2 - t1 - 1, t1 + 1);
+        snprintf(parser->create.tablecomment, sizeof(parser->create.tablecomment) - 1, "%.*s", (int)(t2 - t1 - 1), t1 + 1);
     }
 
     return RDBAPI_TRUE;
@@ -973,12 +990,54 @@ RDBAPI_BOOL onParseDesc (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len
 {
     char table[RDB_KEY_NAME_MAXLEN * 2 + 10 + 1] = {0};
 
-    snprintf(table, sizeof(table) - 1, "%.*s", RDB_KEY_NAME_MAXLEN * 2 + 10, sql);
+    snprintf(table, sizeof(table) - 1, "%s", sql);
 
     if (! parse_table(cstr_LRtrim_chr(table, 32), parser->desctable.tablespace, parser->desctable.tablename)) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "parse_table failed");
+        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "(%s:%d) parse_table failed", __FILE__, __LINE__);
         return RDBAPI_FALSE;
     }
 
     return RDBAPI_TRUE;
+}
+
+
+RDBAPI_BOOL onParseInfo (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len)
+{
+    char * sec = cstr_Rtrim_chr(sql, 32);
+    int chlen = cstr_length(sec, 20);
+
+    if (! chlen) {
+        parser->info.section = MAX_NODEINFO_SECTIONS;
+        return RDBAPI_TRUE;
+    } else {
+        const char *sections[] = {
+            "SERVER",        // 0
+            "CLIENTS",       // 1
+            "MEMORY",        // 2
+            "PERSISTENCE",   // 3
+            "STATS",         // 4
+            "REPLICATION",   // 5
+            "CPU",           // 6
+            "CLUSTER",       // 7
+            "KEYSPACE",      // 8
+            0
+        };
+
+        int i = 0;
+        const char *section = NULL;
+        
+        sec = cstr_Ltrim_chr(sec, 32);
+        chlen = cstr_length(sec, 16);
+
+        while ((section = sections[i]) != NULL) {
+            if (! cstr_compare_len(section, strlen(section), sec, chlen)) {
+                parser->info.section = (RDBNodeInfoSection) i;
+                break;
+            }
+
+            i++;
+        }
+
+        return section? RDBAPI_TRUE : RDBAPI_FALSE;
+    }
 }

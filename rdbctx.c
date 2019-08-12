@@ -241,7 +241,7 @@ RDBAPI_RESULT RDBCtxNodeCheckInfo (RDBCtxNode ctxnode, RDBNodeInfoSection sectio
     RDBEnvNode envnode;
     RDBPropMap propmap;
 
-    char *sections[] = {
+    const char *sections[] = {
         "SERVER",        // 0
         "CLIENTS",       // 1
         "MEMORY",        // 2
@@ -328,7 +328,7 @@ RDBAPI_RESULT RDBCtxNodeCheckInfo (RDBCtxNode ctxnode, RDBNodeInfoSection sectio
 RDBAPI_RESULT RDBCtxCheckInfo (RDBCtx ctx, RDBNodeInfoSection section)
 {
     if (section < NODEINFO_SERVER || section > MAX_NODEINFO_SECTIONS) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "%s", "RDBAPI_ERR_BADARG: invalid section(%d)", (int) section);
+        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "(%s:%d) RDBAPI_ERR_BADARG: invalid section(%d)", __FILE__, __LINE__, (int) section);
         return RDBAPI_ERR_BADARG;
     } else {
         RDBCtxNode ctxnode;

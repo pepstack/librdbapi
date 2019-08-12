@@ -406,7 +406,7 @@ redisReply * RedisExecCommand (RDBCtx ctx, int argc, const char **argv, const si
              */
             snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "redisCommandArgv REDIS_ERR_IO(errno=%d): %s", errno, strerror(errno));
         } else {
-            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "redisCommandArgv RedisContext Error(%d): %s", redCtx->err, redCtx->errstr);
+            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "redisCommandArgv RedisContext Error(%d): %.*s", redCtx->err, cstr_length(redCtx->errstr, RDB_ERROR_MSG_LEN), redCtx->errstr);
         }
 
         RDBCtxNodeClose(anode);
@@ -765,7 +765,7 @@ RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, sb8 expire_ms)
                 return RDBAPI_SUCCESS;
             } else {
                 // bad reply integer
-                snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_RETVAL: reply integer(%"PRId64")", reply->integer);
+                snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_RETVAL: reply integer(%"PRId64")", (sb8) reply->integer);
 
                 RedisFreeReplyObject(&reply);
                 return RDBAPI_ERR_RETVAL;
@@ -820,7 +820,7 @@ RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, sb8 expire_ms)
             return RDBAPI_ERR_NOKEY;
         } else {
             // bad reply integer
-            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_RETVAL: reply integer(%"PRId64")", reply->integer);
+            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_RETVAL: reply integer(%"PRId64")", (sb8) reply->integer);
             RedisFreeReplyObject(&reply);
             return RDBAPI_ERR_RETVAL;
         }
