@@ -206,6 +206,8 @@ typedef struct _RDBResultMap_t
 
     RDBTableFilter filter;
 
+    RDBSQLStmt sqlstmt;
+
     char delimiter;
 
     // store reply rows
@@ -241,8 +243,7 @@ typedef struct _RDBResultRow_t
 } RDBResultRow_t;
 
 
-RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap);
-
+RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, RDBSQLStmt sqlstmt, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap);
 
 int RDBBuildRowkeyPattern (const char * tablespace, const char * tablename,
     const RDBFieldDes_t *fielddes, int numfields,

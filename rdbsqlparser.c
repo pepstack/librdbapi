@@ -44,6 +44,7 @@ typedef struct _RDBSQLParser_t
     RDBSQLStmt stmt;
 
     union {
+        // DELETE also use select
         struct SELECT {
             char tablespace[RDB_KEY_NAME_MAXLEN + 1];
             char tablename[RDB_KEY_NAME_MAXLEN + 1];
@@ -67,23 +68,6 @@ typedef struct _RDBSQLParser_t
             ub8 offset;
             ub4 limit;
         } select;
-
-        struct DELETE_FROM {
-            char tablespace[RDB_KEY_NAME_MAXLEN + 1];
-            char tablename[RDB_KEY_NAME_MAXLEN + 1];
-
-            // fields filter
-            int numfields;
-            char      *fields[RDBAPI_ARGV_MAXNUM];
-            RDBFilterExpr fieldexprs[RDBAPI_ARGV_MAXNUM];
-            char      *fieldvals[RDBAPI_ARGV_MAXNUM];
-
-            // keys filter
-            int numkeys;
-            char *keys[RDBAPI_ARGV_MAXNUM];
-            RDBFilterExpr keyexprs[RDBAPI_ARGV_MAXNUM];
-            char *keyvals[RDBAPI_ARGV_MAXNUM];
-        } delfrom;
 
         struct CREATE_TABLE {
             char tablespace[RDB_KEY_NAME_MAXLEN + 1];
@@ -200,7 +184,7 @@ RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQL
 
 void RDBSQLParserFree (RDBSQLParser parser)
 {
-    if (parser->stmt == RDBSQL_SELECT) {
+    if (parser->stmt == RDBSQL_SELECT || parser->stmt == RDBSQL_DELETE) {
         int i = 0;
         while (i < RDBAPI_ARGV_MAXNUM) {
             char *psz;
@@ -236,10 +220,12 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
 
     const char **vtnames = ctx->env->valtypenames;
 
-    if (parser->stmt == RDBSQL_SELECT) {
+    if (parser->stmt == RDBSQL_SELECT || parser->stmt == RDBSQL_DELETE) {
         RDBResultMap resultMap;
 
-        res = RDBTableScanFirst(ctx, parser->select.tablespace, parser->select.tablename,
+        res = RDBTableScanFirst(ctx,
+                parser->stmt,
+                parser->select.tablespace, parser->select.tablename,
                 parser->select.numkeys,
                 parser->select.keys,
                 parser->select.keyexprs,
@@ -628,7 +614,7 @@ RDBAPI_BOOL onParseSelect (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
     }
 
     snprintf(fields, sizeof(fields) - 1, "%.*s", (int)(_from - sql), sql);
-    snprintf(table, sizeof(table) - 1, "%.*s", RDB_KEY_NAME_MAXLEN * 2 + 10, _from + strlen(" FROM "));
+    snprintf(table, sizeof(table) - 1, "%s", _from + strlen(" FROM "));
 
     psz = strstr(table, " WHERE ");
     if (psz) {
@@ -702,9 +688,14 @@ RDBAPI_BOOL onParseDelete (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
     char *psz;
 
     char table[RDB_KEY_NAME_MAXLEN * 2 + 10 + 1] = {0};
-    char wheres[1024] = {0};
+    char wheres[RDB_SQL_WHERE_LEN_MAX + 2] = {0};
 
-    snprintf(table, sizeof(table) - 1, "%.*s", RDB_KEY_NAME_MAXLEN * 2 + 10, sql);
+    char offset[32] = {0};
+    char limit[32] = {0};
+
+    ub8 limitTmp = 0;
+
+    snprintf(table, sizeof(table) - 1, "%.*s", len, sql);
 
     psz = strstr(table, " WHERE ");
     if (psz) {
@@ -712,19 +703,58 @@ RDBAPI_BOOL onParseDelete (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 
         psz = strstr(sql, " WHERE ");
         snprintf(wheres, sizeof(wheres) - 1, "%.*s", len - (int)(psz - sql), psz + strlen(" WHERE "));
+
+        psz = strstr(wheres, " OFFSET ");
+        if (psz) {
+            *psz = 0;
+        }
+        psz = strstr(wheres, " LIMIT ");
+        if (psz) {
+            *psz = 0;
+        }
     }
 
-    if (! parse_table(cstr_LRtrim_chr(table, 32), parser->delfrom.tablespace, parser->delfrom.tablename)) {
+    psz = strstr(sql, " OFFSET ");
+    if (psz) {
+        snprintf(offset, sizeof(offset) - 1, "%.*s", len - (int)(psz - sql), psz + strlen(" OFFSET "));
+        psz = strstr(offset, " LIMIT ");
+        if (psz) {
+            *psz = 0;
+        }
+    }
+
+    psz = strstr(sql, " LIMIT ");
+    if (psz) {
+        snprintf(limit, sizeof(limit) - 1, "%.*s", len - (int)(psz - sql), psz + strlen(" LIMIT "));
+        psz = strstr(limit, " OFFSET ");
+        if (psz) {
+            *psz = 0;
+        }
+    }
+
+    if (! parse_table(cstr_LRtrim_chr(table, 32), parser->select.tablespace, parser->select.tablename)) {
         snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "parse_table failed");
         return RDBAPI_FALSE;
     }
-  
-    if (parse_where(cstr_LRtrim_chr(wheres, 32), parser->delfrom.fields, parser->delfrom.fieldexprs, parser->delfrom.fieldvals) < 0) {
+
+    parser->select.numfields = parse_where(cstr_LRtrim_chr(wheres, 32), parser->select.fields, parser->select.fieldexprs, parser->select.fieldvals);
+    if (parser->select.numfields < 0) {
         snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "parse_where failed");
         return RDBAPI_FALSE;
     }
 
-    return RDBAPI_FALSE;
+    if (cstr_to_ub8(10, offset, (int) strlen(offset), &parser->select.offset) < 0) {
+        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "error OFFSET");
+        return RDBAPI_FALSE;
+    }
+
+    if (cstr_to_ub8(10, limit, (int) strlen(limit), &limitTmp) < 0) {
+        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "error LIMIT");
+        return RDBAPI_FALSE;
+    }
+    parser->select.limit = (ub4)limitTmp;
+
+    return RDBAPI_TRUE;
 }
 
 

@@ -592,6 +592,7 @@ extern RDBAPI_RESULT RedisIncrFloatField (RDBCtx ctx, const char *key, const cha
  *
  *********************************************************************/
 extern RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
+    RDBSQLStmt sqlstmt,
     const char *tablespace,
     const char *tablename,
     int filter_numkeys,

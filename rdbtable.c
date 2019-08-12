@@ -386,22 +386,18 @@ static int RDBResultRowNodeCompare (void *newObject, void *nodeObject)
 }
 
 
-static void RDBResultRowNodeDelete (void *rownode, void *arg)
+static void RDBResultRowFree (RDBResultRow rowdata)
 {
-    RDBResultRow row = (RDBResultRow) rownode;
+    RedisFreeReplyObject(&rowdata->replykey);
+    RDBFieldsMapFree(rowdata->fieldmap);
 
-    freeReplyObject(row->replykey);
-    RDBFieldsMapFree(row->fieldmap);
-
-    RDBMemFree(row);
+    RDBMemFree(rowdata);
 }
 
 
-static void RDBResultRowFree (RDBResultRow rowdata)
+static void RDBResultRowNodeDelete (void *rownode, void *arg)
 {
-    freeReplyObject(rowdata->replykey);
-    RDBFieldsMapFree(rowdata->fieldmap);
-    RDBMemFree(rowdata);
+    RDBResultRowFree((RDBResultRow) rownode);
 }
 
 
@@ -528,7 +524,7 @@ int RDBFinishRowkeyPattern (const RDBFieldDes_t *tabledes, int nfielddes, const 
 
 ///////////////////////////// PUBLIC API /////////////////////////////
 
-RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap)
+RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, RDBSQLStmt sqlstmt, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap)
 {
     RDBResultMap hMap = (RDBResultMap) RDBMemAlloc(sizeof(RDBResultMap_t) + sizeof(RDBFieldDes_t) * numfields);
     if (! hMap) {
@@ -536,6 +532,7 @@ RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, int numfields, const RDBFi
     }
 
     hMap->filter = filter;
+    hMap->sqlstmt = sqlstmt;
 
     RDBResultMapSetDelimiter(hMap, RDB_TABLE_DELIMITER_CHAR);
 
@@ -630,7 +627,7 @@ RDBAPI_RESULT RDBResultMapInsert (RDBResultMap resultMap, redisReply *reply)
 {
     int i, j, k, ret;
 
-    red_black_node_t * node;
+    red_black_node_t *node;
     RDBResultRow rowdata;
 
     RDBKeyVal kvfilter;
@@ -720,25 +717,41 @@ RDBAPI_RESULT RDBResultMapInsert (RDBResultMap resultMap, redisReply *reply)
         }
     }
 
-    // pass all filters ok
-    rowdata = (RDBResultRow) RDBMemAlloc(sizeof(RDBResultRow_t ));
+    if (resultMap->sqlstmt == RDBSQL_SELECT) {
+        // pass all filters ok
+        rowdata = (RDBResultRow) RDBMemAlloc(sizeof(RDBResultRow_t ));
 
-    rowdata->fieldmap = fieldmap;
-    rowdata->replykey = reply;
+        rowdata->fieldmap = fieldmap;
+        rowdata->replykey = reply;
 
-    node = rbtree_insert_unique(&resultMap->rbtree, (void *) rowdata, &ret);
+        node = rbtree_insert_unique(&resultMap->rbtree, (void *) rowdata, &ret);
 
-    if (! node) {
-        // out of memory
-        RDBResultRowFree(rowdata);
-        return RDBAPI_ERR_NOMEM;
+        if (! node) {
+            // out of memory
+            RDBResultRowFree(rowdata);
+            return RDBAPI_ERR_NOMEM;
+        }
+
+        if (! ret) {
+            RDBResultRowFree(rowdata);
+            return RDBAPI_ERR_EXISTED;
+        }
+
+        return RDBAPI_SUCCESS;
+    } else if (resultMap->sqlstmt == RDBSQL_DELETE) {
+        ret = RedisDeleteKey(resultMap->ctxh, reply->str, NULL, 0);
+        if (ret == 1 || ret == RDBAPI_KEY_NOTFOUND) {
+            //TODO:
+
+            RedisFreeReplyObject(&reply);
+            RDBFieldsMapFree(fieldmap);
+            return RDBAPI_SUCCESS;
+        }
     }
 
-    if (! ret) {
-        RDBResultRowFree(rowdata);
-        return RDBAPI_ERR_EXISTED;
-    }
-
+    // others:
+    RedisFreeReplyObject(&reply);
+    RDBFieldsMapFree(fieldmap);
     return RDBAPI_SUCCESS;
 }
 
@@ -788,6 +801,7 @@ ub8 RDBResultMapGetOffset (RDBResultMap hResultMap)
 
 
 static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
+    RDBSQLStmt sqlstmt,
     const char *tablespace,   // must valid
     const char *tablename,    // must valid
     const char *desctable,    // if DESC table, take it as key
@@ -931,7 +945,7 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
     }
 
     // MUST after RDBTableFilterInit
-    if (RDBResultMapNew(filter, tabledes.nfields, tabledes.fielddes, resultfields, &resultMap) != RDBAPI_SUCCESS) {
+    if (RDBResultMapNew(filter, sqlstmt, tabledes.nfields, tabledes.fielddes, resultfields, &resultMap) != RDBAPI_SUCCESS) {
         snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_NOMEM: out of memory");
         RDBTableFilterFree(filter);
         return RDBAPI_ERR_NOMEM;
@@ -949,6 +963,7 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
 
 
 RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
+    RDBSQLStmt sqlstmt,
     const char *tablespace,   // must valid
     const char *tablename,    // must valid
     int numkeys,
@@ -966,6 +981,7 @@ RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
     RDBResultMap *phResultMap)
 {
    return RDBTableScanFirstInternal(ctx,
+            sqlstmt,
             tablespace,
             tablename,
             NULL,
@@ -1542,6 +1558,7 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
 
     // Get fields des
     result = RDBTableScanFirstInternal(ctx,
+        RDBSQL_SELECT,
         RDB_SYSTEM_TABLE_PREFIX, tablespace,
         tablename,            // key
         0, NULL, NULL, NULL,  // filter keys
@@ -1705,6 +1722,8 @@ static void RDBResultRowPrintCallback (void * _row, void * _map)
     RDBResultMap resultMap = (RDBResultMap)_map;
     RDBResultRow resultRow = (RDBResultRow)_row;
     RDBFieldsMap fieldsmap = resultRow->fieldmap;
+
+    //TODO: resultMap->sqlstmt == RDBSQL_SELECT
 
     // print rowkey values
     for (i = 1; i <= resultMap->rowkeyid[0]; i++) {

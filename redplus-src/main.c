@@ -331,6 +331,7 @@ int redplus_exec_redsql (RDBEnv env, const char *rdbsql, const char *output)
         RDBResultMapPrintOut(resultMap, 1);
 
         printf("# result rows=%"PRIu64".\n", RDBResultMapSize(resultMap));
+        printf("# last offset=%"PRIu64".\n", offset);
     } else if (RDBSQLParserGetStmt(sqlparser, NULL, 0) == RDBSQL_CREATE) {
         RDBResultMapPrintOut(resultMap, 1);
 

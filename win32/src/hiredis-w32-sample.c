@@ -314,7 +314,7 @@ int main(int argc, const char *argv[])
     ub8 offset = 0;
     ub8 total = 0;
 
-    res = RDBTableScanFirst(ctx, "xsdb", "logentry", 0, 0, 0, 0, 0, fields, fieldexprs, fieldvals, 0, 0, -1, NULL, &resultMap);
+    res = RDBTableScanFirst(ctx, RDBSQL_SELECT, "xsdb", "logentry", 0, 0, 0, 0, 0, fields, fieldexprs, fieldvals, 0, 0, -1, NULL, &resultMap);
     if (res == RDBAPI_SUCCESS) {
         while ((offset = RDBTableScanNext(resultMap, offset, 20)) != RDB_ERROR_OFFSET) {
             RDBResultMapPrintOut(resultMap, 1);
