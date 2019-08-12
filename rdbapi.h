@@ -61,7 +61,7 @@ extern "C"
 #endif
 
 #ifndef RDB_CLUSTER_CTX_TIMEOUT
-# define RDB_CLUSTER_CTX_TIMEOUT   0     // never
+# define RDB_CLUSTER_CTX_TIMEOUT   0     // never timeout
 #endif
 
 #ifndef RDB_CLUSTER_SOTIMEO_MS
@@ -367,12 +367,12 @@ extern void RDBThreadCtxFree (RDBThreadCtx thrctx);
 
 /**
  * RDBEnvCreate
- *  cluster - string for redis cluster nodes ("test@127.0.0.1:7001-7009") if clusterlen > 0 or
- *            pathfile to cfgfile if clusterlen is 0.
+ *  cluster - string for redis cluster nodes ("test@127.0.0.1:7001-7009") or
+ *            pathfile to cfgfile ("file:///path/to/redplus.cfg").
  *  ctxtimeout - timeout in seconds for connection context
  *  sotimeo_ms - timeout in milliseconds for SO_SNDTIMEO and SO_RCVTIMEO
  */
-extern RDBAPI_RESULT RDBEnvCreate (const char *cluster, size_t clusterlen, int ctxtimeout, int sotimeo_ms, RDBEnv *outenv);
+extern RDBAPI_RESULT RDBEnvCreate (const char *cluster, int ctxtimeout, int sotimeo_ms, RDBEnv *outenv);
 
 extern void RDBEnvDestroy (RDBEnv env);
 
@@ -401,16 +401,6 @@ extern const char * RDBEnvNodeHostPort (RDBEnvNode envnode);
 extern RDBAPI_BOOL RDBEnvNodeGetMaster (RDBEnvNode envnode, int *masterindex);
 
 extern int RDBEnvNodeGetSlaves (RDBEnvNode envnode, int slaveindex[RDBAPI_SLAVES_MAXNUM]);
-
-
-/**
- * ahostport:
- *   - 127.0.0.1:7001-7009
- *   - 127.0.0.1:7001,127.0.0.1:7002-7005,...
- *   - 192.168.22.11:7001-7003,192.168.22.12:7001-7003,...
- *   - authpass@host:port,authpass@host2:port2,...
- */
-extern RDBAPI_RESULT RDBEnvInitAllNodes (RDBEnv env, const char *ahostport, size_t ahostportlen, ub4 ctxtimeout, ub4 sotimeoms);
 
 
 /**********************************************************************

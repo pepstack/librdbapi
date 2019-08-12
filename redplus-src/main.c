@@ -41,10 +41,6 @@
 #include <common/cstrutil.h>
 
 
-#define REDISCLUSTER_NUMNODES      9
-#define REDISCLUSTER_TIMEOUT       0
-#define REDISCLUSTER_SOTIMEOMS     12000
-
 #ifndef __WINDOWS__
 /**
  * realfilepath()
@@ -92,7 +88,7 @@ static int get_app_path (const char *argv0, char apppath[], size_t sz)
 #ifdef __WINDOWS__
 # define PATH_SEPARATOR_CHAR  '\\'
 
-    GetModuleFileNameA(NULL, apppath, sz);
+    GetModuleFileNameA(NULL, apppath, (DWORD) sz);
 
     if (strnlen(apppath, sz) == sz) {
         printf("app path too long: %s\n", argv0);
@@ -171,7 +167,6 @@ int main(int argc, const char *argv[])
     const struct option lopts[] = {
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
-        {"numnodes", required_argument, 0, 'N'},
         {"rediscluster", required_argument, 0, 'R'},
         {"command", required_argument, 0, 'C'},
         {"rdbsql", required_argument, 0, 'S'},
@@ -186,10 +181,6 @@ int main(int argc, const char *argv[])
 
     char appcfg[260] = {0};
 
-    int numnodes = REDISCLUSTER_NUMNODES;
-    int ctxtimeout = REDISCLUSTER_TIMEOUT;       // seconds
-    int sotimeoms = REDISCLUSTER_SOTIMEOMS;      // milliseconds
-
     char *nodenames[RDB_CLUSTER_NODES_MAX] = {0};
 
     char ts[24];
@@ -200,12 +191,14 @@ int main(int argc, const char *argv[])
     startTime = RDBCurrentTime(1, ts);
     printf("# %s-%s start : %s\n", APPNAME, APPVER, ts);
 
-    ch = get_app_path(argv[0], appcfg, 256);
+    strcpy(appcfg, "file://");
+
+    ch = get_app_path(argv[0], appcfg+7, 240);
     if (ch == -1) {
         exit(-1);
     }
 
-    snprintf(appcfg + ch - 1, strlen(APPNAME) + 6, "%c%s.cfg", PATH_SEPARATOR_CHAR, APPNAME);
+    snprintf(appcfg + 7 + ch, strlen(APPNAME) + 6, "%c%s.cfg", PATH_SEPARATOR_CHAR, APPNAME);
     appcfg[sizeof(appcfg) - 1] = 0;
 
     while ((ch = getopt_long_only(argc, (char *const *) argv, "hVR:C:S:O:", lopts, &index)) != -1) {
@@ -226,10 +219,6 @@ int main(int argc, const char *argv[])
 
         case 'R':
             snprintf(cluster, sizeof(cluster) - 1, "%s", optarg);
-            break;
-
-        case 'N':
-            numnodes = atoi(optarg);
             break;
 
         case 'C':
@@ -259,11 +248,11 @@ int main(int argc, const char *argv[])
     if (cluster[0]) {
         printf("# redis cluster: %s\n", cluster);
 
-        RDBEnvCreate(cluster, strlen(cluster), ctxtimeout, sotimeoms, &env);
+        RDBEnvCreate(cluster, 0, 0, &env);
     } else {
         printf("# load config: %s\n", appcfg);
 
-        RDBEnvCreate(appcfg, 0, ctxtimeout, sotimeoms, &env);
+        RDBEnvCreate(appcfg, 0, 0, &env);
     }
 
     if (! env) {
@@ -295,7 +284,6 @@ void redplus_print_usage()
     printf("Options:\n");
     printf("  -h, --help               Display help info\n");
     printf("  -V, --version            Show version info\n\n");
-    printf("  -N, --numnodes=NUMBER    Number of redis cluster nodes. (%d default)\n", REDISCLUSTER_NUMNODES);
     printf("  -R, --rediscluster=HOSTS Redis cluster host nodes. (example: 'authpass@127.0.0.1:7001-7009')\n");
     printf("  -C, --command=REDISCMD   Redis command to call.\n");
     printf("  -S, --rdbsql=RDBSQL      SQL to execute on redisdb. (example: SELECT * FROM a.t WHERE ...)\n");

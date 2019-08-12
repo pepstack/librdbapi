@@ -21,9 +21,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\redplus\main.c">
-      <Filter>src</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\common\getopt_longw.c">
       <Filter>common</Filter>
     </ClCompile>
@@ -33,10 +30,8 @@
     <ClCompile Include="..\..\..\common\log4c_logger.c">
       <Filter>common</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\redplus\test.sh" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\..\..\redplus\test-win.bat" />
-    <None Include="..\..\..\redplus\redplus.cfg" />
+    <ClCompile Include="..\..\..\redplus-src\main.c">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

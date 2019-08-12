@@ -58,11 +58,11 @@ typedef struct _RDBNodeCfg_t
 } RDBNodeCfg_t, *RDBNodeCfg;
 
 
-static int RDBParseClusterNodes (const char *hosts, size_t hostslen, ub4 ctxtimeout, ub4 sotimeo_ms, RDBNodeCfg nodecfgs[RDB_CLUSTER_NODES_MAX])
+static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_ms, RDBNodeCfg nodecfgs[RDB_CLUSTER_NODES_MAX])
 {
     char *nodenames[RDB_CLUSTER_NODES_MAX] = {0};
 
-    int nn = cstr_slpit_chr(hosts, (int) hostslen, ',', nodenames, RDB_CLUSTER_NODES_MAX);
+    int nn = cstr_slpit_chr(hosts, cstr_length(hosts, -1), ',', nodenames, RDB_CLUSTER_NODES_MAX);
 
     int nodeindex = 0;
 
@@ -247,8 +247,6 @@ static void RDBEnvInitInternal (RDBEnv env, RDBNodeCfg nodecfgs[])
 
 static size_t RDBEnvLoadCfgfile (const char *cfgfile, char **outCluster, int *ioCtxtimeout, int *ioSotimeo_ms)
 {
-    RDBAPI_RESULT res;
-
     int numnodes = 0;
 
     int ctxtimeout = *ioCtxtimeout;
@@ -298,7 +296,7 @@ static size_t RDBEnvLoadCfgfile (const char *cfgfile, char **outCluster, int *io
             // test@192.168.39.111:7009
             line = cstr_trim_chr(rdbuf, 32);
 
-            len = strlen(line);
+            len = cstr_length(line, 255);
             if (len < 16 || len > 120) {
                 printf("RDBAPI_ERROR: (%s:%d) bad node(%d) config: %s\n", __FILE__, __LINE__, n+1, line);
                 return RDBAPI_ERROR;
@@ -339,18 +337,22 @@ static size_t RDBEnvLoadCfgfile (const char *cfgfile, char **outCluster, int *io
 }
 
 
-RDBAPI_RESULT RDBEnvCreate (const char *cluster, size_t clusterlen, int ctxtimeout, int sotimeo_ms, RDBEnv *outenv)
+RDBAPI_RESULT RDBEnvCreate (const char *cluster, int ctxtimeout, int sotimeo_ms, RDBEnv *outenv)
 {
-    if (! clusterlen) {
+    if (sotimeo_ms == 0) {
+        sotimeo_ms = RDB_CLUSTER_SOTIMEO_MS;
+    }
+
+    if (cstr_startwith(cluster, cstr_length(cluster, -1), "file://", 7)) {
         int ret;
         char *clustnodes = NULL;
 
-        clusterlen = RDBEnvLoadCfgfile(cluster, &clustnodes, &ctxtimeout, &sotimeo_ms);
-        if (! clusterlen) {
+        size_t nodeslen = RDBEnvLoadCfgfile(cluster + 7, &clustnodes, &ctxtimeout, &sotimeo_ms);
+        if (! nodeslen) {
             return RDBAPI_ERROR;
         }
 
-        ret = RDBEnvCreate(clustnodes, clusterlen, ctxtimeout, sotimeo_ms, outenv);
+        ret = RDBEnvCreate(clustnodes, ctxtimeout, sotimeo_ms, outenv);
 
         free(clustnodes);
 
@@ -361,10 +363,10 @@ RDBAPI_RESULT RDBEnvCreate (const char *cluster, size_t clusterlen, int ctxtimeo
         int numnodes;
         RDBNodeCfg nodecfgs[RDB_CLUSTER_NODES_MAX] = {0};
 
-        numnodes = RDBParseClusterNodes(cluster, clusterlen, ctxtimeout, sotimeo_ms, nodecfgs);
+        numnodes = RDBParseClusterNodes(cluster, ctxtimeout, sotimeo_ms, nodecfgs);
 
         if (numnodes < 1) {
-            printf("(%s:%d) invalid clusternodes: %.*s", __FILE__, __LINE__, clusterlen, cluster);
+            printf("(%s:%d) invalid clusternodes: %s", __FILE__, __LINE__, cluster);
             return RDBAPI_ERR_NODES;
         }
 

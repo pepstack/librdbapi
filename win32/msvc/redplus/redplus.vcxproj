@@ -68,7 +68,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>copy  $(ProjectDir)..\..\..\redplus\redplus.cfg $(ProjectDir)target\$(Platform)\$(Configuration)\</Command>
+      <Command>copy  $(ProjectDir)..\..\..\redplus-src\redplus.cfg $(ProjectDir)target\$(Platform)\$(Configuration)\</Command>
     </PostBuildEvent>
     <PostBuildEvent>
       <Message>copy redisplus.cfg</Message>
@@ -94,7 +94,7 @@
       <OptimizeReferences>true</OptimizeReferences>
     </Link>
     <PostBuildEvent>
-      <Command>copy  $(ProjectDir)..\..\..\redplus\redplus.cfg $(ProjectDir)target\$(Platform)\$(Configuration)\</Command>
+      <Command>copy  $(ProjectDir)..\..\..\redplus-src\redplus.cfg $(ProjectDir)target\$(Platform)\$(Configuration)\</Command>
     </PostBuildEvent>
     <PostBuildEvent>
       <Message>copy redplus.cfg</Message>
@@ -104,12 +104,7 @@
     <ClCompile Include="..\..\..\common\getoptw.c" />
     <ClCompile Include="..\..\..\common\getopt_longw.c" />
     <ClCompile Include="..\..\..\common\log4c_logger.c" />
-    <ClCompile Include="..\..\..\redplus\main.c" />
-    <ClCompile Include="..\..\..\redplus\test.sh" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\..\..\redplus\redplus.cfg" />
-    <None Include="..\..\..\redplus\test-win.bat" />
+    <ClCompile Include="..\..\..\redplus-src\main.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

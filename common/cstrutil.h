@@ -444,6 +444,9 @@ static int cstr_compare_len (const char *Astr, int Alen, const char *Bstr, int B
 }
 
 
+#define cstr_length(str, maxlen)    (str? ((maxlen)==-1? (int)strlen(str) : (int)strnlen(str, maxlen)) : 0)
+
+
 /**
  * cstr_startwith("HelloWorld", 10, "Hello", 5) == cstr_bool_true
  * cstr_startwith("HelloWorld", 10, "World", 5) == cstr_bool_false

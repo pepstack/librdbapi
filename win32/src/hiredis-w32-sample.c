@@ -54,10 +54,7 @@ int main(int argc, const char *argv[])
     thrctx = RDBThreadCtxCreate(0, 0, 0);
     assert(thrctx);
 
-    res = RDBEnvCreate(0, 9, &env);
-    assert(res == RDBAPI_SUCCESS);
-
-    res = RDBEnvInitAllNodes(env, "test@192.168.39.111:7001-7009", -1, 0, 12000);
+    res = RDBEnvCreate("test@192.168.39.111:7001-7009", 0, 0, &env);
     assert(res == RDBAPI_SUCCESS);
 
     res = RDBCtxCreate(env, &ctx);
