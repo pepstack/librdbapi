@@ -95,11 +95,13 @@ typedef struct _RDBSQLParser_t
     char sql[0];
 } RDBSQLParser_t;
 
+
 RDBAPI_BOOL onParseSelect (RDBSQLParser_t * parser, RDBCtx ctx, char *selsql, int len);
 RDBAPI_BOOL onParseDelete (RDBSQLParser_t * parser, RDBCtx ctx, char *delsql, int len);
 RDBAPI_BOOL onParseUpdate (RDBSQLParser_t * parser, RDBCtx ctx, char *updsql, int len);
 RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *cresql, int len);
 RDBAPI_BOOL onParseDesc (RDBSQLParser_t * parser, RDBCtx ctx, char *cresql, int len);
+RDBAPI_BOOL onParseDrop (RDBSQLParser_t * parser, RDBCtx ctx, char *cresql, int len);
 RDBAPI_BOOL onParseInfo (RDBSQLParser_t * parser, RDBCtx ctx, char *cresql, int len);
 
 
@@ -171,6 +173,11 @@ RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQL
 
         parseOk = onParseInfo(parser, ctx, parser->sql + strlen("INFO"), parser->sqlen - (int)strlen("INFO"));
         parser->stmt = parseOk? RDBSQL_INFO_SECTION : RDBSQL_INVALID;
+
+    } else if (cstr_startwith(parser->sql, parser->sqlen, "DROP ", (int)strlen("DROP "))) {
+
+        parseOk = onParseDrop(parser, ctx, parser->sql + strlen("DROP "), parser->sqlen - (int)strlen("DROP "));
+        parser->stmt = parseOk? RDBSQL_DROP_TABLE : RDBSQL_INVALID;
 
     } else {
         snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_RDBSQL: invalid sql");
@@ -326,6 +333,11 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
 
             return RDBAPI_SUCCESS;
         }
+    } else if (parser->stmt == RDBSQL_DROP_TABLE) {
+
+
+
+
     } else if (parser->stmt == RDBSQL_INFO_SECTION) {
         // TODO: resultmap
         if (RDBCtxCheckInfo(ctx, parser->info.section) == RDBAPI_SUCCESS) {
@@ -997,6 +1009,13 @@ RDBAPI_BOOL onParseDesc (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len
         return RDBAPI_FALSE;
     }
 
+    return RDBAPI_TRUE;
+}
+
+
+RDBAPI_BOOL onParseDrop (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len)
+{
+    // TODO:
     return RDBAPI_TRUE;
 }
 
