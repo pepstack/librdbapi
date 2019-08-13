@@ -1030,7 +1030,7 @@ RDBAPI_BOOL onParseInfo (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len
         chlen = cstr_length(sec, 16);
 
         while ((section = sections[i]) != NULL) {
-            if (! cstr_compare_len(section, strlen(section), sec, chlen)) {
+            if (! cstr_compare_len(section, (int)strlen(section), sec, chlen)) {
                 parser->info.section = (RDBNodeInfoSection) i;
                 break;
             }

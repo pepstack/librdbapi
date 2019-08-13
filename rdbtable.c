@@ -507,7 +507,6 @@ int RDBFinishRowkeyPattern (const RDBFieldDes_t *fielddes, int nfielddes, const 
     for (i = 1; i <= rowkeyid[0]; i++) {
         j = rowkeyid[i];
 
-        //DEBUG
         snprintf(pattern, RDB_KEY_NAME_MAXLEN + 1, "$%.*s", fielddes[j].namelen, fielddes[j].fieldname);
 
         l = cstr_replace_new(rowkey, pattern, "*", &result);
@@ -519,7 +518,7 @@ int RDBFinishRowkeyPattern (const RDBFieldDes_t *fielddes, int nfielddes, const 
     }
 
     *rowkeypattern = rowkey;
-    return len;
+    return cstr_length(rowkey, RDB_ROWKEY_MAX_SIZE);
 }
 
 
@@ -844,7 +843,7 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
         return RDBAPI_ERROR;
     }
 
-    res = RDBTableFilterCreate(&filter, RDBAPI_SQL_PATTERN_SIZE);
+    res = RDBTableFilterCreate(&filter, RDB_ROWKEY_MAX_SIZE);
     if (res != RDBAPI_SUCCESS) {
         snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERROR(%d): RDBTableFilterCreate failed", res);
         return RDBAPI_ERROR;
