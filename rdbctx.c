@@ -78,7 +78,11 @@ void RDBCtxFree (RDBCtx ctx)
 
 RDBEnv RDBCtxGetEnv (RDBCtx ctx)
 {
-    return ctx->env;
+    if (ctx) {
+        return ctx->env;
+    } else {
+        return NULL;
+    }
 }
 
 

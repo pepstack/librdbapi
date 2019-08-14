@@ -29,6 +29,8 @@
  *
  * @author: master@pepstack.com
  *
+ *   https://intermediate-and-advanced-software-carpentry.readthedocs.io/en/latest/c++-wrapping.html
+ *
  * @version: 1.0.0
  * @create: 2019-06-14
  * @update:
@@ -666,7 +668,6 @@ extern void RDBSQLParserFree (RDBSQLParser sqlParser);
 extern ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser sqlParser, RDBResultMap *outResultMap);
 
 extern RDBSQLStmt RDBSQLParserGetStmt (RDBSQLParser sqlParser, char **parsedClause, int pretty);
-
 
 #if defined(__cplusplus)
 }
