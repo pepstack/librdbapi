@@ -67,6 +67,8 @@ static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_
     int nodeindex = 0;
 
     while (nodeindex < RDB_CLUSTER_NODES_MAX && nodenames[nodeindex]) {
+        int flds = 0;
+
         // pass@host:port
         char *authpass = NULL;
         char *host = NULL;
@@ -74,12 +76,73 @@ static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_
 
         char *outs[2] = {0};
 
-        int flds = cstr_slpit_chr(nodenames[nodeindex], (int)strlen(nodenames[nodeindex]), '@', outs, 2);
+        char * nodestr = nodenames[nodeindex];
+
+        if (nodestr[0] == nodestr[ strlen(nodestr) - 1 ]) {
+            if (nodestr[0] == '\'' || nodestr[0] == '"') {
+                nodestr[ strlen(nodestr) - 1 ] = 0;
+                nodestr++;
+            }
+        }
+
+        // with authpass = test@123
+        //   1) 'test@123'@127.0.0.1:7001
+        //   2) "test@123"@127.0.0.1:7001
+        //   3) test@123@127.0.0.1:7001
+        // without authpass
+        //   127.0.0.1:7001
+
+        if (nodestr[0] == '"') {
+            char * p = strstr(nodestr, "\"@");
+            if (!p) {
+                printf("(%s:%d) node(%d) error: %s\n", __FILE__, __LINE__, nodeindex, nodestr);
+                nodeindex = -1;
+                goto exit_return;
+            }
+
+            *p++ = 0;
+            *p++ = 0;
+
+            outs[0] = strdup(&nodestr[1]);
+            outs[1] = strdup(p);
+
+            flds = 2;
+        } else if (nodestr[0] == '\'') {
+            char * p = strstr(nodestr, "'@");
+            if (!p) {
+                printf("(%s:%d) node(%d) error: %s\n", __FILE__, __LINE__, nodeindex, nodestr);
+                nodeindex = -1;
+                goto exit_return;
+            }
+
+            *p++ = 0;
+            *p++ = 0;
+
+            outs[0] = strdup(&nodestr[1]);
+            outs[1] = strdup(p);
+
+            flds = 2;
+        } else {
+            char * p = strrchr(nodestr, '@');
+            if (p) {
+                *p++ = 0;
+
+                outs[0] = strdup(nodestr);
+                outs[1] = strdup(p);
+
+                flds = 2;
+            } else {
+                // no authpass
+                outs[0] = strdup(nodestr);
+                flds = 1;
+            }
+        }
 
         if (flds == 1) {
-            // no pass
+            // without authpass
             char *hpouts[2] = {0};
 
+            // get ip:port
             if (cstr_slpit_chr(nodenames[nodeindex], (int)strlen(nodenames[nodeindex]), ':', hpouts, 2) == 2) {
                 if (cstr_slpit_chr(outs[1], (int)strlen(outs[1]), ':', hpouts, 2) == 2) {
                     host = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[0], 32), '\''));
@@ -90,6 +153,7 @@ static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_
                 free(hpouts[1]);
             }
         } else if (flds == 2) {
+            // with authpass
             char *hpouts[2] = {0};
 
             authpass = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(outs[0], 32), '\''));
@@ -103,15 +167,18 @@ static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_
             free(hpouts[1]);
         }
 
-        free(outs[0]);
-        free(outs[1]);
+        while (flds-- > 0) {
+            free(outs[flds]);
+        }
 
-        if (! host || !port) {
+        if (! host || ! port) {
             free(host);
             free(port);
             free(authpass);
 
-            break;
+            printf("(%s:%d) node(%d) error: %s\n", __FILE__, __LINE__, nodeindex, nodestr);
+            nodeindex = -1;
+            goto exit_return;
         }
 
         do {
@@ -155,6 +222,7 @@ static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_
         free(authpass);
     }
 
+exit_return:
     while (nn-- > 0) {
         free(nodenames[nn]);
     }
