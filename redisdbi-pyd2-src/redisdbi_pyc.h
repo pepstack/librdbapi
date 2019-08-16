@@ -24,14 +24,14 @@
 ***********************************************************************/
 
 /**
-* redisdbi_py2.h
+* redisdbi_pyc.h
 *
-*   librdbapi wrapper for python2.7
+*   librdbapi for python2.x
 *
 * 2019-08
 */
-#ifndef REDISDBI_PY2_H_INCLUDED
-#define REDISDBI_PY2_H_INCLUDED
+#ifndef REDISDBI_PYC_H_INCLUDED
+#define REDISDBI_PYC_H_INCLUDED
 
 #if defined(__cplusplus)
 extern "C"
@@ -39,14 +39,25 @@ extern "C"
 #endif
 
 #ifdef DLL_EXPORT
-# define REDISDBI_API extern __declspec(dllexport)
+# define REDISDBI_PYDAPI extern __declspec(dllexport)
 #else
-# define REDISDBI_API extern
+# define REDISDBI_PYDAPI extern
 #endif
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* python2.x include */
+#include <Python.h>
+#include <structmember.h>
+#include <datetime.h>
 
 #include <rdbapi.h>
 
-REDISDBI_API void initredisdbi();
+#define REDISDBI_PYDNAME  "redisdbi"
+#define REDISDBI_PYDVER   "1.0.1"
+#define REDISDBI_AUTHOR   "350137278@qq.com"
 
 
 static void rdbconn_free (void * _ctx, void * _env)
@@ -82,8 +93,36 @@ static RDBCtx connect (const char *cluster, int ctxtimeout, int sotimeo_ms)
 }
 
 
+/**
+ * RDBICon
+ *   rdbapi connect object
+ */
+typedef struct {
+    PyObject_HEAD
+
+    // private
+    RDBEnv env;
+    RDBCtx ctx;
+
+    // class members
+    PyObject *have_result_set;
+
+} RDBICon;
+
+void RDBICon_dealloc (RDBICon *self);
+
+PyObject *RDBICon_new (PyTypeObject *type, PyObject *args, PyObject *kwds);
+
+int RDBICon_init (RDBICon *self, PyObject *args, PyObject *kwds);
+
+
+/**
+ * PyCFunction of module
+ */
+PyObject* pycGetApiVersion (PyObject* self, PyObject* args);
+
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* REDISDBI_PY2_H_INCLUDED */
+#endif /* REDISDBI_PYC_H_INCLUDED */

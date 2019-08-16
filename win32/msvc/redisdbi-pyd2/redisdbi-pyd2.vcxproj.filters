@@ -30,12 +30,12 @@
     <ClCompile Include="..\..\..\common\log4c_logger.c">
       <Filter>common</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\redisdbi-src\redisdbi_py2.c">
+    <ClCompile Include="..\..\..\redisdbi-pyd2-src\redisdbi_pyd2.c">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\redisdbi-src\redisdbi_py2.h">
+    <ClInclude Include="..\..\..\redisdbi-pyd2-src\redisdbi_pyd2.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

@@ -29,7 +29,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "redplus", "redplus\redplus.
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "liblog4c", "..\liblog4c\makefiles\msvc\vs2013\liblog4c.vcxproj", "{D0C5B748-D9DB-42A2-B54A-A680EBDCEA5C}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "redisdbi-w32", "redisdbi-w32\redisdbi-w32.vcxproj", "{5D5FB9F1-D57A-41D8-831D-6EF12D29DBCB}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "redisdbi-pyd2", "redisdbi-pyd2\redisdbi-pyd2.vcxproj", "{5D5FB9F1-D57A-41D8-831D-6EF12D29DBCB}"
 	ProjectSection(ProjectDependencies) = postProject
 		{11F8D15E-25D1-4E24-A1B0-67C6FEE50A2D} = {11F8D15E-25D1-4E24-A1B0-67C6FEE50A2D}
 	EndProjectSection
