@@ -59,7 +59,7 @@ static int realfilepath (const char * file, char * rpdirbuf, size_t maxlen)
     p = realpath(file, 0);
 
     if (p) {
-        snprintf(rpdirbuf, maxlen, "%s", p);
+        snprintf_chkd(rpdirbuf, maxlen, "%s", p);
 
         free(p);
 
@@ -71,11 +71,11 @@ static int realfilepath (const char * file, char * rpdirbuf, size_t maxlen)
             return (int)(p - rpdirbuf);
         }
 
-        snprintf(rpdirbuf, maxlen, "invlid path: %s", file);
+        snprintf_chkd(rpdirbuf, maxlen, "invlid path: %s", file);
         return 0;
     }
 
-    snprintf(rpdirbuf, maxlen, "realpath error(%d): %s", errno, strerror(errno));
+    snprintf_chkd(rpdirbuf, maxlen, "realpath error(%d): %s", errno, strerror(errno));
     return (-2);
 }
 #endif
@@ -195,8 +195,7 @@ int main(int argc, const char *argv[])
         exit(-1);
     }
 
-    snprintf(appcfg+7+ch, strlen(APPNAME) + 6, "%c%s.cfg", PATH_SEPARATOR_CHAR, APPNAME);
-    appcfg[sizeof(appcfg) - 1] = 0;
+    snprintf_chkd(appcfg+7+ch, strlen(APPNAME) + 6, "%c%s.cfg", PATH_SEPARATOR_CHAR, APPNAME);
 
     while ((ch = getopt_long_only(argc, (char *const *) argv, "hVR:C:S:O:", lopts, &index)) != -1) {
         switch (ch) {
@@ -215,19 +214,19 @@ int main(int argc, const char *argv[])
             break;
 
         case 'R':
-            snprintf(cluster, sizeof(cluster) - 1, "%s", optarg);
+            snprintf_chkd(cluster, sizeof(cluster) - 1, "%s", optarg);
             break;
 
         case 'C':
-            snprintf(command, sizeof(command) - 1, "%s", optarg);
+            snprintf_chkd(command, sizeof(command) - 1, "%s", optarg);
             break;
 
         case 'S':
-            snprintf(redsql, sizeof(redsql) - 1, "%s", optarg);
+            snprintf_chkd(redsql, sizeof(redsql) - 1, "%s", optarg);
             break;
 
         case 'O':
-            snprintf(output, sizeof(output) - 1, "%s", optarg);
+            snprintf_chkd(output, sizeof(output) - 1, "%s", optarg);
             break;
 
         case 'h':
@@ -290,7 +289,6 @@ void redplus_print_usage()
 
 int redplus_exec_command (RDBEnv env, const char *command, const char *output)
 {
-
     return 0;
 }
 

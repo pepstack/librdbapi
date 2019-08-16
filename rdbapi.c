@@ -242,7 +242,7 @@ ub8 RDBCurrentTime (int spec, char *timestr)
     if (spec == RDBAPI_TIMESPEC_SEC) {
         if (timestr) {
             struct tm *p = localtime(&tb.time);
-            snprintf(timestr, 20, "%04d-%02d-%02d %02d:%02d:%02d",
+            snprintf_chkd_V2(-1, timestr, 20, "%04d-%02d-%02d %02d:%02d:%02d",
                     1900 + p->tm_year,
                     1 + p->tm_mon,
                     p->tm_mday,
@@ -256,7 +256,7 @@ ub8 RDBCurrentTime (int spec, char *timestr)
     } else if (spec == RDBAPI_TIMESPEC_MSEC) {
         if (timestr) {
             struct tm *p = localtime(&tb.time);
-            snprintf(timestr, 24, "%04d-%02d-%02d %02d:%02d:%02d.%03d",
+            snprintf_chkd_V2(-1, timestr, 24, "%04d-%02d-%02d %02d:%02d:%02d.%03d",
                 1900 + p->tm_year,
                 1 + p->tm_mon,
                 p->tm_mday,
@@ -275,7 +275,7 @@ ub8 RDBCurrentTime (int spec, char *timestr)
         if (gettimeofday(&tv, NULL) == 0) {
             if (timestr) {
                 struct tm *p = localtime(&tv.tv_sec);
-                snprintf(timestr, 20, "%04d-%02d-%02d %02d:%02d:%02d",
+                snprintf_chkd_V2(-1, timestr, 20, "%04d-%02d-%02d %02d:%02d:%02d",
                     1900 + p->tm_year,
                     1 + p->tm_mon,
                     p->tm_mday,
@@ -289,7 +289,7 @@ ub8 RDBCurrentTime (int spec, char *timestr)
         if (gettimeofday(&tv, NULL) == 0) {
             if (timestr) {
                 struct tm *p = localtime(&tv.tv_sec);
-                snprintf(timestr, 24, "%04d-%02d-%02d %02d:%02d:%02d.%03d",
+                snprintf_chkd_V2(-1, timestr, 24, "%04d-%02d-%02d %02d:%02d:%02d.%03d",
                     1900 + p->tm_year,
                     1 + p->tm_mon,
                     p->tm_mday,
@@ -380,13 +380,12 @@ redisReply * RedisExecCommand (RDBCtx ctx, int argc, const char **argv, const si
     redisReply * reply = NULL;
 
     *ctx->errmsg = 0;
-    ctx->errmsg[RDB_ERROR_MSG_LEN] = 0;
 
     RDBCtxNode anode = RDBCtxGetActiveNode(ctx, NULL, 0);
 
     redisContext * redCtx = RDBCtxNodeGetRedisContext(anode);
     if (! redCtx) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "Active node not found");
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "Active node not found");
         return NULL;
     }
 
@@ -404,9 +403,9 @@ redisReply * RedisExecCommand (RDBCtx ctx, int argc, const char **argv, const si
              *
              * Add timeo_data can close this error!!
              */
-            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "redisCommandArgv REDIS_ERR_IO(errno=%d): %s", errno, strerror(errno));
+            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "redisCommandArgv REDIS_ERR_IO(errno=%d): %s", errno, strerror(errno));
         } else {
-            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "redisCommandArgv RedisContext Error(%d): %.*s", redCtx->err, cstr_length(redCtx->errstr, RDB_ERROR_MSG_LEN), redCtx->errstr);
+            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "redisCommandArgv RedisContext Error(%d): %.*s", redCtx->err, cstr_length(redCtx->errstr, RDB_ERROR_MSG_LEN), redCtx->errstr);
         }
 
         RDBCtxNodeClose(anode);
@@ -460,14 +459,14 @@ redisReply * RedisExecCommand (RDBCtx ctx, int argc, const char **argv, const si
             }
 
             if (reply) {
-                snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "AUTH failed(%d): %s", reply->type, reply->str);
+                snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "AUTH failed(%d): %s", reply->type, reply->str);
                 RedisFreeReplyObject(&reply);
             }
 
             return NULL;
         }
 
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "REDIS_REPLY_ERROR: %s", reply->str);
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "REDIS_REPLY_ERROR: %s", reply->str);
 
         RedisFreeReplyObject(&reply);
         return NULL;
@@ -496,10 +495,9 @@ RDBAPI_RESULT RedisExecArgvOnNode (RDBCtxNode ctxnode, int argc, const char *arg
             return RDBAPI_SUCCESS;
         }
     } else {
-        snprintf(ctxnode->ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERROR: No active node");
+        snprintf_chkd(ctxnode->ctx->errmsg, sizeof(ctxnode->ctx->errmsg), "RDBAPI_ERROR: No active node");
     }
 
-    ctxnode->ctx->errmsg[RDB_ERROR_MSG_LEN] = 0;
     return RDBAPI_ERROR;
 }
 
@@ -518,10 +516,9 @@ RDBAPI_RESULT RedisExecCommandOnNode (RDBCtxNode ctxnode, char *command, redisRe
     *outReply = NULL;
 
     *ctx->errmsg = 0;
-    ctx->errmsg[RDB_ERROR_MSG_LEN] = 0;
 
     if (! command || ! *command) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_BADARG: null command");
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: null command");
         return RDBAPI_ERR_BADARG;
     }
 
@@ -532,7 +529,7 @@ RDBAPI_RESULT RedisExecCommandOnNode (RDBCtxNode ctxnode, char *command, redisRe
     }
 
     if (! argv[i]) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_BADARG: bad command");
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: bad command");
         return RDBAPI_ERR_BADARG;
     }
 
@@ -563,10 +560,10 @@ int RedisExecCommandOnAllNodes (RDBCtx ctx, char *command, redisReply **replys, 
 
     int numnodes = ctx->env->clusternodes;
 
-    ctx->errmsg[RDB_ERROR_MSG_LEN] = 0;
+    *ctx->errmsg = 0;
 
     if (! replys) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "REDISAPI_EARG: bad replys");
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "REDISAPI_EARG: bad replys");
         return RDBAPI_ERR_BADARG;
     }
 
@@ -577,7 +574,7 @@ int RedisExecCommandOnAllNodes (RDBCtx ctx, char *command, redisReply **replys, 
     }
 
     if (! command || ! *command) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "REDISAPI_EARG: bad command");
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "REDISAPI_EARG: bad command");
         return RDBAPI_ERR_BADARG;
     }
 
@@ -588,7 +585,7 @@ int RedisExecCommandOnAllNodes (RDBCtx ctx, char *command, redisReply **replys, 
     }
 
     if (! argv[i]) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "REDISAPI_EARG: bad command");
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "REDISAPI_EARG: bad command");
         return RDBAPI_ERR_BADARG;
     }
 
@@ -728,7 +725,7 @@ RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, sb8 expire_ms)
 
     redisReply *reply = NULL;
 
-    ctx->errmsg[RDB_ERROR_MSG_LEN] = 0;
+    *ctx->errmsg = 0;
 
     if (expire_ms == 0) {
         // ignored
@@ -754,7 +751,7 @@ RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, sb8 expire_ms)
         reply = RedisExecCommand(ctx, 2, argv, argl);
         if (! reply) {
             // error
-            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERROR: RedisExecCommand failed");
+            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: RedisExecCommand failed");
             return RDBAPI_ERROR;
         }
 
@@ -765,7 +762,7 @@ RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, sb8 expire_ms)
                 return RDBAPI_SUCCESS;
             } else {
                 // bad reply integer
-                snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_RETVAL: reply integer(%"PRId64")", (sb8) reply->integer);
+                snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_RETVAL: reply integer(%"PRId64")", (sb8) reply->integer);
 
                 RedisFreeReplyObject(&reply);
                 return RDBAPI_ERR_RETVAL;
@@ -773,7 +770,7 @@ RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, sb8 expire_ms)
         }
 
         // bad reply type
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
         RedisFreeReplyObject(&reply);
 
         return RDBAPI_ERR_TYPE;
@@ -788,7 +785,7 @@ RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, sb8 expire_ms)
         argl[0] = 6;
         argl[1] = strlen(key);
 
-        argl[2] = snprintf(val, 22, "%"PRId64"", expire_ms / 1000);
+        argl[2] = snprintf_chkd(val, sizeof(val), "%"PRId64"", expire_ms / 1000);
     } else {
         // pexpire key ms
         argv[0] = "pexpire";
@@ -798,7 +795,7 @@ RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, sb8 expire_ms)
         argl[0] = 7;
         argl[1] = strlen(key);
 
-        argl[2] = snprintf(val, 22, "%"PRId64"", expire_ms);
+        argl[2] = snprintf_chkd(val, sizeof(val), "%"PRId64"", expire_ms);
     }
 
     val[21] = 0;
@@ -816,18 +813,18 @@ RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, sb8 expire_ms)
         } else if (reply->integer == 0) {
             // key not found
             RedisFreeReplyObject(&reply);
-            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_NOKEY: not found key(%s)", key);
+            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_NOKEY: not found key(%s)", key);
             return RDBAPI_ERR_NOKEY;
         } else {
             // bad reply integer
-            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_RETVAL: reply integer(%"PRId64")", (sb8) reply->integer);
+            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_RETVAL: reply integer(%"PRId64")", (sb8) reply->integer);
             RedisFreeReplyObject(&reply);
             return RDBAPI_ERR_RETVAL;
         }
     }
 
     // bad reply type
-    snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
+    snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
     RedisFreeReplyObject(&reply);
     return RDBAPI_ERR_TYPE;
 }
@@ -840,7 +837,7 @@ RDBAPI_RESULT RedisSetKey (RDBCtx ctx, const char *key, const char *value, size_
     const char *argv[5];
     size_t argl[5];
 
-    char str[22];
+    char str[22] = {0};
 
     int argc = 3;
 
@@ -858,7 +855,7 @@ RDBAPI_RESULT RedisSetKey (RDBCtx ctx, const char *key, const char *value, size_
             argv[3] = "EX";
             argl[3] = 2;
 
-            argl[4] = snprintf(str, 22, "%"PRId64"", expire_ms / 1000);
+            argl[4] = snprintf_chkd(str, sizeof(str), "%"PRId64"", expire_ms / 1000);
             argv[4] = str;
 
             argc = 5;
@@ -866,13 +863,12 @@ RDBAPI_RESULT RedisSetKey (RDBCtx ctx, const char *key, const char *value, size_
             argv[3] = "PX";
             argl[3] = 2;
 
-            argl[4] = snprintf(str, 22, "%"PRId64"", expire_ms);
+            argl[4] = snprintf_chkd(str, sizeof(str), "%"PRId64"", expire_ms);
             argv[4] = str;
 
             argc = 5;
         }
     }
-    str[21] = 0;
 
     reply = RedisExecCommand(ctx, argc, argv, argl);
 
@@ -926,7 +922,7 @@ RDBAPI_RESULT RedisHMSet (RDBCtx ctx, const char *key, const char * fields[], co
     }
 
     if (i > RDBAPI_ARGV_MAXNUM) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_BADARG: too many fields.");
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too many fields.");
         return RDBAPI_ERR_BADARG;
     }
 
@@ -943,7 +939,7 @@ RDBAPI_RESULT RedisHMSet (RDBCtx ctx, const char *key, const char * fields[], co
         return RedisExpireKey(ctx, key, expire_ms);
     } else {
         // bad reply type
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
 
         RedisFreeReplyObject(&reply);
         return RDBAPI_ERR_TYPE;
@@ -991,7 +987,7 @@ RDBAPI_RESULT RedisHMSetLen (RDBCtx ctx, const char *key, size_t keylen, const c
     }
 
     if (i > RDBAPI_ARGV_MAXNUM) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_BADARG: too many fields.");
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too many fields.");
         return RDBAPI_ERR_BADARG;
     }
 
@@ -1008,7 +1004,7 @@ RDBAPI_RESULT RedisHMSetLen (RDBCtx ctx, const char *key, size_t keylen, const c
         return RedisExpireKey(ctx, key, expire_ms);
     } else {
         // bad reply type
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
 
         RedisFreeReplyObject(&reply);
         return RDBAPI_ERR_TYPE;
@@ -1074,7 +1070,7 @@ RDBAPI_RESULT RedisHMGet (RDBCtx ctx, const char * key, const char * fields[], r
         }
 
         if (i > RDBAPI_ARGV_MAXNUM) {
-            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_BADARG: too many fields.");
+            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too many fields.");
             return RDBAPI_ERR_BADARG;
         }
 
@@ -1085,7 +1081,7 @@ RDBAPI_RESULT RedisHMGet (RDBCtx ctx, const char * key, const char * fields[], r
         }
 
         if (reply->type != REDIS_REPLY_ARRAY) {
-            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
+            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
 
             RedisFreeReplyObject(&reply);
             return RDBAPI_ERR_TYPE;
@@ -1093,7 +1089,7 @@ RDBAPI_RESULT RedisHMGet (RDBCtx ctx, const char * key, const char * fields[], r
 
         if (reply->elements != argc - 2) {
             // bad reply elements
-            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_APP: reply elements(%"PRIu64"). required(%d).", reply->elements, argc);
+            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_APP: reply elements(%"PRIu64"). required(%d).", reply->elements, argc);
             RedisFreeReplyObject(&reply);
             return RDBAPI_ERR_APP;
         }
@@ -1114,7 +1110,7 @@ RDBAPI_RESULT RedisHMGet (RDBCtx ctx, const char * key, const char * fields[], r
         }
 
         if (reply->type != REDIS_REPLY_ARRAY) {
-            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
+            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
 
             RedisFreeReplyObject(&reply);
             return RDBAPI_ERR_TYPE;
@@ -1134,12 +1130,12 @@ int RedisDeleteKey (RDBCtx ctx, const char * key, const char * fields[], int num
     redisReply *reply = NULL;
 
     if (numfields > RDBAPI_ARGV_MAXNUM) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_BADARG: too many fields(%d)", numfields);
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too many fields(%d)", numfields);
         return RDBAPI_ERR_BADARG;
     }
 
     if (numfields < 0) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_BADARG: invalid numfields(%d)", numfields);
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid numfields(%d)", numfields);
         return RDBAPI_ERR_BADARG;
     }
 
@@ -1181,7 +1177,7 @@ int RedisDeleteKey (RDBCtx ctx, const char * key, const char * fields[], int num
 
     if (reply->type != REDIS_REPLY_INTEGER) {
         // bad reply type
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
 
         RedisFreeReplyObject(&reply);
         return RDBAPI_ERR_TYPE;
@@ -1194,7 +1190,7 @@ int RedisDeleteKey (RDBCtx ctx, const char * key, const char * fields[], int num
         RedisFreeReplyObject(&reply);
         return RDBAPI_KEY_NOTFOUND;
     } else {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_RETVAL: reply integer(%d)", (int)reply->integer);
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_RETVAL: reply integer(%d)", (int)reply->integer);
         RedisFreeReplyObject(&reply);
         return RDBAPI_ERR_RETVAL;
     }
@@ -1219,7 +1215,7 @@ int RedisExistsKey (RDBCtx ctx, const char * key)
 
     if (reply->type != REDIS_REPLY_INTEGER) {
         // bad reply type: REDIS_REPLY_INTEGER expected
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
 
         RedisFreeReplyObject(&reply);
         return RDBAPI_ERR_TYPE;
@@ -1248,7 +1244,7 @@ RDBAPI_RESULT RedisClusterKeyslot (RDBCtx ctx, const char *key, sb8 *slot)
 
     if (reply->type != REDIS_REPLY_INTEGER) {
         // bad reply type: REDIS_REPLY_INTEGER required
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
         RedisFreeReplyObject(&reply);
         return RDBAPI_ERR_TYPE;
     }
@@ -1337,7 +1333,7 @@ RDBAPI_RESULT RedisWatchKeys (RDBCtx ctx, const char *keys[], int numkeys)
     }
 
     if (argc == 0 || argc >= RDBAPI_ARGV_MAXNUM) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_BADARG: error numkeys(%d)", numkeys);
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: error numkeys(%d)", numkeys);
         return RDBAPI_ERR_BADARG;
     }
 
@@ -1380,7 +1376,7 @@ RDBAPI_RESULT RedisGenerateId (RDBCtx ctx, const char *generator, int count, sb8
         // redis:port > INCRBY generator count
         char bycount[22];
 
-        snprintf(bycount, 22, "%d", count);
+        snprintf_chkd(bycount, sizeof(bycount), "%d", count);
         bycount[21] = 0;
 
         const char *cmds[] = { "incrby", generator, bycount };
@@ -1427,8 +1423,7 @@ RDBAPI_RESULT RedisIncrIntegerField (RDBCtx ctx, const char *key, const char *fi
     // redis:port > HINCRBY key field increment
     char incrbuf[22];
 
-    snprintf(incrbuf, 22, "%"PRId64, increment);
-    incrbuf[21] = 0;
+    snprintf_chkd(incrbuf, sizeof(incrbuf), "%"PRId64, increment);
 
     const char *cmds[] = {"hincrby", key, field, incrbuf};
 
@@ -1471,8 +1466,7 @@ RDBAPI_RESULT RedisIncrFloatField (RDBCtx ctx, const char *key, const char *fiel
     // redis:port > HINCRBY key field increment
     char incrbuf[42];
 
-    snprintf(incrbuf, 40, "%e", increment);
-    incrbuf[40] = 0;
+    snprintf_chkd(incrbuf, sizeof(incrbuf), "%e", increment);
 
     const char *cmds[] = {"hincrbyfloat", key, field, incrbuf};
 
@@ -1530,7 +1524,7 @@ RDBAPI_RESULT RedisClusterCheck (RDBCtx ctx)
 
     numnodes = RDBEnvNumNodes(ctx->env);
     if (numnodes == 0) {
-        snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "nodes not found");
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "nodes not found");
         return RDBAPI_ERROR;
     }
 
@@ -1555,8 +1549,7 @@ RDBAPI_RESULT RedisClusterCheck (RDBCtx ctx)
 
         // check cluster_enabled
         if (len != 1 || propval[0] != '1') {
-            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERROR: cluster_enabled=%s", propval);
-            ctx->errmsg[RDB_ERROR_MSG_LEN] = 0;
+            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: cluster_enabled=%s", propval);
             return RDBAPI_ERROR;
         }        
     
@@ -1568,15 +1561,14 @@ RDBAPI_RESULT RedisClusterCheck (RDBCtx ctx)
                 len = RDBCtxNodeInfoProp(ctxnode, NODEINFO_REPLICATION, "connected_slaves", propval);
                 if (len == 1) {
                     int slaveid;
-                    char slave[10];
+                    char slave[10] = {0};
 
                     envnode->replica.connected_slaves = atoi(propval);
 
                     for (slaveid = 0; slaveid < envnode->replica.connected_slaves; slaveid++) {
                         RDBEnvNode slavenode = NULL;
 
-                        snprintf(slave, 9, "slave%d", slaveid);
-                        slave[9] = 0;
+                        snprintf_chkd(slave, sizeof(slave), "slave%d", slaveid);
 
                         len = RDBCtxNodeInfoProp(ctxnode, NODEINFO_REPLICATION, slave, propval);
                         if (len > 0) {
@@ -1603,8 +1595,7 @@ RDBAPI_RESULT RedisClusterCheck (RDBCtx ctx)
                         }
 
                         if (! slavenode) {
-                            snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERROR: slave%d node not found", slaveid);
-                            ctx->errmsg[RDB_ERROR_MSG_LEN] = 0;
+                            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: slave%d node not found", slaveid);
                             return RDBAPI_ERROR;
                         }
 
@@ -1629,15 +1620,13 @@ RDBAPI_RESULT RedisClusterCheck (RDBCtx ctx)
                 }
 
                 if (! masterenode) {
-                    snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERROR: master node not found");
-                    ctx->errmsg[RDB_ERROR_MSG_LEN] = 0;
+                    snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: master node not found");
                     return RDBAPI_ERROR;
                 }
 
                 envnode->replica.master_nodeindex = masterenode->index;
             } else {
-                snprintf(ctx->errmsg, RDB_ERROR_MSG_LEN, "RDBAPI_ERR_APP: role prop not found: %s", propval);
-                ctx->errmsg[RDB_ERROR_MSG_LEN] = 0;
+                snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_APP: role prop not found: %s", propval);
                 return RDBAPI_ERR_APP;
             }
         }

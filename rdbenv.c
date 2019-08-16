@@ -191,8 +191,8 @@ static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_
                 for (; pno <= endpno; pno++) {
                     RDBNodeCfg nodecfg = (RDBNodeCfg) RDBMemAlloc(sizeof(RDBNodeCfg_t));
 
-                    snprintf(nodecfg->host, RDB_HOSTADDR_MAXLEN, "%s", host);
-                    snprintf(nodecfg->authpass, RDB_AUTHPASS_MAXLEN, "%s", authpass);
+                    snprintf_chkd(nodecfg->host, sizeof(nodecfg->host), "%s", host);
+                    snprintf_chkd(nodecfg->authpass, sizeof(nodecfg->authpass), "%s", authpass);
 
                     nodecfg->port = (ub4) pno;
                     nodecfg->ctxtimeout = ctxtimeout;
@@ -203,8 +203,8 @@ static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_
             } else {
                 RDBNodeCfg nodecfg = (RDBNodeCfg) RDBMemAlloc(sizeof(RDBNodeCfg_t));
 
-                snprintf(nodecfg->host, RDB_HOSTADDR_MAXLEN, "%s", host);
-                snprintf(nodecfg->authpass, RDB_AUTHPASS_MAXLEN, "%s", authpass);
+                snprintf_chkd(nodecfg->host, sizeof(nodecfg->host), "%s", host);
+                snprintf_chkd(nodecfg->authpass, sizeof(nodecfg->authpass), "%s", authpass);
 
                 nodecfg->port = (ub4) atol(port);
                 nodecfg->ctxtimeout = ctxtimeout;
@@ -260,55 +260,55 @@ static void RDBEnvInitInternal (RDBEnv env, RDBNodeCfg nodecfgs[])
     env->valtype_chk_table[RDBVT_DEC] = 1;
 
     i = 0;
-    snprintf(env->_valtypenamebuf + i, 6, "SB2");
+    snprintf_V1(env->_valtypenamebuf + i, 6, "SB2");
     env->valtypenames[RDBVT_SB2] = &env->_valtypenamebuf[i];
 
     i += 8;
-    snprintf(env->_valtypenamebuf + i, 6, "UB2");
+    snprintf_V1(env->_valtypenamebuf + i, 6, "UB2");
     env->valtypenames[RDBVT_UB2] = &env->_valtypenamebuf[i];
 
     i += 8;
-    snprintf(env->_valtypenamebuf + i, 6, "UB4");
+    snprintf_V1(env->_valtypenamebuf + i, 6, "UB4");
     env->valtypenames[RDBVT_UB4] = &env->_valtypenamebuf[i];
 
     i += 8;
-    snprintf(env->_valtypenamebuf + i, 6, "UB4X");
+    snprintf_V1(env->_valtypenamebuf + i, 6, "UB4X");
     env->valtypenames[RDBVT_UB4X] = &env->_valtypenamebuf[i];
 
     i += 8;
-    snprintf(env->_valtypenamebuf + i, 6, "SB8");
+    snprintf_V1(env->_valtypenamebuf + i, 6, "SB8");
     env->valtypenames[RDBVT_SB8] = &env->_valtypenamebuf[i];
 
     i += 8;
-    snprintf(env->_valtypenamebuf + i, 6, "UB8");
+    snprintf_V1(env->_valtypenamebuf + i, 6, "UB8");
     env->valtypenames[RDBVT_UB8] = &env->_valtypenamebuf[i];
 
     i += 8;
-    snprintf(env->_valtypenamebuf + i, 6, "UB8X");
+    snprintf_V1(env->_valtypenamebuf + i, 6, "UB8X");
     env->valtypenames[RDBVT_UB8X] = &env->_valtypenamebuf[i];
 
     i += 8;
-    snprintf(env->_valtypenamebuf + i, 6, "CHAR");
+    snprintf_V1(env->_valtypenamebuf + i, 6, "CHAR");
     env->valtypenames[RDBVT_CHAR] = &env->_valtypenamebuf[i];
 
     i += 8;
-    snprintf(env->_valtypenamebuf + i, 6, "BYTE");
+    snprintf_V1(env->_valtypenamebuf + i, 6, "BYTE");
     env->valtypenames[RDBVT_BYTE] = &env->_valtypenamebuf[i];
 
     i += 8;
-    snprintf(env->_valtypenamebuf + i, 6, "STR");
+    snprintf_V1(env->_valtypenamebuf + i, 6, "STR");
     env->valtypenames[RDBVT_STR] = &env->_valtypenamebuf[i];
 
     i += 8;
-    snprintf(env->_valtypenamebuf + i, 6, "FLT64");
+    snprintf_V1(env->_valtypenamebuf + i, 6, "FLT64");
     env->valtypenames[RDBVT_FLT64] = &env->_valtypenamebuf[i];
 
     i += 8;
-    snprintf(env->_valtypenamebuf + i, 6, "BLOB");
+    snprintf_V1(env->_valtypenamebuf + i, 6, "BLOB");
     env->valtypenames[RDBVT_BLOB] = &env->_valtypenamebuf[i];
 
     i += 8;
-    snprintf(env->_valtypenamebuf + i, 6, "DEC");
+    snprintf_V1(env->_valtypenamebuf + i, 6, "DEC");
     env->valtypenames[RDBVT_DEC] = &env->_valtypenamebuf[i];
 }
 
@@ -381,9 +381,9 @@ static size_t RDBEnvLoadCfgfile (const char *cfgfile, char **outCluster, int *io
             }
             
             if (! nnlen) {
-                len = snprintf(cluster, maxsz, "%.*s", len, line);
+                len = snprintf_chkd(cluster, maxsz, "%.*s", len, line);
             } else {
-                len = snprintf(cluster + nnlen, maxsz, ",%.*s", len, line);
+                len = snprintf_chkd(cluster + nnlen, maxsz, ",%.*s", len, line);
             }
             nnlen += len;
         }
@@ -514,15 +514,12 @@ void RDBEnvSetNode (RDBEnvNode node, const char *host, ub4 port, ub4 ctxtimeout,
 {
     node->port = port;
 
-    snprintf(node->host, sizeof(node->host), "%.*s", (int) strnlen(host, RDB_HOSTADDR_MAXLEN), host);
-    node->host[RDB_HOSTADDR_MAXLEN] = 0;
+    snprintf_chkd(node->host, sizeof(node->host), "%.*s", (int) strnlen(host, RDB_HOSTADDR_MAXLEN), host);
 
-    snprintf(node->key, sizeof(node->key), "%s:%d", node->host, (int) node->port);
-    node->key[sizeof(node->key) - 1] = 0;
+    snprintf_chkd(node->key, sizeof(node->key), "%s:%d", node->host, (int) node->port);
 
     if (authpass) {
-        snprintf(node->authpass, sizeof(node->authpass), "%.*s", (int) strnlen(authpass, RDB_AUTHPASS_MAXLEN), authpass);
-        node->authpass[RDB_AUTHPASS_MAXLEN] = 0;
+        snprintf_chkd(node->authpass, sizeof(node->authpass), "%.*s", (int) strnlen(authpass, RDB_AUTHPASS_MAXLEN), authpass);
     } else {
         *node->authpass = 0;
     }
@@ -555,8 +552,7 @@ RDBEnvNode RDBEnvFindNode (RDBEnv env, const char *host, ub4 port)
     } else {
         char key[RDB_HOSTADDR_MAXLEN + 12];
 
-        snprintf(key, sizeof(key), "%s:%u", host, port);
-        key[sizeof(key) - 1] = '\0';
+        snprintf_chkd(key, sizeof(key), "%s:%u", host, port);
 
         HASH_FIND_STR(env->nodemap, key, node);
     }
