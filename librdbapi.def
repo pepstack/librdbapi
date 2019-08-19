@@ -4,6 +4,7 @@ LIBRARY librdbapi-w32
 EXPORTS
 	RDBCurrentTime
 	RDBMemAlloc
+	RDBMemRealloc
 	RDBMemFree
 	RDBExprValues
 
@@ -76,6 +77,7 @@ EXPORTS
 	RedisIncrFloatField
 	RedisClusterCheck
 
+	RDBResultMapListFree
 	RDBResultMapFree
 	RDBResultMapClean
 	RDBResultMapSize
@@ -97,4 +99,7 @@ EXPORTS
 
 	RDBSQLParserNew
 	RDBSQLParserFree
+	RDBSQLParserGetStmt
 	RDBSQLExecute
+	RDBSQLExecuteSQL
+	RDBSQLExecuteFile

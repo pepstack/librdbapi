@@ -585,6 +585,18 @@ RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, RDBSQLStmt sqlstmt, int nu
 }
 
 
+void RDBResultMapListFree (RDBResultMap *resultMaps, int count)
+{
+    if (resultMaps) {
+        while (count-- > 0) {
+            RDBResultMapFree(resultMaps[count]);
+        }
+
+        RDBMemFree(resultMaps);
+    }
+}
+
+
 void RDBResultMapFree (RDBResultMap hResultMap)
 {
     if (hResultMap) {

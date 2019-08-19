@@ -552,11 +552,15 @@ static int cstr_findstr_in (const char *str, int count, const char *dests[], int
 static int cstr_readline (FILE *fp, char line[], size_t maxlen)
 {
     int ch, len = 0;
-    
+    int whitespace = 1;
+
     while ((ch = fgetc(fp)) != EOF) {
         if (len < maxlen) {
-            if (ch != '\r' && ch != '\n') {
+            if (ch != '\r' && ch != '\n' && ch != '\\') {
                 line[len++] = ch;
+                if (ch != 32) {
+                    whitespace = 0;
+                }
             }
         }
 
@@ -565,8 +569,14 @@ static int cstr_readline (FILE *fp, char line[], size_t maxlen)
         }
     }
 
+    if (ch == EOF && len == 0) {
+        // end of file
+        return -1;
+    }
+
     line[len] = 0;
-    return len;
+
+    return (whitespace? 0 : len);
 }
 
 

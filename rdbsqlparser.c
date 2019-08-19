@@ -196,7 +196,7 @@ RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQL
 
 void RDBSQLParserFree (RDBSQLParser parser)
 {
-    if (parser->stmt == RDBSQL_SELECT || parser->stmt == RDBSQL_DELETE) {
+    if (parser && parser->stmt == RDBSQL_SELECT || parser->stmt == RDBSQL_DELETE) {
         int i = 0;
         while (i < RDBAPI_ARGV_MAXNUM) {
             char *psz;
@@ -221,128 +221,6 @@ void RDBSQLParserFree (RDBSQLParser parser)
     };
 
     RDBMemFree(parser);
-}
-
-
-ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
-{
-    RDBAPI_RESULT res;
-
-    *outResultMap = NULL;
-
-    const char **vtnames = (const char **) ctx->env->valtypenames;
-
-    if (parser->stmt == RDBSQL_SELECT || parser->stmt == RDBSQL_DELETE) {
-        RDBResultMap resultMap;
-
-        res = RDBTableScanFirst(ctx,
-                parser->stmt,
-                parser->select.tablespace, parser->select.tablename,
-                parser->select.numkeys,
-                (const char **) parser->select.keys,
-                parser->select.keyexprs,
-                (const char **) parser->select.keyvals,
-                parser->select.numfields,
-                (const char **) parser->select.fields,
-                parser->select.fieldexprs,
-                (const char **) parser->select.fieldvals,
-                NULL,
-                NULL,
-                parser->select.count,
-                (const char **) parser->select.resultfields,
-                &resultMap);
-
-        if (res == RDBAPI_SUCCESS) {
-            ub8 offset = RDBTableScanNext(resultMap, parser->select.offset, parser->select.limit);
-
-            if (offset != RDB_ERROR_OFFSET) {
-                *outResultMap = resultMap;
-                return offset;
-            }
-
-            RDBResultMapFree(resultMap);
-            return 0;
-        }
-    } else if (parser->stmt == RDBSQL_CREATE) {
-        RDBTableDes_t tabledes = {0};
-        res = RDBTableDescribe(ctx, parser->create.tablespace, parser->create.tablename, &tabledes);
-
-        if (res == RDBAPI_SUCCESS && parser->create.fail_on_exists) {
-            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: table already existed");
-            return (ub8) RDBAPI_ERROR;
-        }
-
-        res = RDBTableCreate(ctx, parser->create.tablespace, parser->create.tablename, parser->create.tablecomment, parser->create.numfields, parser->create.fielddefs);
-
-        if (res == RDBAPI_SUCCESS) {
-            bzero(&tabledes, sizeof(tabledes));
-
-            res = RDBTableDescribe(ctx, parser->create.tablespace, parser->create.tablename, &tabledes);
-
-            if (res == RDBAPI_SUCCESS && tabledes.nfields == parser->create.numfields) {
-                RDBResultMap hMap = (RDBResultMap) RDBMemAlloc(sizeof(RDBResultMap_t) + sizeof(RDBFieldDes_t) * tabledes.nfields);
-
-                RDBResultMapSetDelimiter(hMap, RDB_TABLE_DELIMITER_CHAR);
-
-                hMap->kplen = RDBBuildRowkeyPattern(parser->create.tablespace, parser->create.tablename, tabledes.fielddes, tabledes.nfields, hMap->rowkeyid, &hMap->keypattern);
-
-                memcpy(hMap->fielddes, tabledes.fielddes, sizeof(tabledes.fielddes[0]) * tabledes.nfields);
-                hMap->numfields = tabledes.nfields;
-
-                hMap->ctxh = ctx;
-
-                *outResultMap = hMap;
-                return RDBAPI_SUCCESS;
-            }
-        }
-    } else if (parser->stmt == RDBSQL_DESC_TABLE) {
-        RDBTableDes_t tabledes = {0};
-
-        if (RDBTableDescribe(ctx, parser->desctable.tablespace, parser->desctable.tablename, &tabledes) != RDBAPI_SUCCESS) {
-            return (ub8) RDBAPI_ERROR;
-        } else {
-            // TODO: fill result map
-            int j;
-
-            printf("# table key: %s\n", tabledes.table_rowkey);
-            printf("# timestamp: %"PRIu64"\n", tabledes.table_timestamp);
-            printf("# create dt: %s\n", tabledes.table_datetime);
-            printf("# comment  : %s\n", tabledes.table_comment);
-            printf("#[     fieldname     | fieldtype | length |  scale  | rowkey | nullable | comment ]\n");
-            printf("#--------------------+-----------+--------+---------+--------+----------+----------\n");
-
-            for (j = 0; j < tabledes.nfields; j++) {
-                RDBFieldDes_t *fdes = &tabledes.fielddes[j];
-
-                printf(" %-20s| %8s  | %-6d |%8d |  %4d  |   %4d   | %s\n",
-                    fdes->fieldname,
-                    vtnames[fdes->fieldtype],
-                    fdes->length,
-                    fdes->dscale,
-                    fdes->rowkey,
-                    fdes->nullable,
-                    fdes->comment);
-            }
-
-            printf("#----------------------------------------------------------------------------------\n");
-
-            return RDBAPI_SUCCESS;
-        }
-    } else if (parser->stmt == RDBSQL_DROP_TABLE) {
-
-
-
-
-    } else if (parser->stmt == RDBSQL_INFO_SECTION) {
-        // TODO: resultmap
-        if (RDBCtxCheckInfo(ctx, parser->info.section) == RDBAPI_SUCCESS) {
-            RDBCtxPrintInfo(ctx, -1);
-            
-            return RDBAPI_SUCCESS;
-        }
-    }
-
-    return (ub8) RDBAPI_ERROR;
 }
 
 
@@ -1061,4 +939,232 @@ RDBAPI_BOOL onParseInfo (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len
 
         return section? RDBAPI_TRUE : RDBAPI_FALSE;
     }
+}
+
+
+ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
+{
+    RDBAPI_RESULT res;
+
+    *outResultMap = NULL;
+
+    const char **vtnames = (const char **) ctx->env->valtypenames;
+
+    if (parser->stmt == RDBSQL_SELECT || parser->stmt == RDBSQL_DELETE) {
+        RDBResultMap resultMap;
+
+        res = RDBTableScanFirst(ctx,
+                parser->stmt,
+                parser->select.tablespace, parser->select.tablename,
+                parser->select.numkeys,
+                (const char **) parser->select.keys,
+                parser->select.keyexprs,
+                (const char **) parser->select.keyvals,
+                parser->select.numfields,
+                (const char **) parser->select.fields,
+                parser->select.fieldexprs,
+                (const char **) parser->select.fieldvals,
+                NULL,
+                NULL,
+                parser->select.count,
+                (const char **) parser->select.resultfields,
+                &resultMap);
+
+        if (res == RDBAPI_SUCCESS) {
+            ub8 offset = RDBTableScanNext(resultMap, parser->select.offset, parser->select.limit);
+
+            if (offset != RDB_ERROR_OFFSET) {
+                *outResultMap = resultMap;
+                return offset;
+            }
+
+            RDBResultMapFree(resultMap);
+            return 0;
+        }
+    } else if (parser->stmt == RDBSQL_CREATE) {
+        RDBTableDes_t tabledes = {0};
+        res = RDBTableDescribe(ctx, parser->create.tablespace, parser->create.tablename, &tabledes);
+
+        if (res == RDBAPI_SUCCESS && parser->create.fail_on_exists) {
+            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: table already existed");
+            return (ub8) RDBAPI_ERROR;
+        }
+
+        res = RDBTableCreate(ctx, parser->create.tablespace, parser->create.tablename, parser->create.tablecomment, parser->create.numfields, parser->create.fielddefs);
+
+        if (res == RDBAPI_SUCCESS) {
+            bzero(&tabledes, sizeof(tabledes));
+
+            res = RDBTableDescribe(ctx, parser->create.tablespace, parser->create.tablename, &tabledes);
+
+            if (res == RDBAPI_SUCCESS && tabledes.nfields == parser->create.numfields) {
+                RDBResultMap hMap = (RDBResultMap) RDBMemAlloc(sizeof(RDBResultMap_t) + sizeof(RDBFieldDes_t) * tabledes.nfields);
+
+                RDBResultMapSetDelimiter(hMap, RDB_TABLE_DELIMITER_CHAR);
+
+                hMap->kplen = RDBBuildRowkeyPattern(parser->create.tablespace, parser->create.tablename, tabledes.fielddes, tabledes.nfields, hMap->rowkeyid, &hMap->keypattern);
+
+                memcpy(hMap->fielddes, tabledes.fielddes, sizeof(tabledes.fielddes[0]) * tabledes.nfields);
+                hMap->numfields = tabledes.nfields;
+
+                hMap->ctxh = ctx;
+
+                *outResultMap = hMap;
+                return RDBAPI_SUCCESS;
+            }
+        }
+    } else if (parser->stmt == RDBSQL_DESC_TABLE) {
+        RDBTableDes_t tabledes = {0};
+
+        if (RDBTableDescribe(ctx, parser->desctable.tablespace, parser->desctable.tablename, &tabledes) != RDBAPI_SUCCESS) {
+            return (ub8) RDBAPI_ERROR;
+        } else {
+            // TODO: fill result map
+            int j;
+
+            printf("# table key: %s\n", tabledes.table_rowkey);
+            printf("# timestamp: %"PRIu64"\n", tabledes.table_timestamp);
+            printf("# create dt: %s\n", tabledes.table_datetime);
+            printf("# comment  : %s\n", tabledes.table_comment);
+            printf("#[     fieldname     | fieldtype | length |  scale  | rowkey | nullable | comment ]\n");
+            printf("#--------------------+-----------+--------+---------+--------+----------+----------\n");
+
+            for (j = 0; j < tabledes.nfields; j++) {
+                RDBFieldDes_t *fdes = &tabledes.fielddes[j];
+
+                printf(" %-20s| %8s  | %-6d |%8d |  %4d  |   %4d   | %s\n",
+                    fdes->fieldname,
+                    vtnames[fdes->fieldtype],
+                    fdes->length,
+                    fdes->dscale,
+                    fdes->rowkey,
+                    fdes->nullable,
+                    fdes->comment);
+            }
+
+            printf("#----------------------------------------------------------------------------------\n");
+
+            return RDBAPI_SUCCESS;
+        }
+    } else if (parser->stmt == RDBSQL_DROP_TABLE) {
+
+
+
+
+    } else if (parser->stmt == RDBSQL_INFO_SECTION) {
+        // TODO: resultmap
+        if (RDBCtxCheckInfo(ctx, parser->info.section) == RDBAPI_SUCCESS) {
+            RDBCtxPrintInfo(ctx, -1);
+            
+            return RDBAPI_SUCCESS;
+        }
+    }
+
+    return (ub8) RDBAPI_ERROR;
+}
+
+
+ub8 RDBSQLExecuteSQL (RDBCtx ctx, const RDBBlob_t *sqlblob, RDBResultMap *outResultMap)
+{
+    int err;
+    ub8 offset;
+    RDBResultMap resultMap;
+
+    RDBSQLParser sqlparser = NULL;
+
+    *outResultMap = NULL;
+
+    printf("{%s}\n", sqlblob->str);
+
+    err = RDBSQLParserNew(ctx, sqlblob->str, sqlblob->length, &sqlparser);
+    if (err) {
+        printf("RDBSQLParserNew failed: %s\n", RDBCtxErrMsg(ctx));
+        goto ret_error;
+    }
+
+    offset = RDBSQLExecute(ctx, sqlparser, &resultMap);
+    if (offset == RDBAPI_ERROR) {
+        printf("RDBSQLExecute failed: %s", RDBCtxErrMsg(ctx));
+        goto ret_error;
+    }
+
+    // success
+    RDBSQLParserFree(sqlparser);
+
+    *outResultMap = resultMap;
+    return (ub8) offset;
+
+ret_error:
+    RDBSQLParserFree(sqlparser);
+    return (ub8) RDBAPI_ERROR;
+}
+
+
+int RDBSQLExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResultMap **outResultMaps)
+{
+    FILE * fp;
+    ub8 offset;
+
+    if ((fp = fopen(sqlfile, "r")) != NULL) {
+        int len;
+        char line[256];
+
+        RDBBlob_t sqlblob;
+
+        int nmaps = 0;
+        int mapsz = 256;
+        RDBResultMap *resultMaps = (RDBResultMap *) RDBMemAlloc(sizeof(RDBResultMap) * mapsz);
+
+        sqlblob.maxsz = 4096;
+        sqlblob.length = 0;
+        sqlblob.str = RDBMemAlloc(sqlblob.maxsz);
+
+        while ((len = cstr_readline (fp, line, 255)) != -1) {
+            if (len > 0 && line[0] != '#') {
+                char *endp = strrchr(line, ';');
+                if (endp) {
+                    *endp = 0;
+                    len = (int) (endp - line);
+                }
+
+                memcpy(sqlblob.str + sqlblob.length, line, len);
+                sqlblob.length += len;
+
+                if (sqlblob.maxsz - sqlblob.length < sizeof(line)) {
+                    sqlblob.str = RDBMemRealloc(sqlblob.str, sqlblob.maxsz, sqlblob.maxsz + sizeof(line) * 4);
+                    sqlblob.maxsz += sizeof(line) * 4;
+                }
+
+                if (endp) {
+                    RDBResultMap resultMap = NULL;
+                    offset = RDBSQLExecuteSQL(ctx, &sqlblob, &resultMap);
+                    resultMaps[nmaps++] = resultMap;
+
+                    if (nmaps == mapsz) {
+                        resultMaps = (RDBResultMap *) RDBMemRealloc(resultMaps, sizeof(RDBResultMap) * mapsz, sizeof(RDBResultMap) * (mapsz + 256));
+                        mapsz += 256;
+                    }
+
+                    sqlblob.length = 0;
+                    bzero(sqlblob.str, sqlblob.maxsz);
+                }
+            }
+        }
+
+        if (sqlblob.length > 0) {
+            RDBResultMap resultMap = NULL;
+            RDBSQLExecuteSQL(ctx, &sqlblob, &resultMap);
+            resultMaps[nmaps++] = resultMap;
+        }
+
+        RDBMemFree(sqlblob.str);
+        fclose(fp);
+
+        *outResultMaps = resultMaps;
+
+        return nmaps;
+    }
+
+    snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) failed open file: %s", __FILE__, __LINE__, sqlfile);
+    return RDBAPI_ERROR;
 }

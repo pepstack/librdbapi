@@ -315,6 +315,18 @@ void * RDBMemAlloc (size_t sizeb)
 }
 
 
+void * RDBMemRealloc (void *oldp, size_t oldsizeb, size_t newsizeb)
+{
+    void *newp = mem_realloc(oldp, newsizeb);
+
+    if (oldsizeb != (size_t)(-1) && newsizeb > oldsizeb) {
+        bzero((char*)newp + oldsizeb, newsizeb - oldsizeb);
+    }
+
+    return newp;
+}
+
+
 void RDBMemFree (void *addr)
 {
     mem_free(addr);

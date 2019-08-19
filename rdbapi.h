@@ -210,6 +210,7 @@ typedef struct _RDBThreadCtx_t   * RDBThreadCtx;
 typedef struct _RDBSQLParser_t   * RDBSQLParser;
 
 
+
 typedef enum
 {
     // DO NOT CHANGE !
@@ -340,6 +341,8 @@ typedef struct _RDBBlob_t
 extern ub8 RDBCurrentTime (int spec, char *timestr);
 
 extern void * RDBMemAlloc (size_t sizeb);
+
+extern void * RDBMemRealloc (void *oldp, size_t oldsizeb, size_t newsizeb);
 
 extern void RDBMemFree (void *addr);
 
@@ -654,6 +657,8 @@ extern char RDBResultMapSetDelimiter (RDBResultMap hResultMap, char delimiter);
 
 extern void RDBResultMapPrintOut (RDBResultMap hResultMap, RDBAPI_BOOL withHead);
 
+extern void RDBResultMapListFree (RDBResultMap *resultMaps, int count);
+
 
 /**********************************************************************
  *
@@ -665,9 +670,13 @@ extern RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen,
 
 extern void RDBSQLParserFree (RDBSQLParser sqlParser);
 
+extern RDBSQLStmt RDBSQLParserGetStmt (RDBSQLParser sqlParser, char **parsedClause, int pretty);
+
 extern ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser sqlParser, RDBResultMap *outResultMap);
 
-extern RDBSQLStmt RDBSQLParserGetStmt (RDBSQLParser sqlParser, char **parsedClause, int pretty);
+extern ub8 RDBSQLExecuteSQL (RDBCtx ctx, const RDBBlob_t *sqlblob, RDBResultMap *outResultMap);
+
+extern int RDBSQLExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResultMap **outResultMaps);
 
 #if defined(__cplusplus)
 }

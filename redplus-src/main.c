@@ -310,6 +310,16 @@ int redplus_exec_redsql (RDBEnv env, const char *rdbsql, const char *output)
         goto error_exit;
     }
 
+    int nmaps = 0;
+    RDBResultMap *resultMaps = 0;
+
+    nmaps = RDBSQLExecuteFile(ctx, "C:\\Workspace\\github.com\\pepstack\\librdbapi\\redplus-src\\rdbsql.txt", &resultMaps);
+
+    RDBResultMapListFree(resultMaps, nmaps);
+
+    RDBCtxFree(ctx);
+    return 0;
+
     err = RDBSQLParserNew(ctx, rdbsql, -1, &sqlparser);
     if (err) {
         printf("RDBSQLParserNew failed: %s\n", RDBCtxErrMsg(ctx));
