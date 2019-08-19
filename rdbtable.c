@@ -726,7 +726,7 @@ RDBAPI_RESULT RDBResultMapInsert (RDBResultMap resultMap, redisReply *reply)
         }
     }
 
-    if (resultMap->sqlstmt == RDBSQL_SELECT) {
+    if (resultMap->sqlstmt == RDBSQL_SELECT || resultMap->sqlstmt == RDBSQL_DELETE) {
         // pass all filters ok
         rowdata = (RDBResultRow) RDBMemAlloc(sizeof(RDBResultRow_t ));
 
@@ -747,15 +747,6 @@ RDBAPI_RESULT RDBResultMapInsert (RDBResultMap resultMap, redisReply *reply)
         }
 
         return RDBAPI_SUCCESS;
-    } else if (resultMap->sqlstmt == RDBSQL_DELETE) {
-        ret = RedisDeleteKey(resultMap->ctxh, reply->str, NULL, 0);
-        if (ret == 1 || ret == RDBAPI_KEY_NOTFOUND) {
-            //TODO:
-
-            RedisFreeReplyObject(&reply);
-            RDBFieldsMapFree(fieldmap);
-            return RDBAPI_SUCCESS;
-        }
     }
 
     // others:
@@ -860,6 +851,7 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
 
     if (! desctable) {
         if (RDBTableDescribe(ctx, tablespace, tablename, &tabledes) != RDBAPI_SUCCESS) {
+            RDBTableFilterFree(filter);
             return RDBAPI_ERROR;
         }
 
@@ -885,6 +877,7 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
         for (j = 1; j <= resultfields[0]; j++) {
             if (! resultfields[j]) {
                 snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "field not found: %s", fieldnames[j - 1]);
+                RDBTableFilterFree(filter);
                 return RDBAPI_ERROR;
             }
         }
@@ -950,6 +943,7 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
 
     if (res != RDBAPI_SUCCESS) {
         snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR(%d): RDBTableFilterInit failed", res);
+        RDBTableFilterFree(filter);
         return RDBAPI_ERROR;
     }
 
@@ -1352,8 +1346,8 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
         char datetimestr[30];
         char emptystr[] = "";
 
-        const char * fields[11];
-        const char *values[11];
+        const char * fields[10];
+        const char *values[10];
 
         // {redisdb::$tablespace:$tablename}
         snprintf_chkd(key, sizeof(key), "{%.*s::%s:%s}", RDB_KEY_NAME_MAXLEN, RDB_SYSTEM_TABLE_PREFIX, tablespace, tablename);
@@ -1371,7 +1365,6 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
 
         result = RedisHMSet(ctx, key, fields, values, NULL, RDBAPI_KEY_PERSIST);
         if (result == RDBAPI_SUCCESS) {
-            char fieldid[4];
             char rowkey[4];
             char length[12];
             char dscale[12];
@@ -1381,7 +1374,6 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
             for (i = 0; i < numfields; i++) {
                 RDBFieldDes_t *flddef = &fielddefs[i];
 
-                snprintf_chkd(fieldid, sizeof(fieldid), "%d", i+1);
                 snprintf_chkd(rowkey, sizeof(rowkey), "%d", flddef->rowkey);                
                 snprintf_chkd(length, sizeof(length), "%d", flddef->length);
                 snprintf_chkd(dscale, sizeof(dscale), "%d", flddef->dscale);
@@ -1403,9 +1395,8 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
                 fields[5] = "dscale";
                 fields[6] = "rowkey";
                 fields[7] = "nullable";
-                fields[8] = "fieldid";      // 1-based
-                fields[9] = "comment";
-                fields[10] = 0;
+                fields[8] = "comment";
+                fields[9] = 0;
 
                 values[0] = timesec;
                 values[1] = datetimestr;
@@ -1415,9 +1406,8 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
                 values[5] = dscale;
                 values[6] = rowkey;
                 values[7] = nullable;
-                values[8] = fieldid;
-                values[9] = flddef->comment;
-                values[10] = 0;
+                values[8] = flddef->comment;
+                values[9] = 0;
 
                 result = RedisHMSet(ctx, key, fields, values, NULL, RDBAPI_KEY_PERSIST);
                 if (result != RDBAPI_SUCCESS) {
@@ -1433,7 +1423,8 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
 
 typedef struct {
     RDBCtx ctx;
-    RDBFieldDes_t *tabledes;
+    int numfields;
+    RDBFieldDes_t *fieldes;
 } GetFieldDesCallbackArg;
 
 
@@ -1457,7 +1448,6 @@ static void onGetFieldDesCallback (void * pvRow, void *pvArg)
     replyRow = RedisExecCommand(descarg->ctx, 2, argv, argl);
     if (replyRow && replyRow->type == REDIS_REPLY_ARRAY && replyRow->elements) {
         size_t i = 0;
-        int fieldid = 0;
 
         RDBFieldDes_t flddes = {0};
 
@@ -1466,25 +1456,10 @@ static void onGetFieldDesCallback (void * pvRow, void *pvArg)
             redisReply *fieldValue = replyRow->element[i++];
 
             if (fieldName && fieldValue && fieldName->type == REDIS_REPLY_STRING && fieldValue->type == REDIS_REPLY_STRING && fieldValue->len) {
-                if (! flddes.fieldname[0] &&
-                    ! cstr_notequal_len(fieldName->str, fieldName->len, "fieldname", 9) ) {
+                if (! flddes.fieldname[0] && ! cstr_notequal_len(fieldName->str, fieldName->len, "fieldname", 9) ) {
 
-                    flddes.fieldname[0] = 0;
-                    if (fieldValue->len < sizeof(flddes.fieldname)) {
-                        strncpy(flddes.fieldname, fieldValue->str, fieldValue->len);
-                    } else {
-                        strncpy(flddes.fieldname, fieldValue->str, sizeof(flddes.fieldname) - 1);
-                    }
-
-                    flddes.namelen = fieldValue->len;
-
-                    flddes.fieldname[sizeof(flddes.fieldname) - 1] = 0;                    
-                } else if (! fieldid &&
-                           ! cstr_notequal_len(fieldName->str, fieldName->len, "fieldid", 7) ) {
-
-                    fieldid = atoi(fieldValue->str);
-                } else if (! flddes.fieldtype &&
-                           ! cstr_notequal_len(fieldName->str, fieldName->len, "fieldtype", 9) ) {
+                    flddes.namelen = snprintf_chkd(flddes.fieldname, sizeof(flddes.fieldname), "%.*s", (int) fieldValue->len, fieldValue->str);
+                } else if (! flddes.fieldtype && ! cstr_notequal_len(fieldName->str, fieldName->len, "fieldtype", 9) ) {
 
                     if (fieldValue->len == 1) {
                         flddes.fieldtype = (RDBValueType) fieldValue->str[0];
@@ -1501,23 +1476,14 @@ static void onGetFieldDesCallback (void * pvRow, void *pvArg)
                 } else if (! cstr_notequal_len(fieldName->str, fieldName->len, "nullable", 8)) {
 
                     flddes.nullable = atoi(fieldValue->str);
-                } else if (! flddes.comment[0] &&
-                           ! cstr_notequal_len(fieldName->str, fieldName->len, "comment", 7)) {
+                } else if (! flddes.comment[0] && ! cstr_notequal_len(fieldName->str, fieldName->len, "comment", 7)) {
 
-                    flddes.comment[0] = 0;
-                    if (fieldValue->len < sizeof(flddes.comment)) {
-                        strncpy(flddes.comment, fieldValue->str, fieldValue->len);
-                    } else {
-                        strncpy(flddes.comment, fieldValue->str, sizeof(flddes.comment) - 1);
-                    }
-                    flddes.comment[sizeof(flddes.comment) - 1] = 0;
+                    snprintf_chkd(flddes.comment, sizeof(flddes.comment), "%.*s", (int)fieldValue->len, fieldValue->str);
                 }
             }
         }
 
-        if (fieldid > 0) {
-            memcpy(&descarg->tabledes[fieldid - 1], &flddes, sizeof(flddes));
-        }
+        memcpy(&descarg->fieldes[descarg->numfields++], &flddes, sizeof(flddes));
     }
 
     RedisFreeReplyObject(&replyRow);
@@ -1530,8 +1496,8 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
     RDBResultMap resultMap;
 
     // Get table des
+    int i;
     redisReply *tableReply = NULL;
-    const char * tablefields[] = {"ct", "dt", "comment", 0};
 
     bzero(tabledes, sizeof(*tabledes));
 
@@ -1541,21 +1507,28 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
     }
 
     snprintf_chkd(tabledes->table_rowkey, sizeof(tabledes->table_rowkey) - 1, "{%s::%s:%s}", RDB_SYSTEM_TABLE_PREFIX, tablespace, tablename);
-    if (RedisHMGet(ctx, tabledes->table_rowkey, tablefields, &tableReply) != RDBAPI_SUCCESS) {
+    if (RedisHMGet(ctx, tabledes->table_rowkey, NULL, &tableReply) != RDBAPI_SUCCESS) {
         snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) RDBAPI_ERROR: table key not found: %.*s", __FILE__, __LINE__,
             cstr_length(tabledes->table_rowkey, RDB_ERROR_MSG_LEN), tabledes->table_rowkey);
         return RDBAPI_ERROR;
     }
 
-    if (cstr_to_ub8(10, tableReply->element[0]->str, tableReply->element[0]->len, &tabledes->table_timestamp) != 1) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) RDBAPI_ERROR: bad field value: ct='%.*s'", __FILE__, __LINE__, (int) tableReply->element[0]->len, tableReply->element[0]->str);
-        RedisFreeReplyObject(&tableReply);        
-        return RDBAPI_ERROR;
+    for (i = 0; i < tableReply->elements; i += 2) {
+        redisReply *fldNameReply = tableReply->element[i];
+        redisReply *fldValReply = tableReply->element[i+1];
+
+        if (! cstr_compare_len(fldNameReply->str, fldNameReply->len, "ct", 2)) {
+            if (cstr_to_ub8(10, fldValReply->str, fldValReply->len, &tabledes->table_timestamp) != 1) {
+                snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) RDBAPI_ERROR: bad field value: ct='%.*s'", __FILE__, __LINE__, (int) fldValReply->len, fldValReply->str);
+                RedisFreeReplyObject(&tableReply);        
+                return RDBAPI_ERROR;
+            }
+        } else if (! cstr_compare_len(fldNameReply->str, fldNameReply->len, "dt", 2)) {
+            snprintf_chkd(tabledes->table_datetime, sizeof(tabledes->table_datetime), "%.*s", (int)fldValReply->len, fldValReply->str);
+        } else if (! cstr_compare_len(fldNameReply->str, fldNameReply->len, "comment", 7)) {
+            snprintf_chkd(tabledes->table_comment, sizeof(tabledes->table_comment), "%.*s", (int)fldValReply->len, fldValReply->str);
+        }
     }
-
-    snprintf_chkd(tabledes->table_datetime, sizeof(tabledes->table_datetime), "%.*s", (int)tableReply->element[1]->len, tableReply->element[1]->str);
-
-    snprintf_chkd(tabledes->table_comment, sizeof(tabledes->table_comment), "%.*s", (int)tableReply->element[2]->len, tableReply->element[2]->str);
 
     RedisFreeReplyObject(&tableReply);
 
@@ -1596,7 +1569,7 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
         }
 
         do {
-            GetFieldDesCallbackArg fdcbarg = {ctx, tabledes->fielddes};
+            GetFieldDesCallbackArg fdcbarg = {ctx, 0, tabledes->fielddes};
             RDBResultMapTraverse(resultMap, onGetFieldDesCallback, &fdcbarg);
             RDBResultMapFree(resultMap);
         } while(0);

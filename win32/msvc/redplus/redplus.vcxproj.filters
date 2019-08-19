@@ -37,4 +37,7 @@
   <ItemGroup>
     <None Include="..\..\..\redplus-src\redplus.cfg" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\..\..\redplus-src\rdbsql.txt" />
+  </ItemGroup>
 </Project>

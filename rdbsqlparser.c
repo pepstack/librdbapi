@@ -86,6 +86,11 @@ typedef struct _RDBSQLParser_t
             char tablename[RDB_KEY_NAME_MAXLEN + 1];
         } desctable;
 
+        struct DROP_TABLE {
+            char tablespace[RDB_KEY_NAME_MAXLEN + 1];
+            char tablename[RDB_KEY_NAME_MAXLEN + 1];
+        } droptable;
+
         struct INFO_SECTION {
             RDBNodeInfoSection section;
         } info;
@@ -895,7 +900,20 @@ RDBAPI_BOOL onParseDesc (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len
 
 RDBAPI_BOOL onParseDrop (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len)
 {
-    // TODO:
+    char table[RDB_KEY_NAME_MAXLEN * 2 + 10 + 1] = {0};
+
+    if (! strstr(sql, "TABLE ")) {
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) TABLE not found", __FILE__, __LINE__);
+        return RDBAPI_FALSE;
+    }
+
+    snprintf_chkd(table, sizeof(table), "%s", strstr(sql, "TABLE ") + 6);
+
+    if (! parse_table(cstr_LRtrim_chr(table, 32), parser->droptable.tablespace, parser->droptable.tablename)) {
+        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) parse_table failed", __FILE__, __LINE__);
+        return RDBAPI_FALSE;
+    }
+
     return RDBAPI_TRUE;
 }
 
@@ -942,6 +960,15 @@ RDBAPI_BOOL onParseInfo (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len
 }
 
 
+static void RDBResultRowDeleteCallback (void * _row, void * _map)
+{
+    RDBResultMap resultMap = (RDBResultMap)_map;
+    RDBResultRow resultRow = (RDBResultRow)_row;
+
+    RedisDeleteKey(resultMap->ctxh, resultRow->replykey->str, NULL, 0);
+}
+
+
 ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
 {
     RDBAPI_RESULT res;
@@ -974,6 +1001,10 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
             ub8 offset = RDBTableScanNext(resultMap, parser->select.offset, parser->select.limit);
 
             if (offset != RDB_ERROR_OFFSET) {
+                if (parser->stmt == RDBSQL_DELETE) {
+                    RDBResultMapTraverse(resultMap, RDBResultRowDeleteCallback, resultMap);
+                }
+
                 *outResultMap = resultMap;
                 return offset;
             }
@@ -1047,10 +1078,19 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
             return RDBAPI_SUCCESS;
         }
     } else if (parser->stmt == RDBSQL_DROP_TABLE) {
+        RDBTableDes_t tabledes = {0};
+        char keyname[256];
 
+        if (RDBTableDescribe(ctx, parser->droptable.tablespace, parser->droptable.tablename, &tabledes) == RDBAPI_SUCCESS) {
+            int i, rklen = (int) strlen(tabledes.table_rowkey);
 
+            for (i = 0; i < tabledes.nfields; i++) {
+                snprintf_chkd(keyname, sizeof(keyname), "%.*s:%s}", rklen - 1, tabledes.table_rowkey, tabledes.fielddes[i].fieldname);
+                RedisDeleteKey(ctx, keyname, NULL, 0);
+            }
 
-
+            return RedisDeleteKey(ctx, tabledes.table_rowkey, NULL, 0);
+        }        
     } else if (parser->stmt == RDBSQL_INFO_SECTION) {
         // TODO: resultmap
         if (RDBCtxCheckInfo(ctx, parser->info.section) == RDBAPI_SUCCESS) {
@@ -1073,8 +1113,6 @@ ub8 RDBSQLExecuteSQL (RDBCtx ctx, const RDBBlob_t *sqlblob, RDBResultMap *outRes
     RDBSQLParser sqlparser = NULL;
 
     *outResultMap = NULL;
-
-    printf("{%s}\n", sqlblob->str);
 
     err = RDBSQLParserNew(ctx, sqlblob->str, sqlblob->length, &sqlparser);
     if (err) {

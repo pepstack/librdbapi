@@ -109,6 +109,9 @@
   <ItemGroup>
     <None Include="..\..\..\redplus-src\redplus.cfg" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\..\..\redplus-src\rdbsql.txt" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

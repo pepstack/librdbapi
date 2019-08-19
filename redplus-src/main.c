@@ -146,9 +146,9 @@ static void redplus_check_result(const char *errsour, RDBCtx ctx, RDBAPI_RESULT 
 
 void redplus_print_usage();
 
-int redplus_exec_command (RDBEnv env, const char *command, const char *output);
-
-int redplus_exec_redsql (RDBEnv env, const char *redsql, const char *output);
+void redplus_exec_command (RDBEnv env, const char *command, const char *output);
+void redplus_exec_sqlfile (RDBEnv env, const char *redsql, const char *output);
+void redplus_exec_redsql (RDBEnv env, const char *redsql, const char *output);
 
 
 int main(int argc, const char *argv[])
@@ -174,6 +174,8 @@ int main(int argc, const char *argv[])
     char cluster[1024] = {0};
     char command[1024] = {0};
     char redsql[2048] = {0};
+
+    char sqlfile[256] = {0};
     char output[256] = {0};
 
     char appcfg[260] = {0};
@@ -197,7 +199,7 @@ int main(int argc, const char *argv[])
 
     snprintf_chkd(appcfg+7+ch, strlen(APPNAME) + 6, "%c%s.cfg", PATH_SEPARATOR_CHAR, APPNAME);
 
-    while ((ch = getopt_long_only(argc, (char *const *) argv, "hVR:C:S:O:", lopts, &index)) != -1) {
+    while ((ch = getopt_long_only(argc, (char *const *) argv, "hVR:C:S:O:F:", lopts, &index)) != -1) {
         switch (ch) {
         case '?':
             fprintf(stderr, "ERROR: option not defined.\n");
@@ -214,19 +216,23 @@ int main(int argc, const char *argv[])
             break;
 
         case 'R':
-            snprintf_chkd(cluster, sizeof(cluster) - 1, "%s", optarg);
+            snprintf_chkd(cluster, sizeof(cluster), "%s", optarg);
             break;
 
         case 'C':
-            snprintf_chkd(command, sizeof(command) - 1, "%s", optarg);
+            snprintf_chkd(command, sizeof(command), "%s", optarg);
             break;
 
         case 'S':
-            snprintf_chkd(redsql, sizeof(redsql) - 1, "%s", optarg);
+            snprintf_chkd(redsql, sizeof(redsql), "%s", optarg);
+            break;
+
+        case 'F':
+            snprintf_chkd(sqlfile, sizeof(sqlfile), "%s", optarg);
             break;
 
         case 'O':
-            snprintf_chkd(output, sizeof(output) - 1, "%s", optarg);
+            snprintf_chkd(output, sizeof(output), "%s", optarg);
             break;
 
         case 'h':
@@ -256,9 +262,17 @@ int main(int argc, const char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    redplus_exec_command(env, command, output);
+    if (*command) {
+        redplus_exec_command(env, command, output);
+    }
 
-    redplus_exec_redsql(env, redsql, output);
+    if (*sqlfile) {
+        redplus_exec_sqlfile(env, sqlfile, output);
+    }
+
+    if (*redsql) {
+        redplus_exec_redsql(env, redsql, output);
+    }
 
     RDBEnvDestroy(env);
 
@@ -283,17 +297,40 @@ void redplus_print_usage()
     printf("  -R, --rediscluster=HOSTS Redis cluster host nodes. (example: 'authpass@127.0.0.1:7001-7009')\n");
     printf("  -C, --command=REDISCMD   Redis command to call.\n");
     printf("  -S, --rdbsql=RDBSQL      SQL to execute on redisdb. (example: SELECT * FROM a.t WHERE ...)\n");
+    printf("  -F, --sqlfile=PATHFILE   execute a SQL file.\n");
     printf("  -O, --output=PATHFILE    Pathfile to store output result map\n\n");
 }
 
 
-int redplus_exec_command (RDBEnv env, const char *command, const char *output)
+void redplus_exec_command (RDBEnv env, const char *command, const char *output)
 {
-    return 0;
+
 }
 
 
-int redplus_exec_redsql (RDBEnv env, const char *rdbsql, const char *output)
+void redplus_exec_sqlfile (RDBEnv env, const char *sqlfile, const char *output)
+{
+    RDBAPI_RESULT err = RDBAPI_ERROR;
+    RDBCtx ctx = NULL;
+
+    int nmaps = 0;
+    RDBResultMap *resultMaps = NULL;
+
+    err = RDBCtxCreate(env, &ctx);
+    if (err) {
+        printf("RDBCtxCreate error(%d).\n", err);
+        return;
+    }
+
+    nmaps = RDBSQLExecuteFile(ctx, sqlfile, &resultMaps);
+
+    RDBResultMapListFree(resultMaps, nmaps);
+
+    RDBCtxFree(ctx);
+}
+
+
+void redplus_exec_redsql (RDBEnv env, const char *rdbsql, const char *output)
 {
     RDBAPI_RESULT err = RDBAPI_ERROR;
 
@@ -309,16 +346,6 @@ int redplus_exec_redsql (RDBEnv env, const char *rdbsql, const char *output)
         printf("RDBCtxCreate error(%d).\n", err);
         goto error_exit;
     }
-
-    int nmaps = 0;
-    RDBResultMap *resultMaps = 0;
-
-    nmaps = RDBSQLExecuteFile(ctx, "C:\\Workspace\\github.com\\pepstack\\librdbapi\\redplus-src\\rdbsql.txt", &resultMaps);
-
-    RDBResultMapListFree(resultMaps, nmaps);
-
-    RDBCtxFree(ctx);
-    return 0;
 
     err = RDBSQLParserNew(ctx, rdbsql, -1, &sqlparser);
     if (err) {
@@ -351,7 +378,7 @@ int redplus_exec_redsql (RDBEnv env, const char *rdbsql, const char *output)
     RDBResultMapFree(resultMap);
     RDBCtxFree(ctx);
 
-    return RDBAPI_SUCCESS;
+    return;
 
 error_exit:
     if (sqlparser) {
@@ -365,6 +392,4 @@ error_exit:
     if (ctx) {
         RDBCtxFree(ctx);
     }
-
-    return err;
 }
