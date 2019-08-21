@@ -329,7 +329,7 @@ int main(int argc, const char *argv[])
         RDBResultMapFree(resultMap);
     }
 
-    RDBThreadCtxFree(thrctx);
+    RDBThreadCtxDestroy(thrctx);
 
     printf("redis close success.\n");
 

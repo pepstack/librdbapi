@@ -22,11 +22,7 @@
 #define unlink			_unlink
 #define stricmp			_stricmp
 #define strnicmp		_strnicmp
-
-#ifndef strdup
-# define strdup			_strdup
-#endif
-
+#define strdup			_strdup
 #define alloca			_alloca
 
 

@@ -44,14 +44,14 @@
     <OutDir>$(ProjectDir)target\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(ProjectDir)build\$(Platform)\$(Configuration)\</IntDir>
     <IncludePath>$(ProjectDir)..\..\liblog4c\src\;$(ProjectDir)..\..\include;$(ProjectDir)..\..\..\;$(IncludePath)</IncludePath>
-    <LibraryPath>$(ProjectDir)..\..\liblog4c\makefiles\msvc\vs2013\target\x64\Debug;$(ProjectDir)..\..\lib64\Debug;$(ProjectDir)..\rdbapi-w32lib\target\x64\Debug;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(ProjectDir)..\..\liblog4c\makefiles\msvc\target\x64\Debug;$(ProjectDir)..\..\lib64\Debug;$(ProjectDir)..\rdbapi-w32lib\target\x64\Debug;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(ProjectDir)target\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(ProjectDir)build\$(Platform)\$(Configuration)\</IntDir>
     <IncludePath>$(ProjectDir)..\..\liblog4c\src\;$(ProjectDir)..\..\..\;$(ProjectDir)..\..\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(ProjectDir)..\..\liblog4c\makefiles\msvc\vs2013\target\x64\Release;$(ProjectDir)..\..\lib64\Release;$(ProjectDir)..\rdbapi-w32lib\target\x64\Release;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(ProjectDir)..\..\liblog4c\makefiles\msvc\target\x64\Release;$(ProjectDir)..\..\lib64\Release;$(ProjectDir)..\rdbapi-w32lib\target\x64\Release;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
