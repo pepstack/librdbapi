@@ -191,8 +191,8 @@ static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_
                 for (; pno <= endpno; pno++) {
                     RDBNodeCfg nodecfg = (RDBNodeCfg) RDBMemAlloc(sizeof(RDBNodeCfg_t));
 
-                    snprintf_chkd(nodecfg->host, sizeof(nodecfg->host), "%s", host);
-                    snprintf_chkd(nodecfg->authpass, sizeof(nodecfg->authpass), "%s", authpass);
+                    snprintf_chkd_V1(nodecfg->host, sizeof(nodecfg->host), "%s", host);
+                    snprintf_chkd_V1(nodecfg->authpass, sizeof(nodecfg->authpass), "%s", authpass);
 
                     nodecfg->port = (ub4) pno;
                     nodecfg->ctxtimeout = ctxtimeout;
@@ -203,8 +203,8 @@ static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_
             } else {
                 RDBNodeCfg nodecfg = (RDBNodeCfg) RDBMemAlloc(sizeof(RDBNodeCfg_t));
 
-                snprintf_chkd(nodecfg->host, sizeof(nodecfg->host), "%s", host);
-                snprintf_chkd(nodecfg->authpass, sizeof(nodecfg->authpass), "%s", authpass);
+                snprintf_chkd_V1(nodecfg->host, sizeof(nodecfg->host), "%s", host);
+                snprintf_chkd_V1(nodecfg->authpass, sizeof(nodecfg->authpass), "%s", authpass);
 
                 nodecfg->port = (ub4) atol(port);
                 nodecfg->ctxtimeout = ctxtimeout;
@@ -381,9 +381,9 @@ static size_t RDBEnvLoadCfgfile (const char *cfgfile, char **outCluster, int *io
             }
             
             if (! nnlen) {
-                len = snprintf_chkd(cluster, maxsz, "%.*s", len, line);
+                len = snprintf_chkd_V1(cluster, maxsz, "%.*s", len, line);
             } else {
-                len = snprintf_chkd(cluster + nnlen, maxsz, ",%.*s", len, line);
+                len = snprintf_chkd_V1(cluster + nnlen, maxsz, ",%.*s", len, line);
             }
             nnlen += len;
         }
@@ -514,12 +514,12 @@ void RDBEnvSetNode (RDBEnvNode node, const char *host, ub4 port, ub4 ctxtimeout,
 {
     node->port = port;
 
-    snprintf_chkd(node->host, sizeof(node->host), "%.*s", (int) strnlen(host, RDB_HOSTADDR_MAXLEN), host);
+    snprintf_chkd_V1(node->host, sizeof(node->host), "%.*s", (int) strnlen(host, RDB_HOSTADDR_MAXLEN), host);
 
-    snprintf_chkd(node->key, sizeof(node->key), "%s:%d", node->host, (int) node->port);
+    snprintf_chkd_V1(node->key, sizeof(node->key), "%s:%d", node->host, (int) node->port);
 
     if (authpass) {
-        snprintf_chkd(node->authpass, sizeof(node->authpass), "%.*s", (int) strnlen(authpass, RDB_AUTHPASS_MAXLEN), authpass);
+        snprintf_chkd_V1(node->authpass, sizeof(node->authpass), "%.*s", (int) strnlen(authpass, RDB_AUTHPASS_MAXLEN), authpass);
     } else {
         *node->authpass = 0;
     }
@@ -552,7 +552,7 @@ RDBEnvNode RDBEnvFindNode (RDBEnv env, const char *host, ub4 port)
     } else {
         char key[RDB_HOSTADDR_MAXLEN + 12];
 
-        snprintf_chkd(key, sizeof(key), "%s:%u", host, port);
+        snprintf_chkd_V1(key, sizeof(key), "%s:%u", host, port);
 
         HASH_FIND_STR(env->nodemap, key, node);
     }

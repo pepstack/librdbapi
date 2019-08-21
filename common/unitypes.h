@@ -28,7 +28,7 @@
 *
 *   Universal Standard definitions and types, Bob Jenkins
 *
-* 2019-07-01: revised
+* 2019-08-21: revised
 */
 #ifndef UNITYPES_H_INCLUDED
 #define UNITYPES_H_INCLUDED
@@ -47,6 +47,11 @@ extern "C"
 # include <stdlib.h>
 # include <string.h>
 # include <assert.h>
+# include <stdarg.h>
+
+# include <float.h>
+# include <limits.h>
+# include <stdint.h>
 # define STDIO
 #endif
 
@@ -133,6 +138,96 @@ typedef unsigned char ub1;
 /* signed 1-byte quantities */
 typedef signed char sb1;
 #define SB1MAXVAL 0x7f
+
+#if defined (_MSC_VER)
+    // warning C4996: 'vsnprintf': This function or variable may be unsafe.
+    // Consider using vsnprintf_s instead.
+    //  To disable deprecation, use _CRT_SECURE_NO_WARNINGS
+    #pragma warning(disable:4996)
+#endif
+
+/**
+ * snprintf_chkd_V1()
+ *   A checked V1 version of snprintf() for both GCC and MSVC
+ *   No error.
+ * see:
+ *   <stdarg.h>
+ *   https://linux.die.net/man/3/snprintf
+ *
+ *   The functions snprintf() and vsnprintf() do not write more than size bytes
+ *    (including the terminating null byte ('\0')).
+ *   If the output was truncated due to this limit then the return value is the
+ *    number of characters (excluding the terminating null byte) which would have
+ *    been written to the final string if enough space had been available.
+ *   Thus, a return value of size or more means that the output was truncated.
+ */
+static int snprintf_chkd_V1 (char *outputbuf, size_t bufsize, const char *format, ...)
+{
+    int len;
+
+    va_list args;
+    va_start(args, format);
+    len = vsnprintf(outputbuf, bufsize, format, args);
+    va_end(args);
+
+    if (len < 0) {
+        len = 0;
+        *outputbuf = '\0';
+    } else if (len >= (int) bufsize) {
+        /* output was truncated due to bufsize limit */
+        len = (int) bufsize - 1;
+
+        /* for MSVC */
+        outputbuf[len] = '\0';
+    }
+
+    return len;
+}
+
+
+/**
+ * snprintf_chkd_V2()
+ *   A crashed on error version of snprintf.
+ *    
+ *    If exitcode not given (= 0), same as snprintf_safe()
+ */
+static int snprintf_chkd_V2 (int exitcode, char *outputbuf, size_t bufsize, const char *format, ...)
+{
+    int len;
+
+    va_list args;
+    va_start(args, format);
+    len = vsnprintf(outputbuf, bufsize, format, args);
+    va_end(args);
+
+    if (len < 0) {
+        len = 0;
+        *outputbuf = '\0';
+
+        /* exit on error if exitcode given (not 0) */
+        if (exitcode) {
+            fprintf(stderr, "(%s:%d) fatal: output error is encountered.\n", __FILE__, __LINE__);
+            exit(exitcode);
+        }
+    } else if (len >= (int) bufsize) {
+        /* output was truncated due to bufsize limit */
+        len = (int) bufsize - 1;
+
+        /* for MSVC */
+        outputbuf[len] = '\0';
+
+        /* exit on error if exitcode given (not 0) */
+        if (exitcode) {
+            fprintf(stderr, "(%s:%d) fatal: output was truncated. (%s...)\n", __FILE__, __LINE__, outputbuf);
+            exit(exitcode);
+        }
+    }
+
+    return len;
+}
+
+
+#define snprintf_V1    snprintf
 
 #ifdef __cplusplus
 }

@@ -262,7 +262,7 @@ RDBAPI_RESULT RDBCtxNodeCheckInfo (RDBCtxNode ctxnode, RDBNodeInfoSection sectio
     const char *argv[] = {"info", 0};
 
     if ((int) section < (int) NODEINFO_SERVER || (int) section >= (int) MAX_NODEINFO_SECTIONS) {
-        snprintf_chkd(ctxnode->ctx->errmsg, sizeof(ctxnode->ctx->errmsg), "RDBAPI_ERR_BADARG: invalid section(%d)", (int)section);
+        snprintf_chkd_V1(ctxnode->ctx->errmsg, sizeof(ctxnode->ctx->errmsg), "RDBAPI_ERR_BADARG: invalid section(%d)", (int)section);
         return RDBAPI_ERR_BADARG;
     }
 
@@ -281,7 +281,7 @@ RDBAPI_RESULT RDBCtxNodeCheckInfo (RDBCtxNode ctxnode, RDBNodeInfoSection sectio
     result = RedisExecArgvOnNode(ctxnode, 2, argv, argvlen, &reply);
     if (result == RDBAPI_SUCCESS) {
         if (reply->type != REDIS_REPLY_STRING) {
-            snprintf_chkd(ctxnode->ctx->errmsg, sizeof(ctxnode->ctx->errmsg), "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
+            snprintf_chkd_V1(ctxnode->ctx->errmsg, sizeof(ctxnode->ctx->errmsg), "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
             RedisFreeReplyObject(&reply);
             return RDBAPI_ERR_TYPE;
         }
@@ -332,7 +332,7 @@ RDBAPI_RESULT RDBCtxNodeCheckInfo (RDBCtxNode ctxnode, RDBNodeInfoSection sectio
 RDBAPI_RESULT RDBCtxCheckInfo (RDBCtx ctx, RDBNodeInfoSection section)
 {
     if (section < NODEINFO_SERVER || section > MAX_NODEINFO_SECTIONS) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) RDBAPI_ERR_BADARG: invalid section(%d)", __FILE__, __LINE__, (int) section);
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) RDBAPI_ERR_BADARG: invalid section(%d)", __FILE__, __LINE__, (int) section);
         return RDBAPI_ERR_BADARG;
     } else {
         RDBCtxNode ctxnode;
@@ -429,7 +429,7 @@ int RDBCtxNodeInfoProp (RDBCtxNode ctxnode, RDBNodeInfoSection section, const ch
             HASH_FIND_STR(propmap, propname, propnode);
 
             if (propnode) {
-                len = snprintf_chkd(propvalue, RDBAPI_PROP_MAXSIZE, "%s", propnode->value);
+                len = snprintf_chkd_V1(propvalue, RDBAPI_PROP_MAXSIZE, "%s", propnode->value);
                 return len;
             }
         }

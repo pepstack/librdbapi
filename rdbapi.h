@@ -355,17 +355,19 @@ extern int RDBExprValues (RDBValueType vt, const char *val1, int len1, RDBFilter
  *
  *********************************************************************/
 
-extern RDBThreadCtx RDBThreadCtxCreate (ub8 key_expire_ms, ssize_t keybuf_size_max, ssize_t valbuf_size_max);
+extern RDBThreadCtx RDBThreadCtxCreate (ub8 keyExpireMS, ssize_t keyBufSize, ssize_t valBufSize);
 
 extern RDBCtx RDBThreadCtxAttach (RDBThreadCtx thrctx, RDBCtx ctx);
 
-extern RDBCtx RDBThreadCtxGetConn (RDBThreadCtx thrctx, ub8 * key_expire_ms);
+extern RDBCtx RDBThreadCtxGetConn (RDBThreadCtx thrctx);
 
-extern char * RDBThreadCtxGetKBuf (RDBThreadCtx thrctx, size_t *keybuf_cb);
+extern ub8 RDBThreadCtxGetExpire (RDBThreadCtx thrctx);
 
-extern char * RDBThreadCtxGetVBuf (RDBThreadCtx thrctx, size_t *valbuf_cb);
+extern char * RDBThreadCtxKeyBuf (RDBThreadCtx thrctx, ssize_t *bufSizeOut);
 
-extern void RDBThreadCtxFree (RDBThreadCtx thrctx);
+extern char * RDBThreadCtxValBuf (RDBThreadCtx thrctx, ssize_t *bufSizeOut);
+
+extern void RDBThreadCtxDestroy (RDBThreadCtx thrctx);
 
 
 /**********************************************************************

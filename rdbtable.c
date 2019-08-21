@@ -193,8 +193,8 @@ static RDBAPI_RESULT RDBTableFilterInit (RDBTableFilter filter,
     int i, j, k, len, offlen = 0;
     size_t sz, valsz;
 
-    snprintf_chkd(filter->tablespace, sizeof(filter->tablespace), "%s", tablespace);
-    snprintf_chkd(filter->tablename, sizeof(filter->tablename), "%s", tablename);
+    snprintf_chkd_V1(filter->tablespace, sizeof(filter->tablespace), "%s", tablespace);
+    snprintf_chkd_V1(filter->tablename, sizeof(filter->tablename), "%s", tablename);
 
     // validate and set keys
     filter->patternkeys = 0;
@@ -309,23 +309,23 @@ static RDBAPI_RESULT RDBTableFilterInit (RDBTableFilter filter,
                     switch (kvnode->expr) {
                     case RDBFIL_EQUAL:
                     case RDBFIL_MATCH:
-                        snprintf_chkd(repvalue, RDB_KEY_VALUE_SIZE, "%.*s", kvnode->vlen, kvnode->val);
+                        snprintf_chkd_V1(repvalue, RDB_KEY_VALUE_SIZE, "%.*s", kvnode->vlen, kvnode->val);
                         break;
 
                     case RDBFIL_LEFT_LIKE:
-                        snprintf_chkd(repvalue, RDB_KEY_VALUE_SIZE + 1, "%.*s*", kvnode->vlen, kvnode->val);
+                        snprintf_chkd_V1(repvalue, RDB_KEY_VALUE_SIZE + 1, "%.*s*", kvnode->vlen, kvnode->val);
                         break;
 
                     case RDBFIL_RIGHT_LIKE:
-                        snprintf_chkd(repvalue, RDB_KEY_VALUE_SIZE + 1, "*%.*s", kvnode->vlen, kvnode->val);
+                        snprintf_chkd_V1(repvalue, RDB_KEY_VALUE_SIZE + 1, "*%.*s", kvnode->vlen, kvnode->val);
                         break;
 
                     case RDBFIL_LIKE:
-                        snprintf_chkd(repvalue, RDB_KEY_VALUE_SIZE + 2, "*%.*s*", kvnode->vlen, kvnode->val);
+                        snprintf_chkd_V1(repvalue, RDB_KEY_VALUE_SIZE + 2, "*%.*s*", kvnode->vlen, kvnode->val);
                         break;
                     }
 
-                    if (snprintf_chkd(pattern, sizeof(pattern), "$%.*s", kvnode->klen, kvnode->key) < sizeof(pattern)) {
+                    if (snprintf_chkd_V1(pattern, sizeof(pattern), "$%.*s", kvnode->klen, kvnode->key) < sizeof(pattern)) {
                         char * newstr;
                         int newlen = cstr_replace_new(keypattern, pattern, repvalue, &newstr);
                         if (newlen) {
@@ -351,9 +351,9 @@ static RDBAPI_RESULT RDBTableFilterInit (RDBTableFilter filter,
     } else {
         if (desctable) {
             // {redisdb::xsdb:logentry:*}
-            len = snprintf_chkd(filter->patternblob.str, filter->patternblob.maxsz, "{%s::%s:%s:*}", filter->tablespace, filter->tablename, desctable);
+            len = snprintf_chkd_V1(filter->patternblob.str, filter->patternblob.maxsz, "{%s::%s:%s:*}", filter->tablespace, filter->tablename, desctable);
         } else {
-            len = snprintf_chkd(filter->patternblob.str, filter->patternblob.maxsz, "{%s::%s:*}", filter->tablespace, filter->tablename);
+            len = snprintf_chkd_V1(filter->patternblob.str, filter->patternblob.maxsz, "{%s::%s:*}", filter->tablespace, filter->tablename);
         }
 
         if (len >= (int)filter->patternblob.maxsz) {
@@ -477,15 +477,15 @@ int RDBBuildRowkeyPattern (const char * tablespace, const char * tablename,
 
     rowkey = (char *) RDBMemAlloc(szlen + 1);
 
-    offlen += snprintf_chkd(rowkey + offlen, szlen - offlen, "{%s::%s", tablespace, tablename);
+    offlen += snprintf_chkd_V1(rowkey + offlen, szlen - offlen, "{%s::%s", tablespace, tablename);
 
     for (k = 1; k <= rowkeyid[0]; k++) {
         j = rowkeyid[k];
 
-        offlen += snprintf_chkd(rowkey + offlen, szlen - offlen, ":$%s", fielddes[j].fieldname);
+        offlen += snprintf_chkd_V1(rowkey + offlen, szlen - offlen, ":$%s", fielddes[j].fieldname);
     }
 
-    offlen += snprintf_chkd(rowkey + offlen, szlen - offlen, "}");
+    offlen += snprintf_chkd_V1(rowkey + offlen, szlen - offlen, "}");
     rowkey[offlen] = 0;
 
     *outRowkeyPattern = rowkey;
@@ -504,7 +504,7 @@ int RDBFinishRowkeyPattern (const RDBFieldDes_t *fielddes, int nfielddes, const 
     for (i = 1; i <= rowkeyid[0]; i++) {
         j = rowkeyid[i];
 
-        snprintf_chkd(pattern, sizeof(pattern), "$%.*s", fielddes[j].namelen, fielddes[j].fieldname);
+        snprintf_chkd_V1(pattern, sizeof(pattern), "$%.*s", fielddes[j].namelen, fielddes[j].fieldname);
 
         l = cstr_replace_new(rowkey, pattern, "*", &result);
         if (l) {
@@ -830,12 +830,12 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
     ub1 resultfields[RDBAPI_ARGV_MAXNUM + 1] = {0};
 
     if (numkeys > RDBAPI_SQL_KEYS_MAX) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too many keys");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too many keys");
         return RDBAPI_ERR_BADARG;
     }
 
     if (numfields > RDBAPI_SQL_FIELDS_MAX) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too many fields");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too many fields");
         return RDBAPI_ERR_BADARG;
     }
 
@@ -845,7 +845,7 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
 
     res = RDBTableFilterCreate(&filter, RDB_ROWKEY_MAX_SIZE);
     if (res != RDBAPI_SUCCESS) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR(%d): RDBTableFilterCreate failed", res);
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR(%d): RDBTableFilterCreate failed", res);
         return RDBAPI_ERROR;
     }
 
@@ -876,7 +876,7 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
 
         for (j = 1; j <= resultfields[0]; j++) {
             if (! resultfields[j]) {
-                snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "field not found: %s", fieldnames[j - 1]);
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "field not found: %s", fieldnames[j - 1]);
                 RDBTableFilterFree(filter);
                 return RDBAPI_ERROR;
             }
@@ -942,14 +942,14 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
     }
 
     if (res != RDBAPI_SUCCESS) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR(%d): RDBTableFilterInit failed", res);
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR(%d): RDBTableFilterInit failed", res);
         RDBTableFilterFree(filter);
         return RDBAPI_ERROR;
     }
 
     // MUST after RDBTableFilterInit
     if (RDBResultMapNew(filter, sqlstmt, tabledes.nfields, tabledes.fielddes, resultfields, &resultMap) != RDBAPI_SUCCESS) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_NOMEM: out of memory");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_NOMEM: out of memory");
         RDBTableFilterFree(filter);
         return RDBAPI_ERR_NOMEM;
     }
@@ -1021,7 +1021,7 @@ static RDBAPI_RESULT RDBTableScanOnNode (RDBCtxNode ctxnode, RDBTableCursor node
 
     // construct scan clause
     argvlen[0] = 4; // scan
-    argvlen[1] = snprintf_chkd(cursor, sizeof(cursor), "%"PRIu64, nodestate->cursor);
+    argvlen[1] = snprintf_chkd_V1(cursor, sizeof(cursor), "%"PRIu64, nodestate->cursor);
     cursor[21] = 0;
 
     if (patternblob) {
@@ -1029,7 +1029,7 @@ static RDBAPI_RESULT RDBTableScanOnNode (RDBCtxNode ctxnode, RDBTableCursor node
         argvlen[3] = patternblob->length;
 
         argvlen[4] = 5; // count
-        argvlen[5] = snprintf_chkd(count, sizeof(count), "%u", maxlimit);
+        argvlen[5] = snprintf_chkd_V1(count, sizeof(count), "%u", maxlimit);
         count[11] = 0;
 
         const char *argv[] = {
@@ -1045,7 +1045,7 @@ static RDBAPI_RESULT RDBTableScanOnNode (RDBCtxNode ctxnode, RDBTableCursor node
         result = RedisExecArgvOnNode(ctxnode, 6, argv, argvlen, &reply);
     } else {
         argvlen[2] = 5; // count
-        argvlen[3] = snprintf_chkd(count, sizeof(count), "%d", maxlimit);
+        argvlen[3] = snprintf_chkd_V1(count, sizeof(count), "%d", maxlimit);
         count[11] = 0;
 
         const char *argv[] = {
@@ -1096,7 +1096,7 @@ static RDBAPI_RESULT RDBTableScanOnNode (RDBCtxNode ctxnode, RDBTableCursor node
             // success: return data
             return RDBAPI_SUCCESS;
         } else {
-            snprintf_chkd(ctxnode->ctx->errmsg, sizeof(ctxnode->ctx->errmsg), "RDBAPI_ERROR: reply type(%d).", reply->type);
+            snprintf_chkd_V1(ctxnode->ctx->errmsg, sizeof(ctxnode->ctx->errmsg), "RDBAPI_ERROR: reply type(%d).", reply->type);
             RedisFreeReplyObject(&reply);
             return RDBAPI_ERROR;
         }
@@ -1255,22 +1255,22 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
 
     // validate table and fields
     if (numfields < 1 || numfields > RDBAPI_ARGV_MAXNUM) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid numfields(%d)", numfields);
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid numfields(%d)", numfields);
         return RDBAPI_ERR_BADARG;
     }
 
     if (! tablespace || strnlen(tablespace, RDB_KEY_NAME_MAXLEN + 1) > RDB_KEY_NAME_MAXLEN) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid tablespace");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid tablespace");
         return RDBAPI_ERR_BADARG;
     }
 
     if (! tablename || strnlen(tablename, RDB_KEY_NAME_MAXLEN + 1) > RDB_KEY_NAME_MAXLEN) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid tablename");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid tablename");
         return RDBAPI_ERR_BADARG;
     }
 
     if (tablecomment && strnlen(tablecomment, RDB_KEY_VALUE_SIZE) == RDB_KEY_VALUE_SIZE) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid tablecomment");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid tablecomment");
         return RDBAPI_ERR_BADARG;
     }
 
@@ -1280,23 +1280,23 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
         RDBFieldDes_t *flddef = &fielddefs[i];
 
         if (flddef->rowkey < 0) {
-            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: bad rowkey(%d)", flddef->rowkey);
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: bad rowkey(%d)", flddef->rowkey);
             return RDBAPI_ERR_BADARG;
         }
 
         if (flddef->rowkey > RDBAPI_SQL_KEYS_MAX) {
-            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too many keys");
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too many keys");
             return RDBAPI_ERR_BADARG;
         }
 
         if (flddef->rowkey > 0) {
             if (flddef->nullable) {
-                snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: rowkey(%d) field is nullable: %s", flddef->rowkey, flddef->fieldname);
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: rowkey(%d) field is nullable: %s", flddef->rowkey, flddef->fieldname);
                 return RDBAPI_ERR_BADARG;
             }
 
             if (rowkeys[flddef->rowkey]) {
-                snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: duplicate rowkeys(%d) for field: %s", flddef->rowkey, flddef->fieldname);
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: duplicate rowkeys(%d) for field: %s", flddef->rowkey, flddef->fieldname);
                 return RDBAPI_ERR_BADARG;
             }
 
@@ -1305,27 +1305,27 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
         }
 
         if (flddef->length < 0) {
-            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid length(%d) for field: %s", flddef->length, flddef->fieldname);
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid length(%d) for field: %s", flddef->length, flddef->fieldname);
             return RDBAPI_ERR_BADARG;
         }
 
         if (flddef->length > RDB_FIELD_LENGTH_MAX) {
-            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too big length(%d) for field: %s", flddef->length, flddef->fieldname);
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too big length(%d) for field: %s", flddef->length, flddef->fieldname);
             return RDBAPI_ERR_BADARG;
         }
 
         if (flddef->fieldtype == RDBVT_FLT64) {
             if (flddef->length > RDB_FIELD_FLT_LENGTH_MAX) {
-                snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too big length(%d) for float field: %s", flddef->length, flddef->fieldname);
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too big length(%d) for float field: %s", flddef->length, flddef->fieldname);
                 return RDBAPI_ERR_BADARG;
             }
 
             if (flddef->dscale < RDB_FIELD_FLT_SCALE_MIN) {
-                snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid dscale(%d) for float field: %s", flddef->dscale, flddef->fieldname);
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid dscale(%d) for float field: %s", flddef->dscale, flddef->fieldname);
                 return RDBAPI_ERR_BADARG;
             }
             if (flddef->dscale > RDB_FIELD_FLT_SCALE_MAX) {
-                snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too big dscale(%d) for float field: %s", flddef->dscale, flddef->fieldname);
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too big dscale(%d) for float field: %s", flddef->dscale, flddef->fieldname);
                 return RDBAPI_ERR_BADARG;
             }
         }
@@ -1333,7 +1333,7 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
 
     for (i = 1; i <= rowkeys[0]; i++) {
         if (! rowkeys[i]) {
-            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: rowkey(%d) not found", i);
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: rowkey(%d) not found", i);
             return RDBAPI_ERR_BADARG;
         }
     }
@@ -1350,8 +1350,8 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
         const char *values[10];
 
         // {redisdb::$tablespace:$tablename}
-        snprintf_chkd(key, sizeof(key), "{%.*s::%s:%s}", RDB_KEY_NAME_MAXLEN, RDB_SYSTEM_TABLE_PREFIX, tablespace, tablename);
-        snprintf_chkd(timesec, sizeof(timesec), "%"PRIu64, RDBCurrentTime(RDBAPI_TIMESPEC_SEC, datetimestr));
+        snprintf_chkd_V1(key, sizeof(key), "{%.*s::%s:%s}", RDB_KEY_NAME_MAXLEN, RDB_SYSTEM_TABLE_PREFIX, tablespace, tablename);
+        snprintf_chkd_V1(timesec, sizeof(timesec), "%"PRIu64, RDBCurrentTime(RDBAPI_TIMESPEC_SEC, datetimestr));
 
         fields[0] = "ct";   // create time in seconds
         fields[1] = "dt";   // create date in form: "YYYY-MM-DD hh:mm:ss"
@@ -1374,9 +1374,9 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
             for (i = 0; i < numfields; i++) {
                 RDBFieldDes_t *flddef = &fielddefs[i];
 
-                snprintf_chkd(rowkey, sizeof(rowkey), "%d", flddef->rowkey);                
-                snprintf_chkd(length, sizeof(length), "%d", flddef->length);
-                snprintf_chkd(dscale, sizeof(dscale), "%d", flddef->dscale);
+                snprintf_chkd_V1(rowkey, sizeof(rowkey), "%d", flddef->rowkey);                
+                snprintf_chkd_V1(length, sizeof(length), "%d", flddef->length);
+                snprintf_chkd_V1(dscale, sizeof(dscale), "%d", flddef->dscale);
 
                 fieldtype[0] = (char) flddef->fieldtype;
 
@@ -1385,7 +1385,7 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
                 }
 
                 // {redisdb::$tablespace:$tablename:$fieldname}
-                snprintf_chkd(key, sizeof(key), "{%.*s::%s:%s:%s}", RDB_KEY_NAME_MAXLEN, RDB_SYSTEM_TABLE_PREFIX, tablespace, tablename, flddef->fieldname);
+                snprintf_chkd_V1(key, sizeof(key), "{%.*s::%s:%s:%s}", RDB_KEY_NAME_MAXLEN, RDB_SYSTEM_TABLE_PREFIX, tablespace, tablename, flddef->fieldname);
 
                 fields[0] = "ct";
                 fields[1] = "dt";
@@ -1458,7 +1458,7 @@ static void onGetFieldDesCallback (void * pvRow, void *pvArg)
             if (fieldName && fieldValue && fieldName->type == REDIS_REPLY_STRING && fieldValue->type == REDIS_REPLY_STRING && fieldValue->len) {
                 if (! flddes.fieldname[0] && ! cstr_notequal_len(fieldName->str, fieldName->len, "fieldname", 9) ) {
 
-                    flddes.namelen = snprintf_chkd(flddes.fieldname, sizeof(flddes.fieldname), "%.*s", (int) fieldValue->len, fieldValue->str);
+                    flddes.namelen = snprintf_chkd_V1(flddes.fieldname, sizeof(flddes.fieldname), "%.*s", (int) fieldValue->len, fieldValue->str);
                 } else if (! flddes.fieldtype && ! cstr_notequal_len(fieldName->str, fieldName->len, "fieldtype", 9) ) {
 
                     if (fieldValue->len == 1) {
@@ -1478,7 +1478,7 @@ static void onGetFieldDesCallback (void * pvRow, void *pvArg)
                     flddes.nullable = atoi(fieldValue->str);
                 } else if (! flddes.comment[0] && ! cstr_notequal_len(fieldName->str, fieldName->len, "comment", 7)) {
 
-                    snprintf_chkd(flddes.comment, sizeof(flddes.comment), "%.*s", (int)fieldValue->len, fieldValue->str);
+                    snprintf_chkd_V1(flddes.comment, sizeof(flddes.comment), "%.*s", (int)fieldValue->len, fieldValue->str);
                 }
             }
         }
@@ -1502,13 +1502,13 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
     bzero(tabledes, sizeof(*tabledes));
 
     if (! strcmp(tablespace, RDB_SYSTEM_TABLE_PREFIX)) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) RDBAPI_ERROR: system tablespace: %s", __FILE__, __LINE__, tablespace);
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) RDBAPI_ERROR: system tablespace: %s", __FILE__, __LINE__, tablespace);
         return RDBAPI_ERROR;
     }
 
-    snprintf_chkd(tabledes->table_rowkey, sizeof(tabledes->table_rowkey) - 1, "{%s::%s:%s}", RDB_SYSTEM_TABLE_PREFIX, tablespace, tablename);
+    snprintf_chkd_V1(tabledes->table_rowkey, sizeof(tabledes->table_rowkey) - 1, "{%s::%s:%s}", RDB_SYSTEM_TABLE_PREFIX, tablespace, tablename);
     if (RedisHMGet(ctx, tabledes->table_rowkey, NULL, &tableReply) != RDBAPI_SUCCESS) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) RDBAPI_ERROR: table key not found: %.*s", __FILE__, __LINE__,
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) RDBAPI_ERROR: table key not found: %.*s", __FILE__, __LINE__,
             cstr_length(tabledes->table_rowkey, RDB_ERROR_MSG_LEN), tabledes->table_rowkey);
         return RDBAPI_ERROR;
     }
@@ -1519,14 +1519,14 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
 
         if (! cstr_compare_len(fldNameReply->str, fldNameReply->len, "ct", 2)) {
             if (cstr_to_ub8(10, fldValReply->str, fldValReply->len, &tabledes->table_timestamp) != 1) {
-                snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) RDBAPI_ERROR: bad field value: ct='%.*s'", __FILE__, __LINE__, (int) fldValReply->len, fldValReply->str);
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) RDBAPI_ERROR: bad field value: ct='%.*s'", __FILE__, __LINE__, (int) fldValReply->len, fldValReply->str);
                 RedisFreeReplyObject(&tableReply);        
                 return RDBAPI_ERROR;
             }
         } else if (! cstr_compare_len(fldNameReply->str, fldNameReply->len, "dt", 2)) {
-            snprintf_chkd(tabledes->table_datetime, sizeof(tabledes->table_datetime), "%.*s", (int)fldValReply->len, fldValReply->str);
+            snprintf_chkd_V1(tabledes->table_datetime, sizeof(tabledes->table_datetime), "%.*s", (int)fldValReply->len, fldValReply->str);
         } else if (! cstr_compare_len(fldNameReply->str, fldNameReply->len, "comment", 7)) {
-            snprintf_chkd(tabledes->table_comment, sizeof(tabledes->table_comment), "%.*s", (int)fldValReply->len, fldValReply->str);
+            snprintf_chkd_V1(tabledes->table_comment, sizeof(tabledes->table_comment), "%.*s", (int)fldValReply->len, fldValReply->str);
         }
     }
 
@@ -1553,7 +1553,7 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
             fields += RDBResultMapSize(resultMap);
 
             if (fields > RDBAPI_ARGV_MAXNUM) {
-                snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: too many fields");
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: too many fields");
 
                 RDBResultMapFree(resultMap);
                 return RDBAPI_ERROR;
@@ -1561,7 +1561,7 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
         }
 
         if (! fields) {
-            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: table not found: {%s::%s:%s:*}",
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: table not found: {%s::%s:%s:*}",
                 RDB_SYSTEM_TABLE_PREFIX, tablespace, tablename);
 
             RDBResultMapFree(resultMap);
@@ -1578,12 +1578,12 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
             RDBFieldDes_t *fld = &(tabledes->fielddes[tabledes->nfields]);
 
             if (fld->namelen < 1 || fld->namelen > RDB_KEY_NAME_MAXLEN) {
-                snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) invalid fieldname: %s", __FILE__, __LINE__, fld->fieldname);
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) invalid fieldname: %s", __FILE__, __LINE__, fld->fieldname);
                 return RDBAPI_ERROR;
             }
 
             if (! ctx->env->valtype_chk_table[(ub1) fld->fieldtype]) {
-                snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) bad fieldtype for field: %s", __FILE__, __LINE__, fld->fieldname);
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) bad fieldtype for field: %s", __FILE__, __LINE__, fld->fieldname);
                 return RDBAPI_ERROR;
             }
         }

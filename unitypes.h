@@ -28,7 +28,7 @@
 *
 *   Universal Standard definitions and types, Bob Jenkins
 *
-* 2019-07-01: revised
+* 2019-08-21: revised
 */
 #ifndef UNITYPES_H_INCLUDED
 #define UNITYPES_H_INCLUDED
@@ -147,9 +147,9 @@ typedef signed char sb1;
 #endif
 
 /**
- * snprintf_chkd()
- *   A checked version of snprintf() for both GCC and MSVC
- *
+ * snprintf_chkd_V1()
+ *   A checked V1 version of snprintf() for both GCC and MSVC
+ *   No error.
  * see:
  *   <stdarg.h>
  *   https://linux.die.net/man/3/snprintf
@@ -161,7 +161,7 @@ typedef signed char sb1;
  *    been written to the final string if enough space had been available.
  *   Thus, a return value of size or more means that the output was truncated.
  */
-static int snprintf_chkd (char *outputbuf, size_t bufsize, const char *format, ...)
+static int snprintf_chkd_V1 (char *outputbuf, size_t bufsize, const char *format, ...)
 {
     int len;
 

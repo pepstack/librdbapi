@@ -125,12 +125,12 @@ RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQL
     }
 
     if (len < 4) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_RDBSQL: sql is too short");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_RDBSQL: sql is too short");
         return RDBAPI_ERR_RDBSQL;
     }
 
     if (len > RDB_SQL_TOTAL_LEN_MAX) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_RDBSQL: sql is too long");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_RDBSQL: sql is too long");
         return RDBAPI_ERR_RDBSQL;
     }
 
@@ -185,7 +185,7 @@ RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQL
         parser->stmt = parseOk? RDBSQL_DROP_TABLE : RDBSQL_INVALID;
 
     } else {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_RDBSQL: invalid sql");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_RDBSQL: invalid sql");
         parser->stmt = RDBSQL_INVALID;
     }
 
@@ -294,9 +294,9 @@ static int parse_table (char *table, char tablespace[RDB_KEY_NAME_MAXLEN + 1], c
     char *p = strchr(table, '.');
 
     if (p && p == strrchr(table, '.')) {
-        snprintf_chkd(tablespace, RDB_KEY_NAME_MAXLEN + 1, "%.*s", (int)(p - table), table);
+        snprintf_chkd_V1(tablespace, RDB_KEY_NAME_MAXLEN + 1, "%.*s", (int)(p - table), table);
         *p++ = 0;
-        snprintf_chkd(tablename, RDB_KEY_NAME_MAXLEN + 1, "%.*s", (int)(len - (p - table)), p);
+        snprintf_chkd_V1(tablename, RDB_KEY_NAME_MAXLEN + 1, "%.*s", (int)(len - (p - table)), p);
 
         if (strchr(tablename, 32)) {
             *strchr(tablename, 32) = 0;
@@ -335,7 +335,7 @@ static int parse_fields (char *fields, char *fieldnames[RDBAPI_ARGV_MAXNUM])
     while (p) {
         char *name;
 
-        snprintf_chkd(namebuf, RDB_KEY_NAME_MAXLEN * 2, "%s", p);
+        snprintf_chkd_V1(namebuf, RDB_KEY_NAME_MAXLEN * 2, "%s", p);
 
         name = cstr_LRtrim_chr(namebuf, 32);
 
@@ -357,7 +357,7 @@ static char * CheckNewFieldName (const char *name)
     char *namebuf;
     char tmpbuf[RDB_KEY_NAME_MAXLEN + 32];
 
-    snprintf_chkd(tmpbuf, sizeof(tmpbuf), "%s", name);
+    snprintf_chkd_V1(tmpbuf, sizeof(tmpbuf), "%s", name);
 
     namebuf = cstr_LRtrim_chr(tmpbuf, 32);
 
@@ -374,7 +374,7 @@ static char * CheckNewFieldValue (const char *value)
     char *valbuf;
     char tmpbuf[RDB_KEY_VALUE_SIZE + 32];
 
-    snprintf_chkd(tmpbuf, sizeof(tmpbuf), "%s", value);
+    snprintf_chkd_V1(tmpbuf, sizeof(tmpbuf), "%s", value);
 
     valbuf = cstr_LRtrim_chr(cstr_LRtrim_chr(tmpbuf, 32), 39);
 
@@ -523,19 +523,19 @@ RDBAPI_BOOL onParseSelect (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 
     char * _from = strstr(sql, " FROM ");
     if (! _from) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(SELECT) error - FROM not found");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(SELECT) error - FROM not found");
         return RDBAPI_FALSE;
     }
 
-    snprintf_chkd(fields, sizeof(fields), "%.*s", (int)(_from - sql), sql);
-    snprintf_chkd(table, sizeof(table), "%s", _from + strlen(" FROM "));
+    snprintf_chkd_V1(fields, sizeof(fields), "%.*s", (int)(_from - sql), sql);
+    snprintf_chkd_V1(table, sizeof(table), "%s", _from + strlen(" FROM "));
 
     psz = strstr(table, " WHERE ");
     if (psz) {
         *psz = 0;
 
         psz = strstr(sql, " WHERE ");
-        snprintf_chkd(wheres, sizeof(wheres), "%.*s", len - (int)(psz - sql), psz + strlen(" WHERE "));
+        snprintf_chkd_V1(wheres, sizeof(wheres), "%.*s", len - (int)(psz - sql), psz + strlen(" WHERE "));
 
         psz = strstr(wheres, " OFFSET ");
         if (psz) {
@@ -549,7 +549,7 @@ RDBAPI_BOOL onParseSelect (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 
     psz = strstr(sql, " OFFSET ");
     if (psz) {
-        snprintf_chkd(offset, sizeof(offset), "%.*s", len - (int)(psz - sql), psz + strlen(" OFFSET "));
+        snprintf_chkd_V1(offset, sizeof(offset), "%.*s", len - (int)(psz - sql), psz + strlen(" OFFSET "));
         psz = strstr(offset, " LIMIT ");
         if (psz) {
             *psz = 0;
@@ -558,7 +558,7 @@ RDBAPI_BOOL onParseSelect (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 
     psz = strstr(sql, " LIMIT ");
     if (psz) {
-        snprintf_chkd(limit, sizeof(limit), "%.*s", len - (int)(psz - sql), psz + strlen(" LIMIT "));
+        snprintf_chkd_V1(limit, sizeof(limit), "%.*s", len - (int)(psz - sql), psz + strlen(" LIMIT "));
         psz = strstr(limit, " OFFSET ");
         if (psz) {
             *psz = 0;
@@ -566,29 +566,29 @@ RDBAPI_BOOL onParseSelect (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
     }
 
     if (! parse_table(cstr_LRtrim_chr(table, 32), parser->select.tablespace, parser->select.tablename)) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "parse_table failed");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "parse_table failed");
         return RDBAPI_FALSE;
     }
 
     parser->select.count = parse_fields(cstr_LRtrim_chr(fields, 32), parser->select.resultfields);
     if (! parser->select.count) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) parse_fields failed", __FILE__, __LINE__);
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) parse_fields failed", __FILE__, __LINE__);
         return RDBAPI_FALSE;
     }
   
     parser->select.numfields = parse_where(cstr_LRtrim_chr(wheres, 32), parser->select.fields, parser->select.fieldexprs, parser->select.fieldvals);
     if (parser->select.numfields < 0) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "parse_where failed");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "parse_where failed");
         return RDBAPI_FALSE;
     }
 
     if (cstr_to_ub8(10, offset, (int) strlen(offset), &parser->select.offset) < 0) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "error OFFSET");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "error OFFSET");
         return RDBAPI_FALSE;
     }
 
     if (cstr_to_ub8(10, limit, (int) strlen(limit), &limitTmp) < 0) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "error LIMIT");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "error LIMIT");
         return RDBAPI_FALSE;
     }
     parser->select.limit = (ub4)limitTmp;
@@ -609,14 +609,14 @@ RDBAPI_BOOL onParseDelete (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 
     ub8 limitTmp = 0;
 
-    snprintf_chkd(table, sizeof(table), "%.*s", len, sql);
+    snprintf_chkd_V1(table, sizeof(table), "%.*s", len, sql);
 
     psz = strstr(table, " WHERE ");
     if (psz) {
         *psz = 0;
 
         psz = strstr(sql, " WHERE ");
-        snprintf_chkd(wheres, sizeof(wheres), "%.*s", len - (int)(psz - sql), psz + strlen(" WHERE "));
+        snprintf_chkd_V1(wheres, sizeof(wheres), "%.*s", len - (int)(psz - sql), psz + strlen(" WHERE "));
 
         psz = strstr(wheres, " OFFSET ");
         if (psz) {
@@ -630,7 +630,7 @@ RDBAPI_BOOL onParseDelete (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 
     psz = strstr(sql, " OFFSET ");
     if (psz) {
-        snprintf_chkd(offset, sizeof(offset), "%.*s", len - (int)(psz - sql), psz + strlen(" OFFSET "));
+        snprintf_chkd_V1(offset, sizeof(offset), "%.*s", len - (int)(psz - sql), psz + strlen(" OFFSET "));
         psz = strstr(offset, " LIMIT ");
         if (psz) {
             *psz = 0;
@@ -639,7 +639,7 @@ RDBAPI_BOOL onParseDelete (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 
     psz = strstr(sql, " LIMIT ");
     if (psz) {
-        snprintf_chkd(limit, sizeof(limit), "%.*s", len - (int)(psz - sql), psz + strlen(" LIMIT "));
+        snprintf_chkd_V1(limit, sizeof(limit), "%.*s", len - (int)(psz - sql), psz + strlen(" LIMIT "));
         psz = strstr(limit, " OFFSET ");
         if (psz) {
             *psz = 0;
@@ -647,23 +647,23 @@ RDBAPI_BOOL onParseDelete (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
     }
 
     if (! parse_table(cstr_LRtrim_chr(table, 32), parser->select.tablespace, parser->select.tablename)) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "parse_table failed");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "parse_table failed");
         return RDBAPI_FALSE;
     }
 
     parser->select.numfields = parse_where(cstr_LRtrim_chr(wheres, 32), parser->select.fields, parser->select.fieldexprs, parser->select.fieldvals);
     if (parser->select.numfields < 0) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "parse_where failed");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "parse_where failed");
         return RDBAPI_FALSE;
     }
 
     if (cstr_to_ub8(10, offset, (int) strlen(offset), &parser->select.offset) < 0) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "error OFFSET");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "error OFFSET");
         return RDBAPI_FALSE;
     }
 
     if (cstr_to_ub8(10, limit, (int) strlen(limit), &limitTmp) < 0) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "error LIMIT");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "error LIMIT");
         return RDBAPI_FALSE;
     }
     parser->select.limit = (ub4)limitTmp;
@@ -703,23 +703,23 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
     const char **vtnames = (const char **) ctx->env->valtypenames;
 
     if (!leftp || !rightp || (rightp - leftp) < 16) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "error CREATE TABLE grammar");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "error CREATE TABLE grammar");
         return RDBAPI_FALSE;      
     }
 
     ifnex = strstr(sql, "IF NOT EXISTS ");
     if (ifnex) {
         if (leftp - ifnex > 14) {
-            snprintf_chkd(table, sizeof(table), "%.*s", (int)(leftp - ifnex - 14), ifnex + 14);
+            snprintf_chkd_V1(table, sizeof(table), "%.*s", (int)(leftp - ifnex - 14), ifnex + 14);
         }
         parser->create.fail_on_exists = 0;
     } else {
-        snprintf_chkd(table, sizeof(table), "%.*s", (int)(leftp - sql), sql);
+        snprintf_chkd_V1(table, sizeof(table), "%.*s", (int)(leftp - sql), sql);
         parser->create.fail_on_exists = 1;
     }
 
     if (! parse_table(cstr_LRtrim_chr(table, 32), parser->create.tablespace, parser->create.tablename)) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "parse_table failed");
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "parse_table failed");
         return RDBAPI_FALSE;
     }
 
@@ -735,11 +735,11 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 
         n = cstr_slpit_chr(leftp + 1, (int)(rightp - leftp - 1), ',', 0, 0);
         if (! n) {
-            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "field not found");
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "field not found");
             return RDBAPI_FALSE;
         }
         if (n > RDBAPI_ARGV_MAXNUM) {
-            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "too many fields");
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "too many fields");
             return RDBAPI_FALSE;
         }
 
@@ -762,12 +762,12 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
                     k = cstr_slpit_chr(lp + 1, (int)(rp - lp - 1), '|', 0, 0);
 
                     if (! k) {
-                        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "ROWKEY not found");
+                        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "ROWKEY not found");
                         return RDBAPI_FALSE;
                     }
 
                     if (k > RDBAPI_SQL_KEYS_MAX) {
-                        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "ROWKEY too many");
+                        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "ROWKEY too many");
                         return RDBAPI_FALSE;
                     }
 
@@ -797,7 +797,7 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
                 *p++ = 0;
 
                 fld = cstr_LRtrim_chr(fld, 32);
-                snprintf_chkd(fielddefs[numfields].fieldname, sizeof(fielddefs[numfields].fieldname), "%s", fld);
+                snprintf_chkd_V1(fielddefs[numfields].fieldname, sizeof(fielddefs[numfields].fieldname), "%s", fld);
 
                 fld = cstr_Ltrim_chr(p, 32);
                 int j = cstr_startwith_mul(fld, (int) strlen(fld), vtnames, NULL, 256);
@@ -822,7 +822,7 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
                         // error
                     }
 
-                    snprintf_chkd(valbuf, sizeof(valbuf), "%.*s", (int)(b - a - 1), a + 1);
+                    snprintf_chkd_V1(valbuf, sizeof(valbuf), "%.*s", (int)(b - a - 1), a + 1);
 
                     fielddefs[numfields].length = atoi(cstr_LRtrim_chr(valbuf, 32));
                     if (fielddefs[numfields].length <= 0) {
@@ -850,7 +850,7 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
                         // error
                     }
 
-                    snprintf_chkd(fielddefs[numfields].comment, sizeof(fielddefs[numfields].comment), "%.*s", (int)(c2 - c1 - 1), c1 + 1);
+                    snprintf_chkd_V1(fielddefs[numfields].comment, sizeof(fielddefs[numfields].comment), "%.*s", (int)(c2 - c1 - 1), c1 + 1);
                 }
 
                 numfields++;
@@ -876,7 +876,7 @@ RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
             // error
         }
 
-        snprintf_chkd(parser->create.tablecomment, sizeof(parser->create.tablecomment), "%.*s", (int)(t2 - t1 - 1), t1 + 1);
+        snprintf_chkd_V1(parser->create.tablecomment, sizeof(parser->create.tablecomment), "%.*s", (int)(t2 - t1 - 1), t1 + 1);
     }
 
     return RDBAPI_TRUE;
@@ -887,10 +887,10 @@ RDBAPI_BOOL onParseDesc (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len
 {
     char table[RDB_KEY_NAME_MAXLEN * 2 + 10 + 1] = {0};
 
-    snprintf_chkd(table, sizeof(table), "%s", sql);
+    snprintf_chkd_V1(table, sizeof(table), "%s", sql);
 
     if (! parse_table(cstr_LRtrim_chr(table, 32), parser->desctable.tablespace, parser->desctable.tablename)) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) parse_table failed", __FILE__, __LINE__);
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) parse_table failed", __FILE__, __LINE__);
         return RDBAPI_FALSE;
     }
 
@@ -903,14 +903,14 @@ RDBAPI_BOOL onParseDrop (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len
     char table[RDB_KEY_NAME_MAXLEN * 2 + 10 + 1] = {0};
 
     if (! strstr(sql, "TABLE ")) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) TABLE not found", __FILE__, __LINE__);
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) TABLE not found", __FILE__, __LINE__);
         return RDBAPI_FALSE;
     }
 
-    snprintf_chkd(table, sizeof(table), "%s", strstr(sql, "TABLE ") + 6);
+    snprintf_chkd_V1(table, sizeof(table), "%s", strstr(sql, "TABLE ") + 6);
 
     if (! parse_table(cstr_LRtrim_chr(table, 32), parser->droptable.tablespace, parser->droptable.tablename)) {
-        snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) parse_table failed", __FILE__, __LINE__);
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) parse_table failed", __FILE__, __LINE__);
         return RDBAPI_FALSE;
     }
 
@@ -1017,7 +1017,7 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
         res = RDBTableDescribe(ctx, parser->create.tablespace, parser->create.tablename, &tabledes);
 
         if (res == RDBAPI_SUCCESS && parser->create.fail_on_exists) {
-            snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: table already existed");
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: table already existed");
             return (ub8) RDBAPI_ERROR;
         }
 
@@ -1085,7 +1085,7 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
             int i, rklen = (int) strlen(tabledes.table_rowkey);
 
             for (i = 0; i < tabledes.nfields; i++) {
-                snprintf_chkd(keyname, sizeof(keyname), "%.*s:%s}", rklen - 1, tabledes.table_rowkey, tabledes.fielddes[i].fieldname);
+                snprintf_chkd_V1(keyname, sizeof(keyname), "%.*s:%s}", rklen - 1, tabledes.table_rowkey, tabledes.fielddes[i].fieldname);
                 RedisDeleteKey(ctx, keyname, NULL, 0);
             }
 
@@ -1203,6 +1203,6 @@ int RDBSQLExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResultMap **outResult
         return nmaps;
     }
 
-    snprintf_chkd(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) failed open file: %s", __FILE__, __LINE__, sqlfile);
+    snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) failed open file: %s", __FILE__, __LINE__, sqlfile);
     return RDBAPI_ERROR;
 }

@@ -11,9 +11,10 @@ EXPORTS
 	RDBThreadCtxCreate
 	RDBThreadCtxAttach
 	RDBThreadCtxGetConn
-	RDBThreadCtxGetKBuf
-	RDBThreadCtxGetVBuf
-	RDBThreadCtxFree
+	RDBThreadCtxGetExpire
+	RDBThreadCtxKeyBuf
+	RDBThreadCtxValBuf
+	RDBThreadCtxDestroy
 
     RDBEnvCreate
     RDBEnvDestroy

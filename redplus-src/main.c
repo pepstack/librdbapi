@@ -59,7 +59,7 @@ static int realfilepath (const char * file, char * rpdirbuf, size_t maxlen)
     p = realpath(file, 0);
 
     if (p) {
-        snprintf_chkd(rpdirbuf, maxlen, "%s", p);
+        snprintf_chkd_V1(rpdirbuf, maxlen, "%s", p);
 
         free(p);
 
@@ -71,11 +71,11 @@ static int realfilepath (const char * file, char * rpdirbuf, size_t maxlen)
             return (int)(p - rpdirbuf);
         }
 
-        snprintf_chkd(rpdirbuf, maxlen, "invlid path: %s", file);
+        snprintf_chkd_V1(rpdirbuf, maxlen, "invlid path: %s", file);
         return 0;
     }
 
-    snprintf_chkd(rpdirbuf, maxlen, "realpath error(%d): %s", errno, strerror(errno));
+    snprintf_chkd_V1(rpdirbuf, maxlen, "realpath error(%d): %s", errno, strerror(errno));
     return (-2);
 }
 #endif
@@ -197,7 +197,7 @@ int main(int argc, const char *argv[])
         exit(-1);
     }
 
-    snprintf_chkd(appcfg+7+ch, strlen(APPNAME) + 6, "%c%s.cfg", PATH_SEPARATOR_CHAR, APPNAME);
+    snprintf_chkd_V1(appcfg+7+ch, strlen(APPNAME) + 6, "%c%s.cfg", PATH_SEPARATOR_CHAR, APPNAME);
 
     while ((ch = getopt_long_only(argc, (char *const *) argv, "hVR:C:S:O:F:", lopts, &index)) != -1) {
         switch (ch) {
@@ -216,23 +216,23 @@ int main(int argc, const char *argv[])
             break;
 
         case 'R':
-            snprintf_chkd(cluster, sizeof(cluster), "%s", optarg);
+            snprintf_chkd_V1(cluster, sizeof(cluster), "%s", optarg);
             break;
 
         case 'C':
-            snprintf_chkd(command, sizeof(command), "%s", optarg);
+            snprintf_chkd_V1(command, sizeof(command), "%s", optarg);
             break;
 
         case 'S':
-            snprintf_chkd(redsql, sizeof(redsql), "%s", optarg);
+            snprintf_chkd_V1(redsql, sizeof(redsql), "%s", optarg);
             break;
 
         case 'F':
-            snprintf_chkd(sqlfile, sizeof(sqlfile), "%s", optarg);
+            snprintf_chkd_V1(sqlfile, sizeof(sqlfile), "%s", optarg);
             break;
 
         case 'O':
-            snprintf_chkd(output, sizeof(output), "%s", optarg);
+            snprintf_chkd_V1(output, sizeof(output), "%s", optarg);
             break;
 
         case 'h':
