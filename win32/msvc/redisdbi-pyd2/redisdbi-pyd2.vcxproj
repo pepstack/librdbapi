@@ -94,7 +94,6 @@
   <ItemGroup>
     <ClCompile Include="..\..\..\common\getoptw.c" />
     <ClCompile Include="..\..\..\common\getopt_longw.c" />
-    <ClCompile Include="..\..\..\common\log4c_logger.c" />
     <ClCompile Include="..\..\..\redisdbi-pyd2-src\redisdbi_mod2.c" />
     <ClCompile Include="..\..\..\redisdbi-pyd2-src\redisdbi_pyc.c" />
   </ItemGroup>

@@ -27,9 +27,6 @@
     <ClCompile Include="..\..\..\common\getoptw.c">
       <Filter>common</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\common\log4c_logger.c">
-      <Filter>common</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\redplus-src\main.c">
       <Filter>源文件</Filter>
     </ClCompile>

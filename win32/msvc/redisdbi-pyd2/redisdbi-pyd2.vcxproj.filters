@@ -27,15 +27,15 @@
     <ClCompile Include="..\..\..\common\getoptw.c">
       <Filter>common</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\common\log4c_logger.c">
-      <Filter>common</Filter>
+    <ClCompile Include="..\..\..\redisdbi-pyd2-src\redisdbi_mod2.c">
+      <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\redisdbi-pyd2-src\redisdbi_pyd2.c">
+    <ClCompile Include="..\..\..\redisdbi-pyd2-src\redisdbi_pyc.c">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\redisdbi-pyd2-src\redisdbi_pyd2.h">
+    <ClInclude Include="..\..\..\redisdbi-pyd2-src\redisdbi_pyc.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

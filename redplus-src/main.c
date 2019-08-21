@@ -21,8 +21,8 @@
 # include <stdlib.h>
 # include <crtdbg.h>
 
-#include <common/getoptw.h>
-#include <common/log4c_logger.h>
+# include <Windows.h>
+# include <common/getoptw.h>
 
 # pragma comment(lib, "librdbapi-w32lib.lib")
 # pragma comment(lib, "hiredis.lib")
