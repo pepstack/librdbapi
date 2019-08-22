@@ -1,4 +1,4 @@
-/**
+﻿/**
  * main.c
  *   redis command tool application.
  *
@@ -6,20 +6,25 @@
  * update: 2019-08-01
  * version: 0.0.1
  */
-
-#include <rdbapi.h>
-
 #define APPNAME  "redplus"
 #define APPVER   "0.0.1"
 
+#include <rdbapi.h>
+
 #ifdef __WINDOWS__
 
+# ifdef _DEBUG
 /** memory leak auto-detect in MSVC
  * https://blog.csdn.net/lyc201219/article/details/62219503
  */
-# define _CRTDBG_MAP_ALLOC
-# include <stdlib.h>
-# include <crtdbg.h>
+#   define _CRTDBG_MAP_ALLOC
+#   include <stdlib.h>
+#   include <malloc.h>
+#   include <crtdbg.h>
+# else
+#   include <stdlib.h>
+#   include <malloc.h>
+# endif
 
 # include <Windows.h>
 # include <common/getoptw.h>
@@ -30,7 +35,7 @@
 
 # pragma comment(lib, "liblog4c.lib")
 
-#else
+#else // __WINDOWS__
 
 /* Linux: link liblog4c.lib */
 # include <getopt.h>  /* getopt_long */
@@ -38,7 +43,7 @@
 
 #endif
 
-#include <common/cstrutil.h>
+#include <common/cshell.h>
 
 
 #ifndef __WINDOWS__
@@ -148,18 +153,26 @@ void redplus_print_usage();
 
 void redplus_exec_command (RDBEnv env, const char *command, const char *output);
 void redplus_exec_sqlfile (RDBEnv env, const char *redsql, const char *output);
-void redplus_exec_redsql (RDBEnv env, const char *redsql, const char *output);
+void redplus_exec_sql (RDBEnv env, const char *redsql, const char *output);
 
 
 int main(int argc, const char *argv[])
 {
 #ifdef __WINDOWS__
+
+# ifdef _DEBUG
     int dbgFlag = _CrtSetDbgFlag(_CRTDBG_REPORT_FLAG);
     dbgFlag |= _CRTDBG_LEAK_CHECK_DF;
     _CrtSetDbgFlag(dbgFlag);
-#endif
+# endif // _DEBUG
+
+#endif // __WINDOWS__
 
     int ch, index;
+
+    const char *line;
+    char cshbuf[1024];
+    int interactive = 0;
 
     const struct option lopts[] = {
         {"help", no_argument, 0, 'h'},
@@ -167,6 +180,7 @@ int main(int argc, const char *argv[])
         {"rediscluster", required_argument, 0, 'R'},
         {"command", required_argument, 0, 'C'},
         {"rdbsql", required_argument, 0, 'S'},
+        {"interactive", no_argument, 0, 'I'},
         {"output", required_argument, 0, 'O'},
         {0, 0, 0, 0}
     };
@@ -199,7 +213,7 @@ int main(int argc, const char *argv[])
 
     snprintf_chkd_V1(appcfg+7+ch, strlen(APPNAME) + 6, "%c%s.cfg", PATH_SEPARATOR_CHAR, APPNAME);
 
-    while ((ch = getopt_long_only(argc, (char *const *) argv, "hVR:C:S:O:F:", lopts, &index)) != -1) {
+    while ((ch = getopt_long_only(argc, (char *const *) argv, "hVIR:C:S:O:F:", lopts, &index)) != -1) {
         switch (ch) {
         case '?':
             fprintf(stderr, "ERROR: option not defined.\n");
@@ -235,6 +249,10 @@ int main(int argc, const char *argv[])
             snprintf_chkd_V1(output, sizeof(output), "%s", optarg);
             break;
 
+        case 'I':
+            interactive = 1;
+            break;
+
         case 'h':
             redplus_print_usage();
             exit(0);
@@ -262,6 +280,50 @@ int main(int argc, const char *argv[])
         exit(EXIT_FAILURE);
     }
 
+    if (interactive) {
+        int clen;
+
+        ub8 tm0, tm2;
+        char tmstr0[24];
+        char tmstr2[24];
+
+        CSH_chunk cache = CSH_chunk_new (1);
+
+        printf("# Press quit or Ctrl-C to exit.\n");
+
+        while (interactive) {
+            line = CSH_get_input(cache->offset? "+ ":"redplus> ", cshbuf, sizeof(cshbuf), &clen);
+
+            if (line) {
+                if (clen) {
+                    if (CSH_quit_or_exit(line, clen) == CSH_ANSWER_YES) {
+                        break;
+                    }
+
+                    CSH_chunk_add(cache, line, clen);
+                    CSH_chunk_add(cache, (void*)" ", 1);
+
+                    if (line[clen - 1] == ';') {
+                        tm0 = RDBCurrentTime(1, tmstr0);
+
+                        redplus_exec_sql(env, cache->chunk, output);
+
+                        tm2 = RDBCurrentTime(1, tmstr2);
+
+                        printf("\n#  start : %s"
+                               "\n#   done : %s"
+                               "\n# elapse : %.3lf seconds. (%"PRIu64" ms)"
+                               "\n", tmstr0, tmstr2, (tm2 - tm0) * 0.001, (ub8)(tm2 - tm0));
+
+                        CSH_chunk_reset(cache);
+                    }
+                }
+            }
+        }
+
+        CSH_chunk_free(cache);
+    }
+
     if (*command) {
         redplus_exec_command(env, command, output);
     }
@@ -271,7 +333,7 @@ int main(int argc, const char *argv[])
     }
 
     if (*redsql) {
-        redplus_exec_redsql(env, redsql, output);
+        redplus_exec_sql(env, redsql, output);
     }
 
     RDBEnvDestroy(env);
@@ -330,7 +392,7 @@ void redplus_exec_sqlfile (RDBEnv env, const char *sqlfile, const char *output)
 }
 
 
-void redplus_exec_redsql (RDBEnv env, const char *rdbsql, const char *output)
+void redplus_exec_sql (RDBEnv env, const char *rdbsql, const char *output)
 {
     RDBAPI_RESULT err = RDBAPI_ERROR;
 

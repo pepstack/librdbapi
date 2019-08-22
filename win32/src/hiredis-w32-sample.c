@@ -5,16 +5,30 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#if (defined(WIN32) || defined(_WIN16) || defined(_WIN32) || defined(_WIN64)) && !defined(__WINDOWS__)
-# define __WINDOWS__
+#if (defined(WIN32) || defined(_WIN16) || defined(_WIN32) || defined(_WIN32_WINNT) || defined(_WIN64)) && !defined(__WINDOWS__)
+    #ifdef _WIN32_WINNT
+        #if _WIN32_WINNT  < 0x0500
+            #error  Windows version is too lower than 0x0500
+        #endif
+    #endif
+
+    # define __WINDOWS__
 #endif
 
 #ifdef __WINDOWS__
-// memory leak auto-detect
-// https://blog.csdn.net/lyc201219/article/details/62219503
-# define _CRTDBG_MAP_ALLOC
-# include <stdlib.h>
-# include <crtdbg.h>
+
+# ifdef _DEBUG
+/** memory leak auto-detect in MSVC
+ * https://blog.csdn.net/lyc201219/article/details/62219503
+ */
+#   define _CRTDBG_MAP_ALLOC
+#   include <stdlib.h>
+#   include <malloc.h>
+#   include <crtdbg.h>
+# else
+#   include <stdlib.h>
+#   include <malloc.h>
+# endif
 
 # pragma comment(lib, "librdbapi-w32.lib")
 # pragma comment(lib, "hiredis.lib")
@@ -30,9 +44,13 @@
 int main(int argc, const char *argv[])
 {
 #ifdef __WINDOWS__
+
+# ifdef _DEBUG
     int dbgFlag = _CrtSetDbgFlag(_CRTDBG_REPORT_FLAG);
     dbgFlag |= _CRTDBG_LEAK_CHECK_DF;
     _CrtSetDbgFlag(dbgFlag);
+#endif
+
 #endif
 
     RDBAPI_RESULT res;
@@ -44,7 +62,6 @@ int main(int argc, const char *argv[])
 
     redisReply *reply = NULL;
 
-    char buf[RDBAPI_PROP_MAXSIZE];
     char ts[24];
 
     ub8 startTime = RDBCurrentTime(1, ts);
@@ -70,11 +87,6 @@ int main(int argc, const char *argv[])
     RDBCtxCheckInfo(ctx, MAX_NODEINFO_SECTIONS);
 
     RDBCtxPrintInfo(ctx, -1);
-
-    res = RDBCtxNodeInfoProp(ctxnode, NODEINFO_CLUSTER, "cluster_enabled", buf);
-    if (res > 0) {
-        printf("cluster_enabled:%s\n", buf);
-    }
 
     RDBFieldDes_t fielddefs[] = {
         {

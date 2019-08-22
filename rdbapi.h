@@ -393,8 +393,6 @@ extern int RDBEnvNumMasterNodes (RDBEnv env);
 
 extern RDBEnvNode RDBEnvGetNode (RDBEnv env, int nodeindex);
 
-extern void RDBEnvSetNode (RDBEnvNode node, const char *host, ub4 port, ub4 ctxtimeout, ub4 sotimeo_ms, const char *authpass);
-
 extern RDBEnvNode RDBEnvFindNode (RDBEnv env, const char *host, ub4 port);
 
 extern int RDBEnvNodeIndex (RDBEnvNode envnode);
@@ -446,13 +444,9 @@ extern redisContext * RDBCtxNodeGetRedisContext (RDBCtxNode ctxnode);
 
 extern RDBEnvNode RDBCtxNodeGetEnvNode (RDBCtxNode ctxnode);
 
-extern RDBAPI_RESULT RDBCtxNodeCheckInfo (RDBCtxNode ctxnode, RDBNodeInfoSection section);
-
 extern RDBAPI_RESULT RDBCtxCheckInfo (RDBCtx ctx, RDBNodeInfoSection section);
 
 extern void RDBCtxPrintInfo (RDBCtx ctx, int nodeindex);
-
-extern int RDBCtxNodeInfoProp (RDBCtxNode ctxnode, RDBNodeInfoSection section, const char *propname, char propvalue[RDBAPI_PROP_MAXSIZE]);
 
 
 /**********************************************************************

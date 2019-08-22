@@ -21,7 +21,6 @@ EXPORTS
     RDBEnvNumNodes
 	RDBEnvNumMasterNodes
     RDBEnvGetNode
-    RDBEnvSetNode
     RDBEnvFindNode
     RDBEnvNodeIndex
     RDBEnvNodeHost
@@ -45,8 +44,6 @@ EXPORTS
 	RDBCtxNodeGetCtx
 	RDBCtxNodeGetRedisContext
 	RDBCtxNodeGetEnvNode
-	RDBCtxNodeCheckInfo
-	RDBCtxNodeInfoProp
 	RDBCtxCheckInfo
 	RDBCtxPrintInfo
 

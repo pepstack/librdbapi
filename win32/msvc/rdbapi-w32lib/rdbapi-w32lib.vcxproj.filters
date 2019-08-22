@@ -71,5 +71,8 @@
     <ClInclude Include="..\..\..\common\cstrutil.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\common\threadlock.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -237,7 +237,33 @@ RDBEnvNode RDBCtxNodeGetEnvNode (RDBCtxNode ctxnode)
 }
 
 
-RDBAPI_RESULT RDBCtxNodeCheckInfo (RDBCtxNode ctxnode, RDBNodeInfoSection section)
+int RDBNodeInfoQuery (RDBCtxNode ctxnode, RDBNodeInfoSection section, const char *propname, char propvalue[RDBAPI_PROP_MAXSIZE])
+{
+    int len;
+
+    RDBEnvNode envnode = RDBCtxNodeGetEnvNode(ctxnode);
+
+    *propvalue = 0;
+
+    if (envnode) {
+        RDBPropMap propmap = envnode->nodeinfo[section];
+        if (propmap) {
+            RDBPropNode propnode = NULL;
+
+            HASH_FIND_STR(propmap, propname, propnode);
+
+            if (propnode) {
+                len = snprintf_chkd_V1(propvalue, RDBAPI_PROP_MAXSIZE, "%s", propnode->value);
+                return len;
+            }
+        }
+    }
+
+    return RDBAPI_ERROR;
+}
+
+
+static RDBAPI_RESULT RDBNodeInfoUpdate (RDBCtxNode ctxnode, RDBNodeInfoSection section)
 {
     RDBAPI_RESULT result;
     redisReply *reply;
@@ -266,63 +292,63 @@ RDBAPI_RESULT RDBCtxNodeCheckInfo (RDBCtxNode ctxnode, RDBNodeInfoSection sectio
         return RDBAPI_ERR_BADARG;
     }
 
-    envnode = RDBCtxNodeGetEnvNode(ctxnode);
-    propmap = envnode->nodeinfo[section];
-
-    envnode->nodeinfo[section] = NULL;
-
     argv[1] = sections[(int) section];
     argvlen[1] = strlen(argv[1]);
 
-    // clear old info map
-    RDBPropMapFree(propmap);
-    propmap = NULL;
-
     result = RedisExecArgvOnNode(ctxnode, 2, argv, argvlen, &reply);
+
     if (result == RDBAPI_SUCCESS) {
         if (reply->type != REDIS_REPLY_STRING) {
             snprintf_chkd_V1(ctxnode->ctx->errmsg, sizeof(ctxnode->ctx->errmsg), "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
             RedisFreeReplyObject(&reply);
             return RDBAPI_ERR_TYPE;
-        }
+        } else {
+            // clear old info map before update
+            envnode = RDBCtxNodeGetEnvNode(ctxnode);
+            propmap = envnode->nodeinfo[section];
+            envnode->nodeinfo[section] = NULL;
 
-        char *mapbuf = (char *) RDBMemAlloc(reply->len + 1);
-        memcpy(mapbuf, reply->str, reply->len);
-        mapbuf[reply->len] = 0;
+            RDBPropMapFree(propmap);
+            propmap = NULL;
 
-        char *p = strtok(mapbuf, "\r\n");
-        while (p) {
-            char *key = 0;
-            char *val = 0;
+            char *mapbuf = (char *) RDBMemAlloc(reply->len + 1);
+            memcpy(mapbuf, reply->str, reply->len);
+            mapbuf[reply->len] = 0;
 
-            if (p[0] != '#') {
-                key = p;
-                val = strchr(p, ':');
+            char *p = strtok(mapbuf, "\r\n");
+            while (p) {
+                char *key = 0;
+                char *val = 0;
+
+                if (p[0] != '#') {
+                    key = p;
+                    val = strchr(p, ':');
+                }
+
+                p = strtok(NULL, "\r\n");
+
+                if (key && val) {
+                    RDBPropNode propnode = (RDBPropNode) RDBMemAlloc(sizeof(RDBProp_t));
+
+                    // skip ':'
+                    *val++ = 0;
+
+                    propnode->name = key;
+                    propnode->value = val;
+                    propnode->_mapbuf = mapbuf;
+
+                    HASH_ADD_STR(propmap, name, propnode);
+                }
             }
 
-            p = strtok(NULL, "\r\n");
-
-            if (key && val) {
-                RDBPropNode propnode = (RDBPropNode) RDBMemAlloc(sizeof(RDBProp_t));
-
-                // skip ':'
-                *val++ = 0;
-
-                propnode->name = key;
-                propnode->value = val;
-                propnode->_mapbuf = mapbuf;
-
-                HASH_ADD_STR(propmap, name, propnode);
+            if (! propmap) {
+                // no map created
+                RDBMemFree(mapbuf);
+            } else {
+                envnode->nodeinfo[section] = propmap;
             }
-        }
-
-        if (! propmap) {
-            // no map created
-            RDBMemFree(mapbuf);
         }
     }
-
-    envnode->nodeinfo[section] = propmap;
 
     RedisFreeReplyObject(&reply);
     return result;
@@ -335,6 +361,8 @@ RDBAPI_RESULT RDBCtxCheckInfo (RDBCtx ctx, RDBNodeInfoSection section)
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) RDBAPI_ERR_BADARG: invalid section(%d)", __FILE__, __LINE__, (int) section);
         return RDBAPI_ERR_BADARG;
     } else {
+        threadlock_lock(&ctx->env->thrlock);
+
         RDBCtxNode ctxnode;
         int nodeindex = RDBEnvNumNodes(ctx->env);
 
@@ -345,17 +373,20 @@ RDBAPI_RESULT RDBCtxCheckInfo (RDBCtx ctx, RDBNodeInfoSection section)
                 RDBNodeInfoSection secid;
 
                 for (secid = NODEINFO_SERVER; secid != MAX_NODEINFO_SECTIONS; secid++) {
-                    if (RDBCtxNodeCheckInfo(ctxnode, secid) != RDBAPI_SUCCESS) {
+                    if (RDBNodeInfoUpdate(ctxnode, secid) != RDBAPI_SUCCESS) {
+                        threadlock_unlock(&ctx->env->thrlock);
                         return RDBAPI_ERROR;
                     }
                 }
             } else {
-                if (RDBCtxNodeCheckInfo(ctxnode, section) != RDBAPI_SUCCESS) {
+                if (RDBNodeInfoUpdate(ctxnode, section) != RDBAPI_SUCCESS) {
+                    threadlock_unlock(&ctx->env->thrlock);
                     return RDBAPI_ERROR;
                 }
             }
         }
 
+        threadlock_unlock(&ctx->env->thrlock);
         return RDBAPI_SUCCESS;
     }
 }
@@ -410,30 +441,4 @@ void RDBCtxPrintInfo (RDBCtx ctx, int nodeindex)
             RDBCtxNodePrintInfo(ctxnode, sections);
         }
     }
-}
-
-
-int RDBCtxNodeInfoProp (RDBCtxNode ctxnode, RDBNodeInfoSection section, const char *propname, char propvalue[RDBAPI_PROP_MAXSIZE])
-{
-    int len;
-
-    RDBEnvNode envnode = RDBCtxNodeGetEnvNode(ctxnode);
-
-    *propvalue = 0;
-
-    if (envnode) {
-        RDBPropMap propmap = envnode->nodeinfo[section];
-        if (propmap) {
-            RDBPropNode propnode = NULL;
-
-            HASH_FIND_STR(propmap, propname, propnode);
-
-            if (propnode) {
-                len = snprintf_chkd_V1(propvalue, RDBAPI_PROP_MAXSIZE, "%s", propnode->value);
-                return len;
-            }
-        }
-    }
-
-    return RDBAPI_ERROR;
 }

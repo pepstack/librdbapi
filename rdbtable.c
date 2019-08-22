@@ -839,10 +839,6 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
         return RDBAPI_ERR_BADARG;
     }
 
-    if (RedisClusterCheck(ctx) != RDBAPI_SUCCESS) {
-        return RDBAPI_ERROR;
-    }
-
     res = RDBTableFilterCreate(&filter, RDB_ROWKEY_MAX_SIZE);
     if (res != RDBAPI_SUCCESS) {
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR(%d): RDBTableFilterCreate failed", res);

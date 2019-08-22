@@ -111,6 +111,10 @@
   <ItemGroup>
     <Text Include="..\..\..\redplus-src\rdbsql.txt" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\common\cshell.h" />
+    <ClInclude Include="..\..\..\common\cstrutil.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

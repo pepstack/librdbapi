@@ -27,6 +27,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\..\common\cstrutil.h" />
     <ClInclude Include="..\..\..\common\red_black_tree.h" />
+    <ClInclude Include="..\..\..\common\threadlock.h" />
     <ClInclude Include="..\..\..\common\tiny-regex-c\re.h" />
     <ClInclude Include="..\..\..\rdbapi.h" />
     <ClInclude Include="..\..\..\rdbtypes.h" />

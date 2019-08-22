@@ -28,7 +28,7 @@
 *
 *   C String Utility
 *
-* 2019-08-01
+* 2019-08-22
 */
 #ifndef _CSTRUTIL_H
 #define _CSTRUTIL_H

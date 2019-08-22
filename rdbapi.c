@@ -1544,6 +1544,8 @@ RDBAPI_RESULT RedisClusterCheck (RDBCtx ctx)
         return RDBAPI_ERROR;
     }
 
+    threadlock_lock(&ctx->env->thrlock);
+
     for (nodeindex = 0; nodeindex < numnodes; nodeindex++) {
         int len;
         RDBCtxNode ctxnode = RDBCtxGetNode(ctx, nodeindex);
@@ -1551,20 +1553,21 @@ RDBAPI_RESULT RedisClusterCheck (RDBCtx ctx)
 
         bzero(&envnode->replica, sizeof(envnode->replica));
 
-        len = RDBCtxNodeInfoProp(ctxnode, NODEINFO_CLUSTER, "cluster_enabled", propval);
+        len = RDBNodeInfoQuery(ctxnode, NODEINFO_CLUSTER, "cluster_enabled", propval);
 
         // check cluster_enabled
         if (len != 1 || propval[0] != '1') {
             snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: cluster_enabled=%s", propval);
+            threadlock_unlock(&ctx->env->thrlock);
             return RDBAPI_ERROR;
         }        
     
-        len = RDBCtxNodeInfoProp(ctxnode, NODEINFO_REPLICATION, "role", propval);
+        len = RDBNodeInfoQuery(ctxnode, NODEINFO_REPLICATION, "role", propval);
         if (len > 0) {
             if (cstr_startwith(propval, len, "master", 6)) {
                 envnode->replica.is_master = 1;
 
-                len = RDBCtxNodeInfoProp(ctxnode, NODEINFO_REPLICATION, "connected_slaves", propval);
+                len = RDBNodeInfoQuery(ctxnode, NODEINFO_REPLICATION, "connected_slaves", propval);
                 if (len == 1) {
                     int slaveid;
                     char slave[10] = {0};
@@ -1576,7 +1579,7 @@ RDBAPI_RESULT RedisClusterCheck (RDBCtx ctx)
 
                         snprintf_chkd_V1(slave, sizeof(slave), "slave%d", slaveid);
 
-                        len = RDBCtxNodeInfoProp(ctxnode, NODEINFO_REPLICATION, slave, propval);
+                        len = RDBNodeInfoQuery(ctxnode, NODEINFO_REPLICATION, slave, propval);
                         if (len > 0) {
                             // ip=192.168.39.111,port=7006,state=online,offset=50091828,lag=1
                             char *ip;
@@ -1602,6 +1605,7 @@ RDBAPI_RESULT RedisClusterCheck (RDBCtx ctx)
 
                         if (! slavenode) {
                             snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: slave%d node not found", slaveid);
+                            threadlock_unlock(&ctx->env->thrlock);
                             return RDBAPI_ERROR;
                         }
 
@@ -1617,9 +1621,9 @@ RDBAPI_RESULT RedisClusterCheck (RDBCtx ctx)
                 //role:slave
                 //master_host:192.168.39.111
                 //master_port:7001
-                len = RDBCtxNodeInfoProp(ctxnode, NODEINFO_REPLICATION, "master_port", propval);
+                len = RDBNodeInfoQuery(ctxnode, NODEINFO_REPLICATION, "master_port", propval);
                 if (len > 0) {
-                    len = RDBCtxNodeInfoProp(ctxnode, NODEINFO_REPLICATION, "master_host", propval + 20);
+                    len = RDBNodeInfoQuery(ctxnode, NODEINFO_REPLICATION, "master_host", propval + 20);
                     if (len > 0) {
                         masterenode = RDBEnvFindNode(ctx->env, propval + 20, (ub4) atoi(propval));
                     }
@@ -1627,16 +1631,19 @@ RDBAPI_RESULT RedisClusterCheck (RDBCtx ctx)
 
                 if (! masterenode) {
                     snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: master node not found");
+                    threadlock_unlock(&ctx->env->thrlock);
                     return RDBAPI_ERROR;
                 }
 
                 envnode->replica.master_nodeindex = masterenode->index;
             } else {
                 snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_APP: role prop not found: %s", propval);
+                threadlock_unlock(&ctx->env->thrlock);
                 return RDBAPI_ERR_APP;
             }
         }
     }
 
+    threadlock_unlock(&ctx->env->thrlock);
     return RDBAPI_SUCCESS;
 }

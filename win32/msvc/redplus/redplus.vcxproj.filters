@@ -37,4 +37,12 @@
   <ItemGroup>
     <Text Include="..\..\..\redplus-src\rdbsql.txt" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\common\cshell.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\cstrutil.h">
+      <Filter>common</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>

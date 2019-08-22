@@ -231,6 +231,41 @@ exit_return:
 }
 
 
+static void RDBEnvSetNode (RDBEnvNode node, const char *host, ub4 port, ub4 ctxtimeout, ub4 sotimeoms, const char *authpass)
+{
+    int keylen;
+
+    node->port = port;
+
+    snprintf_chkd_V1(node->host, sizeof(node->host), "%.*s", (int) strnlen(host, RDB_HOSTADDR_MAXLEN), host);
+
+    keylen = snprintf_chkd_V1(node->key, sizeof(node->key), "%s:%d", node->host, (int) node->port);
+
+    if (authpass) {
+        snprintf_chkd_V1(node->authpass, sizeof(node->authpass), "%.*s", (int) strnlen(authpass, RDB_AUTHPASS_MAXLEN), authpass);
+    } else {
+        *node->authpass = 0;
+    }
+
+    if (ctxtimeout) {
+        node->ctxtimeo.tv_sec = ctxtimeout;
+        node->ctxtimeo.tv_usec = 0;
+    } else {
+        node->ctxtimeo.tv_sec = 0;
+        node->ctxtimeo.tv_usec = 0;
+    }
+
+    if (sotimeoms) {
+        node->sotimeo.tv_sec = sotimeoms / 1000;
+        node->sotimeo.tv_usec = (sotimeoms % 1000) * 1000;
+    } else {
+        memset(&node->sotimeo, 0, sizeof(node->sotimeo));
+    }
+
+    HASH_ADD_STR_LEN(node->env->nodemap, key, keylen, node);
+}
+
+
 static void RDBEnvInitInternal (RDBEnv env, RDBNodeCfg nodecfgs[])
 {
     int i;
@@ -449,6 +484,8 @@ RDBAPI_RESULT RDBEnvCreate (const char *cluster, int ctxtimeout, int sotimeo_ms,
             RDBMemFree(nodecfgs[numnodes]);
         }
 
+        threadlock_init(&env->thrlock);
+
         *outenv = env;
         return RDBAPI_SUCCESS;
     }
@@ -459,6 +496,8 @@ void RDBEnvDestroy (RDBEnv env)
 {
     int section;
     int nodeindex;
+
+    threadlock_lock(&env->thrlock);
 
     for (nodeindex = 0; nodeindex < env->clusternodes; nodeindex++) {
         RDBEnvNode envnode = RDBEnvGetNode(env, nodeindex);
@@ -472,6 +511,8 @@ void RDBEnvDestroy (RDBEnv env)
     }
 
     HASH_CLEAR(hh, env->nodemap);
+
+    threadlock_destroy(&env->thrlock);
 
     RDBMemFree((void*) env);
 }
@@ -507,39 +548,6 @@ RDBEnvNode RDBEnvGetNode (RDBEnv env, int nodeindex)
     } else {
         return &env->nodes[nodeindex];
     }
-}
-
-
-void RDBEnvSetNode (RDBEnvNode node, const char *host, ub4 port, ub4 ctxtimeout, ub4 sotimeoms, const char *authpass)
-{
-    node->port = port;
-
-    snprintf_chkd_V1(node->host, sizeof(node->host), "%.*s", (int) strnlen(host, RDB_HOSTADDR_MAXLEN), host);
-
-    snprintf_chkd_V1(node->key, sizeof(node->key), "%s:%d", node->host, (int) node->port);
-
-    if (authpass) {
-        snprintf_chkd_V1(node->authpass, sizeof(node->authpass), "%.*s", (int) strnlen(authpass, RDB_AUTHPASS_MAXLEN), authpass);
-    } else {
-        *node->authpass = 0;
-    }
-
-    if (ctxtimeout) {
-        node->ctxtimeo.tv_sec = ctxtimeout;
-        node->ctxtimeo.tv_usec = 0;
-    } else {
-        node->ctxtimeo.tv_sec = 0;
-        node->ctxtimeo.tv_usec = 0;
-    }
-
-    if (sotimeoms) {
-        node->sotimeo.tv_sec = sotimeoms / 1000;
-        node->sotimeo.tv_usec = (sotimeoms % 1000) * 1000;
-    } else {
-        memset(&node->sotimeo, 0, sizeof(node->sotimeo));
-    }
-
-    HASH_ADD_STR(node->env->nodemap, key, node);
 }
 
 

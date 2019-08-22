@@ -50,6 +50,7 @@ extern "C"
 
 #include "common/memapi.h"
 #include "common/cstrutil.h"
+#include "common/threadlock.h"
 
 #include "common/red_black_tree.h"
 
@@ -131,6 +132,8 @@ typedef struct _RDBEnv_t
     char valtype_chk_table[256];
     char *valtypenames[256];
     char _valtypenamebuf[256];
+
+    thread_lock_t thrlock;
 
     RDBEnvNodeMap nodemap;
 
@@ -248,6 +251,8 @@ int RDBBuildRowkeyPattern (const char * tablespace, const char * tablename,
 
 
 int RDBFinishRowkeyPattern (const RDBFieldDes_t *tabledes, int nfielddes, const int rowkeyid[RDBAPI_KEYS_MAXNUM + 1], char **pattern);
+
+int RDBNodeInfoQuery (RDBCtxNode ctxnode, RDBNodeInfoSection section, const char *propname, char propvalue[RDBAPI_PROP_MAXSIZE]);
 
 
 #if defined(__cplusplus)
