@@ -520,14 +520,15 @@ int RDBFinishRowkeyPattern (const RDBFieldDes_t *fielddes, int nfielddes, const 
 
 
 ///////////////////////////// PUBLIC API /////////////////////////////
-
-RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, RDBSQLStmt sqlstmt, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap)
+void RDBResultMapNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmt sqlstmt, const char *tablespace, const char *tablename, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap)
 {
     RDBResultMap hMap = (RDBResultMap) RDBMemAlloc(sizeof(RDBResultMap_t) + sizeof(RDBFieldDes_t) * numfields);
     if (! hMap) {
-        return RDBAPI_ERR_NOMEM;
+        printf("(%s:%d) out of memory.\n", __FILE__, __LINE__);
+        exit(EXIT_FAILURE);
     }
 
+    hMap->ctxh = ctx;
     hMap->filter = filter;
     hMap->sqlstmt = sqlstmt;
 
@@ -537,42 +538,47 @@ RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, RDBSQLStmt sqlstmt, int nu
 
     if (numfields) {
         int i, j, k;
-        RDBKeyVal fldfilter;
 
-        hMap->kplen = RDBBuildRowkeyPattern(filter->tablespace, filter->tablename, fielddes, numfields, hMap->rowkeyid, &hMap->keypattern);
+        hMap->kplen = RDBBuildRowkeyPattern(tablespace, tablename, fielddes, numfields, hMap->rowkeyid, &hMap->keypattern);
 
         memcpy(hMap->fielddes, fielddes, sizeof(RDBFieldDes_t) * numfields);
         hMap->numfields = numfields;
 
-        // set all of result fields
-        k = 0;
-        for (i = 0; i < resultfields[0]; i++) {
-            j = resultfields[i + 1] - 1;
+        if (resultfields) {
+            // set all of result fields
+            k = 0;
+            for (i = 0; i < resultfields[0]; i++) {
+                j = resultfields[i + 1] - 1;
 
-            if (! RDBFieldIsRowid(hMap, j)) {
-                hMap->fetchfields[k] = hMap->fielddes[j].fieldname;
-                hMap->fieldnamelens[k] = (int) strlen(hMap->fielddes[j].fieldname);
-                k++;
-            }
-        }
-        hMap->resultfields = k;
-
-        // set all of filter fields
-        i = 0;
-        while ((fldfilter = hMap->filter->fldfilters[i++]) != NULL) {
-            int found = 0;
-
-            for (j = 0; hMap->fetchfields[j] != NULL; j++) {
-                if (! strcmp(fldfilter->key, hMap->fetchfields[j])) {
-                    // skip existed
-                    found = 1;
-                    break;
+                if (! RDBFieldIsRowid(hMap, j)) {
+                    hMap->fetchfields[k] = hMap->fielddes[j].fieldname;
+                    hMap->fieldnamelens[k] = (int) strlen(hMap->fielddes[j].fieldname);
+                    k++;
                 }
             }
+            hMap->resultfields = k;
+        }
 
-            if (! found) {
-                hMap->fetchfields[j] = fldfilter->key;
-                hMap->fieldnamelens[j] = fldfilter->klen;
+        if (filter) {
+            RDBKeyVal fldfilter;
+
+            // set all of filter fields
+            i = 0;
+            while ((fldfilter = hMap->filter->fldfilters[i++]) != NULL) {
+                int found = 0;
+
+                for (j = 0; hMap->fetchfields[j] != NULL; j++) {
+                    if (! strcmp(fldfilter->key, hMap->fetchfields[j])) {
+                        // skip existed
+                        found = 1;
+                        break;
+                    }
+                }
+
+                if (! found) {
+                    hMap->fetchfields[j] = fldfilter->key;
+                    hMap->fieldnamelens[j] = fldfilter->klen;
+                }
             }
         }
 
@@ -581,7 +587,6 @@ RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, RDBSQLStmt sqlstmt, int nu
     }
 
     *phResultMap = hMap;
-    return RDBAPI_SUCCESS;
 }
 
 
@@ -800,6 +805,12 @@ ub8 RDBResultMapGetOffset (RDBResultMap hResultMap)
 }
 
 
+RDBSQLStmt RDBResultMapGetStmt (RDBResultMap resultMap)
+{
+    return resultMap->sqlstmt;
+}
+
+
 static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
     RDBSQLStmt sqlstmt,
     const char *tablespace,   // must valid
@@ -944,13 +955,7 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
     }
 
     // MUST after RDBTableFilterInit
-    if (RDBResultMapNew(filter, sqlstmt, tabledes.nfields, tabledes.fielddes, resultfields, &resultMap) != RDBAPI_SUCCESS) {
-        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_NOMEM: out of memory");
-        RDBTableFilterFree(filter);
-        return RDBAPI_ERR_NOMEM;
-    }
-
-    resultMap->ctxh = ctx;
+    RDBResultMapNew(ctx, filter, sqlstmt, filter->tablespace, filter->tablename, tabledes.nfields, tabledes.fielddes, resultfields, &resultMap);
 
     for (nodeindex = 0; nodeindex < RDBEnvNumNodes(ctx->env); nodeindex++) {
         RDBResultNodeState(resultMap, nodeindex)->nodeindex = nodeindex;
@@ -1806,6 +1811,35 @@ void RDBResultMapPrintOut (RDBResultMap resultMap, RDBAPI_BOOL withHead)
             printf("-");
         }
         printf("\n");
+    }
+
+    if (resultMap->sqlstmt == RDBSQL_DESC_TABLE) {
+        int j;
+
+        const char **vtnames = (const char **) resultMap->ctxh->env->valtypenames;
+
+        printf("$(tablename): %.*s}\n", (int) (strchr(resultMap->keypattern, '$') - resultMap->keypattern - 1), resultMap->keypattern);
+        printf("$(rkpattern): %.*s\n", resultMap->kplen, resultMap->keypattern);
+        printf("$(timestamp): %"PRIu64"\n", resultMap->table_timestamp);
+        printf("$(creatdate): %s\n", resultMap->table_datetime);
+        printf("$(tbcomment): %s\n", resultMap->table_comment);
+        printf("[      fieldname     | fieldtype | length |  scale  | rowkey | nullable | comment ]\n");
+        printf("---------------------+-----------+--------+---------+--------+----------+----------\n");
+
+        for (j = 0; j < resultMap->numfields; j++) {
+            RDBFieldDes_t *fdes = &resultMap->fielddes[j];
+
+            printf(" %-20s| %8s  | %-6d |%8d |  %4d  |   %4d   | %s\n",
+                fdes->fieldname,
+                vtnames[fdes->fieldtype],
+                fdes->length,
+                fdes->dscale,
+                fdes->rowkey,
+                fdes->nullable,
+                fdes->comment);
+        }
+        printf("-----------------------------------------------------------------------------------\n");
+
     }
 
     RDBResultMapTraverse(resultMap, RDBResultRowPrintCallback, resultMap);

@@ -655,6 +655,8 @@ extern void RDBResultMapPrintOut (RDBResultMap hResultMap, RDBAPI_BOOL withHead)
 
 extern void RDBResultMapListFree (RDBResultMap *resultMaps, int count);
 
+extern RDBSQLStmt RDBResultMapGetStmt (RDBResultMap resultMap);
+
 
 /**********************************************************************
  *

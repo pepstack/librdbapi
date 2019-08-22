@@ -83,6 +83,7 @@ EXPORTS
 	RDBResultMapExist
 	RDBResultMapTraverse
 	RDBResultMapGetOffset
+	RDBResultMapGetStmt
 	RDBResultMapSetDelimiter
 	RDBResultMapPrintOut
 

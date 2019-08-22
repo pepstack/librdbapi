@@ -310,10 +310,10 @@ int main(int argc, const char *argv[])
 
                         tm2 = RDBCurrentTime(1, tmstr2);
 
-                        printf("\n#  start : %s"
-                               "\n#   done : %s"
-                               "\n# elapse : %.3lf seconds. (%"PRIu64" ms)"
-                               "\n", tmstr0, tmstr2, (tm2 - tm0) * 0.001, (ub8)(tm2 - tm0));
+                        printf("\n# elapsed  : %.3lf seconds. (%"PRIu64" ms)"
+                               "\n# duration : %s ~ %s\n\n",
+                            (tm2 - tm0) * 0.001, (ub8)(tm2 - tm0),
+                            tmstr0, tmstr2);
 
                         CSH_chunk_reset(cache);
                     }
@@ -401,6 +401,12 @@ void redplus_exec_sql (RDBEnv env, const char *rdbsql, const char *output)
     RDBResultMap resultMap = NULL;
     RDBSQLParser sqlparser = NULL;
 
+    RDBBlob_t sqlblob;
+
+    sqlblob.str = (char *) rdbsql;
+    sqlblob.length = cstr_length(rdbsql, -1);
+    sqlblob.maxsz = sqlblob.length + 1;
+
     ub8 offset = RDBAPI_ERROR;
 
     err = RDBCtxCreate(env, &ctx);
@@ -409,48 +415,36 @@ void redplus_exec_sql (RDBEnv env, const char *rdbsql, const char *output)
         goto error_exit;
     }
 
-    err = RDBSQLParserNew(ctx, rdbsql, -1, &sqlparser);
-    if (err) {
-        printf("RDBSQLParserNew failed: %s\n", RDBCtxErrMsg(ctx));
-        goto error_exit;
-    }
-
-    offset = RDBSQLExecute(ctx, sqlparser, &resultMap);
+    offset = RDBSQLExecuteSQL(ctx, &sqlblob, &resultMap);
     if (offset == RDBAPI_ERROR) {
-        printf("RDBSQLExecute failed: %s", RDBCtxErrMsg(ctx));
+        printf("RDBSQLExecuteSQL failed: %s\n", RDBCtxErrMsg(ctx));
         goto error_exit;
     }
 
-    if (RDBSQLParserGetStmt(sqlparser, NULL, 0) == RDBSQL_SELECT) {
+    if (RDBResultMapGetStmt(resultMap) == RDBSQL_SELECT) {
         RDBResultMapPrintOut(resultMap, 1);
 
         printf("# result rows=%"PRIu64".\n", RDBResultMapSize(resultMap));
         printf("# last offset=%"PRIu64".\n", offset);
-    } else if (RDBSQLParserGetStmt(sqlparser, NULL, 0) == RDBSQL_CREATE) {
+    } else if (RDBResultMapGetStmt(resultMap) == RDBSQL_CREATE) {
         RDBResultMapPrintOut(resultMap, 1);
 
         printf("table create success.\n");
-    } else if (RDBSQLParserGetStmt(sqlparser, NULL, 0) == RDBSQL_DESC_TABLE) {
-        printf("success.\n");
+    } else if (RDBResultMapGetStmt(resultMap) == RDBSQL_DESC_TABLE) {
+        printf("# success result:\n\n");
+        RDBResultMapPrintOut(resultMap, 0);
     }
 
+    // success
     RDBResultMapClean(resultMap);
-
-    RDBSQLParserFree(sqlparser);
     RDBResultMapFree(resultMap);
     RDBCtxFree(ctx);
-
     return;
 
 error_exit:
-    if (sqlparser) {
-        RDBSQLParserFree(sqlparser);
-    }
-
     if (resultMap) {
         RDBResultMapFree(resultMap);
     }
-
     if (ctx) {
         RDBCtxFree(ctx);
     }

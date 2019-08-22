@@ -1029,18 +1029,13 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
             res = RDBTableDescribe(ctx, parser->create.tablespace, parser->create.tablename, &tabledes);
 
             if (res == RDBAPI_SUCCESS && tabledes.nfields == parser->create.numfields) {
-                RDBResultMap hMap = (RDBResultMap) RDBMemAlloc(sizeof(RDBResultMap_t) + sizeof(RDBFieldDes_t) * tabledes.nfields);
+                RDBResultMap resultMap;
 
-                RDBResultMapSetDelimiter(hMap, RDB_TABLE_DELIMITER_CHAR);
+                RDBResultMapNew(ctx, NULL, parser->stmt, parser->create.tablespace, parser->create.tablename, tabledes.nfields, tabledes.fielddes, NULL, &resultMap);
 
-                hMap->kplen = RDBBuildRowkeyPattern(parser->create.tablespace, parser->create.tablename, tabledes.fielddes, tabledes.nfields, hMap->rowkeyid, &hMap->keypattern);
+                RDBResultMapSetDelimiter(resultMap, RDB_TABLE_DELIMITER_CHAR);
 
-                memcpy(hMap->fielddes, tabledes.fielddes, sizeof(tabledes.fielddes[0]) * tabledes.nfields);
-                hMap->numfields = tabledes.nfields;
-
-                hMap->ctxh = ctx;
-
-                *outResultMap = hMap;
+                *outResultMap = resultMap;
                 return RDBAPI_SUCCESS;
             }
         }
@@ -1050,31 +1045,15 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
         if (RDBTableDescribe(ctx, parser->desctable.tablespace, parser->desctable.tablename, &tabledes) != RDBAPI_SUCCESS) {
             return (ub8) RDBAPI_ERROR;
         } else {
-            // TODO: fill result map
-            int j;
+            RDBResultMap resultMap;
+            RDBResultMapNew(ctx, NULL, parser->stmt, parser->create.tablespace, parser->create.tablename, tabledes.nfields, tabledes.fielddes, NULL, &resultMap);
 
-            printf("# table key: %s\n", tabledes.table_rowkey);
-            printf("# timestamp: %"PRIu64"\n", tabledes.table_timestamp);
-            printf("# create dt: %s\n", tabledes.table_datetime);
-            printf("# comment  : %s\n", tabledes.table_comment);
-            printf("#[     fieldname     | fieldtype | length |  scale  | rowkey | nullable | comment ]\n");
-            printf("#--------------------+-----------+--------+---------+--------+----------+----------\n");
+            resultMap->table_timestamp = tabledes.table_timestamp;
 
-            for (j = 0; j < tabledes.nfields; j++) {
-                RDBFieldDes_t *fdes = &tabledes.fielddes[j];
+            snprintf_chkd_V1(resultMap->table_datetime, sizeof(resultMap->table_datetime), "%s", tabledes.table_datetime);
+            snprintf_chkd_V1(resultMap->table_comment, sizeof(resultMap->table_comment), "%s", tabledes.table_comment);
 
-                printf(" %-20s| %8s  | %-6d |%8d |  %4d  |   %4d   | %s\n",
-                    fdes->fieldname,
-                    vtnames[fdes->fieldtype],
-                    fdes->length,
-                    fdes->dscale,
-                    fdes->rowkey,
-                    fdes->nullable,
-                    fdes->comment);
-            }
-
-            printf("#----------------------------------------------------------------------------------\n");
-
+            *outResultMap = resultMap;
             return RDBAPI_SUCCESS;
         }
     } else if (parser->stmt == RDBSQL_DROP_TABLE) {

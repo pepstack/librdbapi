@@ -227,6 +227,11 @@ typedef struct _RDBResultMap_t
     // length of fieldname
     int fieldnamelens[RDBAPI_ARGV_MAXNUM + 1];
 
+    // for: DESC $table
+    ub8 table_timestamp;
+    char table_datetime[24];
+    char table_comment[RDB_KEY_VALUE_SIZE];
+
     int numfields;
     RDBFieldDes_t fielddes[0];
 } RDBResultMap_t;
@@ -242,7 +247,8 @@ typedef struct _RDBResultRow_t
 } RDBResultRow_t;
 
 
-RDBAPI_RESULT RDBResultMapNew (RDBTableFilter filter, RDBSQLStmt sqlstmt, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap);
+void RDBResultMapNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmt sqlstmt, const char *tablespace, const char *tablename, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap);
+
 
 int RDBBuildRowkeyPattern (const char * tablespace, const char * tablename,
     const RDBFieldDes_t *fielddes, int numfields,
