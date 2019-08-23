@@ -1135,7 +1135,7 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
                 RDBCtxNode ctxnode = RDBCtxGetNode(ctx, nodeindex);
                 RDBEnvNode envnode = RDBCtxNodeGetEnvNode(ctxnode);
 
-                // node as row: {clusternode($nodeindex)::$host:$port}
+                // node as row: {clusternode(%d)::$host:$port}
                 RDBResultRow rowdata = (RDBResultRow) RDBMemAlloc(sizeof(RDBResultRow_t));
                 int len = snprintf_chkd_V1(keyprefix, sizeof(keyprefix), "{clusternode(%d)::%s}", envnode->index, envnode->key);
 

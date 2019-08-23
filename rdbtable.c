@@ -1725,8 +1725,9 @@ static void RDBResultRowPrintCallback (void * _row, void * _map)
         printf("\n");
     } else if (resultMap->sqlstmt == RDBSQL_INFO_SECTION) {
         RDBNameReply propnode;
-
-        printf("$(node): %.*s\n", (int) resultRow->replykey->len, resultRow->replykey->str);
+        
+        // $(redisdb): {clusternode(9)::127.0.0.1:7009}
+        printf("$(redisdb): %.*s\n", (int) resultRow->replykey->len, resultRow->replykey->str);
         printf("-------------+------------------------------------+--------------------------------\n");
         printf("[   section  |             name                   |              value            ]\n");
         printf("-------------+------------------------------------+--------------------------------\n");
