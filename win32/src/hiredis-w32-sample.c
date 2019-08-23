@@ -329,14 +329,14 @@ int main(int argc, const char *argv[])
     res = RDBTableScanFirst(ctx, RDBSQL_SELECT, "xsdb", "logentry", 0, 0, 0, 0, 0, fields, fieldexprs, fieldvals, 0, 0, -1, NULL, &resultMap);
     if (res == RDBAPI_SUCCESS) {
         while ((offset = RDBTableScanNext(resultMap, offset, 20)) != RDB_ERROR_OFFSET) {
-            RDBResultMapPrintOut(resultMap, 1);
+            RDBResultMapPrintOut(resultMap, "# success:\n\n");
 
             total += RDBResultMapSize(resultMap);
 
             RDBResultMapClean(resultMap);
         }
 
-        printf("total rows=%"PRIu64".\n", total);
+        printf("# total rows=%"PRIu64".\n", total);
 
         RDBResultMapFree(resultMap);
     }

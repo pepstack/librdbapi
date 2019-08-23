@@ -247,6 +247,38 @@ typedef struct _RDBResultRow_t
 } RDBResultRow_t;
 
 
+
+static redisReply * RDBStringReplyCreate (const char *str, size_t len)
+{
+    redisReply * reply = (redisReply *) RDBMemAlloc(sizeof(*reply));
+    reply->type = REDIS_REPLY_STRING;
+
+    if (len == (size_t)(-1)) {
+        len = str? strlen(str) : 0;
+    }
+
+    reply->str = RDBMemAlloc(len + 1);
+    reply->len = (int) len;
+
+    if (str && len) {
+        memcpy(reply->str, str, len);
+    }
+
+    return reply;
+}
+
+
+static redisReply * RDBIntegerReplyCreate (sb8 val)
+{
+    redisReply * reply = (redisReply *) RDBMemAlloc(sizeof(*reply));
+
+    reply->type = REDIS_REPLY_INTEGER;
+    reply->integer = (PORT_LONGLONG) val;
+
+    return reply;
+}
+
+
 void RDBResultMapNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmt sqlstmt, const char *tablespace, const char *tablename, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap);
 
 

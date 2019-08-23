@@ -201,31 +201,33 @@ RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQL
 
 void RDBSQLParserFree (RDBSQLParser parser)
 {
-    if (parser && parser->stmt == RDBSQL_SELECT || parser->stmt == RDBSQL_DELETE) {
-        int i = 0;
-        while (i < RDBAPI_ARGV_MAXNUM) {
-            char *psz;
+    if (parser) {
+        if (parser->stmt == RDBSQL_SELECT || parser->stmt == RDBSQL_DELETE) {
+            int i = 0;
+            while (i < RDBAPI_ARGV_MAXNUM) {
+                char *psz;
 
-            psz = parser->select.resultfields[i];
-            RDBMemFree(psz);
+                psz = parser->select.resultfields[i];
+                RDBMemFree(psz);
 
-            psz = parser->select.keys[i];
-            RDBMemFree(psz);
+                psz = parser->select.keys[i];
+                RDBMemFree(psz);
 
-            psz = parser->select.keyvals[i];
-            RDBMemFree(psz);
+                psz = parser->select.keyvals[i];
+                RDBMemFree(psz);
 
-            psz = parser->select.fields[i];
-            RDBMemFree(psz);
+                psz = parser->select.fields[i];
+                RDBMemFree(psz);
 
-            psz = parser->select.fieldvals[i];
-            RDBMemFree(psz);
+                psz = parser->select.fieldvals[i];
+                RDBMemFree(psz);
 
-            i++;
+                i++;
+            }
         }
-    };
 
-    RDBMemFree(parser);
+        RDBMemFree(parser);
+    };
 }
 
 

@@ -103,7 +103,7 @@
   <ItemGroup>
     <ClCompile Include="..\..\..\common\getoptw.c" />
     <ClCompile Include="..\..\..\common\getopt_longw.c" />
-    <ClCompile Include="..\..\..\redplus-src\main.c" />
+    <ClCompile Include="..\..\..\redplus-src\redplusapp.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\redplus-src\redplus.cfg" />
@@ -114,6 +114,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\..\common\cshell.h" />
     <ClInclude Include="..\..\..\common\cstrutil.h" />
+    <ClInclude Include="..\..\..\redplus-src\redplusapp.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

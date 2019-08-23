@@ -651,7 +651,7 @@ extern ub8 RDBResultMapGetOffset (RDBResultMap hResultMap);
 
 extern char RDBResultMapSetDelimiter (RDBResultMap hResultMap, char delimiter);
 
-extern void RDBResultMapPrintOut (RDBResultMap hResultMap, RDBAPI_BOOL withHead);
+extern void RDBResultMapPrintOut (RDBResultMap hResultMap, const char *header, ...);
 
 extern void RDBResultMapListFree (RDBResultMap *resultMaps, int count);
 

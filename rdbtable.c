@@ -1760,31 +1760,39 @@ char RDBResultMapSetDelimiter (RDBResultMap hResultMap, char delimiter)
 }
 
 
-void RDBResultMapPrintOut (RDBResultMap resultMap, RDBAPI_BOOL withHead)
+void RDBResultMapPrintOut (RDBResultMap resultMap, const char *header, ...)
 {
-    int i = 0;
+    int i;
 
-    if (withHead) {
+    if (header) {
+        va_list args;
+        va_start(args, header);
+        vprintf(header, args);
+        va_end(args);
+    }
+
+    if (resultMap->sqlstmt != RDBSQL_DESC_TABLE) {
         size_t len = 0;
 
-        printf("\n# Key Pattern: %.*s", resultMap->kplen, resultMap->keypattern);
+        const char **vtnames = (const char **) resultMap->ctxh->env->valtypenames;
+
+        printf("$(tablename): %.*s}\n", (int) (strchr(resultMap->keypattern, '$') - resultMap->keypattern - 1), resultMap->keypattern);
+        printf("$(rkpattern): %.*s\n", resultMap->kplen, resultMap->keypattern);
 
         if (resultMap->filter) {
-            printf("\n# Last Offset: %"PRIu64, RDBResultMapGetOffset(resultMap));
+            printf("$(last offset): %"PRIu64"\n", RDBResultMapGetOffset(resultMap));
         }
-
         if (resultMap->rbtree.iSize) {
-            printf("\n# Num of Rows: %"PRIu64, RDBResultMapSize(resultMap));
+            printf("$(result rows): %"PRIu64"\n", RDBResultMapSize(resultMap));
         }
 
         printf("\n");
 
-        // print names for key
         for (i = 1; i <= resultMap->rowkeyid[0]; i++) {
             int j = resultMap->rowkeyid[i];
 
             if (! len) {
-                printf("#[ $%s", resultMap->fielddes[j].fieldname);
+                printf("[ $%s", resultMap->fielddes[j].fieldname);
             } else {
                 printf(" %c $%s", resultMap->delimiter, resultMap->fielddes[j].fieldname);
             }
@@ -1796,7 +1804,7 @@ void RDBResultMapPrintOut (RDBResultMap resultMap, RDBAPI_BOOL withHead)
         for (i = 0; i < resultMap->resultfields; i++) {
             if (! len) {
                 // fieldname
-                printf("#[ %.*s", resultMap->fieldnamelens[i], resultMap->fetchfields[i]);
+                printf("[ %.*s", resultMap->fieldnamelens[i], resultMap->fetchfields[i]);
             } else {
                 // | fieldname
                 printf(" %c %.*s", resultMap->delimiter, resultMap->fieldnamelens[i], resultMap->fetchfields[i]);
@@ -1804,7 +1812,7 @@ void RDBResultMapPrintOut (RDBResultMap resultMap, RDBAPI_BOOL withHead)
 
             len += resultMap->fieldnamelens[i] + 3;
         }
-        printf(" ]\n#--");
+        printf(" ]\n--");
 
         i = 1;
         while (i++ < len) {
@@ -1814,8 +1822,6 @@ void RDBResultMapPrintOut (RDBResultMap resultMap, RDBAPI_BOOL withHead)
     }
 
     if (resultMap->sqlstmt == RDBSQL_DESC_TABLE) {
-        int j;
-
         const char **vtnames = (const char **) resultMap->ctxh->env->valtypenames;
 
         printf("$(tablename): %.*s}\n", (int) (strchr(resultMap->keypattern, '$') - resultMap->keypattern - 1), resultMap->keypattern);
@@ -1823,11 +1829,12 @@ void RDBResultMapPrintOut (RDBResultMap resultMap, RDBAPI_BOOL withHead)
         printf("$(timestamp): %"PRIu64"\n", resultMap->table_timestamp);
         printf("$(creatdate): %s\n", resultMap->table_datetime);
         printf("$(tbcomment): %s\n", resultMap->table_comment);
+        printf("---------------------+-----------+--------+---------+--------+----------+----------\n");
         printf("[      fieldname     | fieldtype | length |  scale  | rowkey | nullable | comment ]\n");
         printf("---------------------+-----------+--------+---------+--------+----------+----------\n");
 
-        for (j = 0; j < resultMap->numfields; j++) {
-            RDBFieldDes_t *fdes = &resultMap->fielddes[j];
+        for (i = 0; i < resultMap->numfields; i++) {
+            RDBFieldDes_t *fdes = &resultMap->fielddes[i];
 
             printf(" %-20s| %8s  | %-6d |%8d |  %4d  |   %4d   | %s\n",
                 fdes->fieldname,
@@ -1838,7 +1845,7 @@ void RDBResultMapPrintOut (RDBResultMap resultMap, RDBAPI_BOOL withHead)
                 fdes->nullable,
                 fdes->comment);
         }
-        printf("-----------------------------------------------------------------------------------\n");
+        printf("---------------------+-----------+--------+---------+--------+----------+----------\n");
 
     }
 

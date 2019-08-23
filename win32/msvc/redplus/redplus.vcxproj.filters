@@ -27,7 +27,7 @@
     <ClCompile Include="..\..\..\common\getoptw.c">
       <Filter>common</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\redplus-src\main.c">
+    <ClCompile Include="..\..\..\redplus-src\redplusapp.c">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
@@ -43,6 +43,9 @@
     </ClInclude>
     <ClInclude Include="..\..\..\common\cstrutil.h">
       <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\redplus-src\redplusapp.h">
+      <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

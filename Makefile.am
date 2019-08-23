@@ -28,10 +28,10 @@ AM_CPPFLAGS = -I$(top_srcdir)/src \
     -I$(top_srcdir)/libs/include
 
 
-#### redisplus app
+#### redplus app
 noinst_PROGRAMS = redplus
 
-redplus_SOURCES = redplus-src/main.c
+redplus_SOURCES = redplus-src/redplusapp.c
 
 redplus_LDADD = ./librdbapi.a \
 	$(top_srcdir)/libs/lib/libhiredis.a \
