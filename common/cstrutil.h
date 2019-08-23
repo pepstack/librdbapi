@@ -42,6 +42,7 @@ extern "C"
 #include <stdlib.h>
 #include <string.h>
 #include <memory.h>
+#include <ctype.h>
 #include <errno.h>
 
 #include "unitypes.h"
@@ -49,6 +50,32 @@ extern "C"
 
 #define cstr_bool_true   1
 #define cstr_bool_false  0
+
+
+static char * cstr_toupper (char * s, int num)
+{
+    char *p = s;
+
+    while (num-- > 0 && *p) {
+       *p = toupper(*p);
+        p++;
+    }
+
+    return s;
+}
+
+
+static char * cstr_tolower (char * s, int num)
+{
+    char *p = s;
+
+    while (num-- > 0 && *p) {
+       *p = tolower(*p);
+        p++;
+    }
+
+    return s;
+}
 
 
 /**

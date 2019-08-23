@@ -151,7 +151,7 @@ int main(int argc, const char *argv[])
     }
 
     if (interactive) {
-        int cnt, clen;
+        int clen;
 
         ub8 tm0, tm2;
         char tmstr0[24];
@@ -160,7 +160,6 @@ int main(int argc, const char *argv[])
         CSH_chunk cache = CSH_chunk_new (1);
 
         print_guide();
-        cnt = 0;
 
         while (interactive) {
             line = CSH_get_input(cache->offset? "+ ":"redplus> ", cshbuf, sizeof(cshbuf), &clen);
@@ -197,9 +196,6 @@ int main(int argc, const char *argv[])
                         continue;
                     }
                 }
-            } else if (cnt++ > 1) {
-                print_guide();
-                cnt = 0;
             }
         }
 

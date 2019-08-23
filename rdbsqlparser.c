@@ -953,7 +953,7 @@ RDBAPI_BOOL onParseInfo (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len
             return RDBAPI_TRUE;
         }
 
-        strupr(sec);
+        cstr_toupper(sec, chlen);
 
         while ((section = sections[i]) != NULL) {
             if (! cstr_compare_len(section, (int)strlen(section), sec, chlen)) {
