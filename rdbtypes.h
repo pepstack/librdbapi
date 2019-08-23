@@ -273,7 +273,7 @@ static redisReply * RDBIntegerReplyCreate (sb8 val)
     redisReply * reply = (redisReply *) RDBMemAlloc(sizeof(*reply));
 
     reply->type = REDIS_REPLY_INTEGER;
-    reply->integer = (PORT_LONGLONG) val;
+    reply->integer = val;
 
     return reply;
 }

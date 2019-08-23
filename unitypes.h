@@ -28,7 +28,7 @@
 *
 *   Universal Standard definitions and types, Bob Jenkins
 *
-* 2019-08-22: revised
+* 2019-08-21: revised
 */
 #ifndef UNITYPES_H_INCLUDED
 #define UNITYPES_H_INCLUDED
@@ -38,14 +38,8 @@ extern "C"
 {
 #endif
 
-#if (defined(WIN32) || defined(_WIN16) || defined(_WIN32) || defined(_WIN32_WINNT) || defined(_WIN64)) && !defined(__WINDOWS__)
-    #ifdef _WIN32_WINNT
-        #if _WIN32_WINNT  < 0x0500
-            #error  Windows version is too lower than 0x0500
-        #endif
-    #endif
-
-    # define __WINDOWS__
+#if (defined(WIN32) || defined(_WIN16) || defined(_WIN32) || defined(_WIN64)) && !defined(__WINDOWS__)
+# define __WINDOWS__
 #endif
 
 #ifndef STDIO

@@ -119,7 +119,7 @@ am_librdbapi_a_OBJECTS = common/red_black_tree.$(OBJEXT) \
 	rdbexpr.$(OBJEXT) rdbsqlparser.$(OBJEXT) rdbapi.$(OBJEXT)
 librdbapi_a_OBJECTS = $(am_librdbapi_a_OBJECTS)
 PROGRAMS = $(noinst_PROGRAMS)
-am_redplus_OBJECTS = redplus-src/main.$(OBJEXT)
+am_redplus_OBJECTS = redplus-src/redplusapp.$(OBJEXT)
 redplus_OBJECTS = $(am_redplus_OBJECTS)
 redplus_DEPENDENCIES = ./librdbapi.a \
 	$(top_srcdir)/libs/lib/libhiredis.a
@@ -338,7 +338,7 @@ AM_CPPFLAGS = -I$(top_srcdir)/src \
     -I$(top_srcdir)/src/librdbapi/uthash \
     -I$(top_srcdir)/libs/include
 
-redplus_SOURCES = redplus-src/main.c
+redplus_SOURCES = redplus-src/redplusapp.c
 redplus_LDADD = ./librdbapi.a \
 	$(top_srcdir)/libs/lib/libhiredis.a \
     -lm \
@@ -418,7 +418,7 @@ redplus-src/$(am__dirstamp):
 redplus-src/$(DEPDIR)/$(am__dirstamp):
 	@$(MKDIR_P) redplus-src/$(DEPDIR)
 	@: > redplus-src/$(DEPDIR)/$(am__dirstamp)
-redplus-src/main.$(OBJEXT): redplus-src/$(am__dirstamp) \
+redplus-src/redplusapp.$(OBJEXT): redplus-src/$(am__dirstamp) \
 	redplus-src/$(DEPDIR)/$(am__dirstamp)
 
 redplus$(EXEEXT): $(redplus_OBJECTS) $(redplus_DEPENDENCIES) $(EXTRA_redplus_DEPENDENCIES) 
@@ -446,7 +446,7 @@ include ./$(DEPDIR)/rdbstmt.Po
 include ./$(DEPDIR)/rdbtable.Po
 include common/$(DEPDIR)/red_black_tree.Po
 include common/tiny-regex-c/$(DEPDIR)/re.Po
-include redplus-src/$(DEPDIR)/main.Po
+include redplus-src/$(DEPDIR)/redplusapp.Po
 
 .c.o:
 	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\

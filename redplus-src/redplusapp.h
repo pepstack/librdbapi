@@ -143,12 +143,12 @@ static int get_app_path (const char *argv0, char apppath[], size_t sz)
     GetModuleFileNameA(NULL, apppath, (DWORD) sz);
 
     if (strnlen(apppath, sz) == sz) {
-        fprintf(stdout, "app path too long: %s\n", argv0);
+        fprintf(stderr, "app path too long: %s\n", argv0);
         return (-1);
     }
 
     if (! strrchr(apppath, PATH_SEPARATOR_CHAR)) {
-        fprintf(stdout, "invalid path: %s\n", apppath);
+        fprintf(stderr, "invalid path: %s\n", apppath);
         return (-1);
     }
 
@@ -158,22 +158,22 @@ static int get_app_path (const char *argv0, char apppath[], size_t sz)
     int ret = realfilepath(argv0, apppath, sz - 1);
 
     if (ret <= 0) {
-        ffprintf(stdout, stderr, "\033[1;31m[error]\033[0m %s\n", apppath);
+        fprintf(stderr, "\033[1;31m[error]\033[0m %s\n", apppath);
         return (-1);
     }
 
     if (strrchr(apppath, PATH_SEPARATOR_CHAR) == strchr(apppath, PATH_SEPARATOR_CHAR)) {
-        ffprintf(stdout, stderr, "\033[1;31m[error]\033[0m under root path: %s\n", apppath);
+        fprintf(stderr, "\033[1;31m[error]\033[0m under root path: %s\n", apppath);
         return (-1);
     }
 
     if (ret >= sz) {
-        ffprintf(stdout, stderr, "\033[1;31m[error]\033[0m path is too long: %s\n", apppath);
+        fprintf(stderr, "\033[1;31m[error]\033[0m path is too long: %s\n", apppath);
         return (-1);
     }
 
     if (! strrchr(apppath, PATH_SEPARATOR_CHAR)) {
-        fprintf(stdout, "invalid path: %s\n", apppath);
+        fprintf(stderr, "invalid path: %s\n", apppath);
         return (-1);
     }
 
