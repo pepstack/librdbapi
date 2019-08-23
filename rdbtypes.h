@@ -199,6 +199,24 @@ typedef struct _RDBAsynCtx_t
 } RDBAsynCtx_t, RDBACtx_t;
 
 
+typedef struct _RDBNameReply_t
+{
+    // makes this structure hashable
+    UT_hash_handle hh;
+
+    char *name;
+
+    // reply object
+    redisReply *value;
+
+    char *subval;
+    int sublen;
+
+    int namelen;
+    char namebuf[0];
+} RDBNameReply_t, *RDBNameReply, *RDBNameReplyMap;
+
+
 typedef struct _RDBResultMap_t
 {
     RDBCtx ctxh;
@@ -278,6 +296,19 @@ static redisReply * RDBIntegerReplyCreate (sb8 val)
     return reply;
 }
 
+
+static redisReply * RDBArrayReplyCreate (size_t elements)
+{
+    redisReply * replyArr = (redisReply *) RDBMemAlloc(sizeof(*replyArr));
+    replyArr->type = REDIS_REPLY_ARRAY;
+
+    replyArr->element = (redisReply **) RDBMemAlloc(sizeof(redisReply *) * elements);
+    replyArr->elements = elements;
+
+    return replyArr;
+}
+
+void RDBResultRowFree (RDBResultRow rowdata);
 
 void RDBResultMapNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmt sqlstmt, const char *tablespace, const char *tablename, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap);
 

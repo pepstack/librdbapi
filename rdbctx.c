@@ -418,6 +418,7 @@ void RDBCtxPrintInfo (RDBCtx ctx, int nodeindex)
 
     int maxnodes = RDBEnvNumNodes(ctx->env);
 
+    // same with RDBNodeInfoSection
     const char *sections[] = {
         "Server",        // 0
         "Clients",       // 1
@@ -431,6 +432,8 @@ void RDBCtxPrintInfo (RDBCtx ctx, int nodeindex)
         0
     };
 
+    threadlock_lock(&ctx->env->thrlock);
+
     if (nodeindex >= 0 && nodeindex < maxnodes) {
         ctxnode = RDBCtxGetNode(ctx, nodeindex);
         RDBCtxNodePrintInfo(ctxnode, sections);
@@ -441,4 +444,6 @@ void RDBCtxPrintInfo (RDBCtx ctx, int nodeindex)
             RDBCtxNodePrintInfo(ctxnode, sections);
         }
     }
+
+    threadlock_unlock(&ctx->env->thrlock);
 }

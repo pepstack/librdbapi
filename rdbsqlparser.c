@@ -929,6 +929,7 @@ RDBAPI_BOOL onParseInfo (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len
         parser->info.section = MAX_NODEINFO_SECTIONS;
         return RDBAPI_TRUE;
     } else {
+        // same with RDBNodeInfoSection
         const char *sections[] = {
             "SERVER",        // 0
             "CLIENTS",       // 1
@@ -947,6 +948,12 @@ RDBAPI_BOOL onParseInfo (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len
         
         sec = cstr_Ltrim_chr(sec, 32);
         chlen = cstr_length(sec, 16);
+        if (chlen == 0) {
+            parser->info.section = MAX_NODEINFO_SECTIONS;
+            return RDBAPI_TRUE;
+        }
+
+        strupr(sec);
 
         while ((section = sections[i]) != NULL) {
             if (! cstr_compare_len(section, (int)strlen(section), sec, chlen)) {
@@ -957,7 +964,23 @@ RDBAPI_BOOL onParseInfo (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len
             i++;
         }
 
-        return section? RDBAPI_TRUE : RDBAPI_FALSE;
+        if (section) {
+            return RDBAPI_TRUE;
+        }
+
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "Bad INFO Section(%.*s). (Section should be: %s | %s | %s | %s | %s | %s | %s | %s)",
+            cstr_length(sec, 12), sec,
+            sections[0],
+            sections[1],
+            sections[2],
+            sections[3],
+            sections[4],
+            sections[5],
+            sections[6],
+            sections[7],
+            sections[8]);
+
+        return RDBAPI_FALSE;
     }
 }
 
@@ -1073,10 +1096,99 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
             return RedisDeleteKey(ctx, tabledes.table_rowkey, NULL, 0);
         }        
     } else if (parser->stmt == RDBSQL_INFO_SECTION) {
-        // TODO: resultmap
         if (RDBCtxCheckInfo(ctx, parser->info.section) == RDBAPI_SUCCESS) {
-            RDBCtxPrintInfo(ctx, -1);
-            
+            int nodeindex;
+            int section;
+
+            char keyprefix[RDBAPI_PROP_MAXSIZE];
+
+            RDBResultMap resultMap;
+
+            const char *sections[] = {
+                "Server",        // 0
+                "Clients",       // 1
+                "Memory",        // 2
+                "Persistence",   // 3
+                "Stats",         // 4
+                "Replication",   // 5
+                "Cpu",           // 6
+                "Cluster",       // 7
+                "Keyspace",      // 8
+                0
+            };
+
+            int numnodes = RDBEnvNumNodes(ctx->env);
+
+            int startInfoSecs = parser->info.section;
+            int nposInfoSecs = parser->info.section + 1;
+            if (parser->info.section == MAX_NODEINFO_SECTIONS) {
+                startInfoSecs = NODEINFO_SERVER;
+                nposInfoSecs = MAX_NODEINFO_SECTIONS;
+            }
+
+            RDBResultMapNew(ctx, NULL, parser->stmt, NULL, NULL, 0, NULL, NULL, &resultMap);
+
+            threadlock_lock(&ctx->env->thrlock);
+
+            for (nodeindex = 0; nodeindex < numnodes; nodeindex++) {
+
+                RDBCtxNode ctxnode = RDBCtxGetNode(ctx, nodeindex);
+                RDBEnvNode envnode = RDBCtxNodeGetEnvNode(ctxnode);
+
+                // node as row: {clusternode($nodeindex)::$host:$port}
+                RDBResultRow rowdata = (RDBResultRow) RDBMemAlloc(sizeof(RDBResultRow_t));
+                int len = snprintf_chkd_V1(keyprefix, sizeof(keyprefix), "{clusternode(%d)::%s}", envnode->index, envnode->key);
+
+                rowdata->replykey = RDBStringReplyCreate(keyprefix, len);
+
+                // section as fields
+                for (section = startInfoSecs; section != nposInfoSecs; section++) {
+                    RDBPropNode propnode;
+                    RDBPropMap propmap = envnode->nodeinfo[section];
+
+                    for (propnode = propmap; propnode != NULL; propnode = propnode->hh.next) {
+                        RDBNameReply nnode;
+
+                        int namelen = snprintf_chkd_V1(keyprefix, sizeof(keyprefix), "%s::%s", sections[section], propnode->name);
+                        int valuelen = cstr_length(propnode->value, RDB_ROWKEY_MAX_SIZE);
+
+                        nnode = (RDBNameReply) RDBMemAlloc(sizeof(RDBNameReply_t) + namelen + 1 + valuelen + 1);
+
+                        nnode->name = nnode->namebuf;
+                        nnode->namelen = namelen;
+                        memcpy(nnode->namebuf, keyprefix, namelen);
+
+                        nnode->subval = &nnode->namebuf[namelen + 1];
+                        nnode->sublen = valuelen;
+                        memcpy(nnode->subval, propnode->value, valuelen);
+
+                        HASH_ADD_STR_LEN(rowdata->fieldmap, name, nnode->namelen, nnode);
+                    }
+                }
+
+                do {
+                    // insert row into result
+                    int is_new_node;
+                    red_black_node_t *node = rbtree_insert_unique(&resultMap->rbtree, (void *) rowdata, &is_new_node);
+
+                    if (! node) {
+                        // out of memory
+                        RDBResultRowFree(rowdata);
+                        RDBResultMapFree(resultMap);
+                        return RDBAPI_ERR_NOMEM;
+                    }
+
+                    if (! is_new_node) {
+                        RDBResultRowFree(rowdata);
+                        RDBResultMapFree(resultMap);
+                        return RDBAPI_ERR_EXISTED;
+                    }
+                } while(0);
+            }
+
+            threadlock_unlock(&ctx->env->thrlock);
+
+            *outResultMap = resultMap;
             return RDBAPI_SUCCESS;
         }
     }

@@ -39,24 +39,6 @@
 #define RDBTABLE_FILTER_REJECT    0
 
 
-typedef struct _RDBNameReply_t
-{
-    // makes this structure hashable
-    UT_hash_handle hh;
-
-    char *name;
-
-    // reply object
-    redisReply *value;
-
-    char *subval;
-    int sublen;
-
-    int namelen;
-    char namebuf[0];
-} RDBNameReply_t, *RDBNameReply, *RDBNameReplyMap;
-
-
 typedef struct _RDBKeyValue_t
 {
     RDBFilterExpr expr;
@@ -383,7 +365,7 @@ static int RDBResultRowNodeCompare (void *newObject, void *nodeObject)
 }
 
 
-static void RDBResultRowFree (RDBResultRow rowdata)
+void RDBResultRowFree (RDBResultRow rowdata)
 {
     RedisFreeReplyObject(&rowdata->replykey);
     RDBFieldsMapFree(rowdata->fieldmap);
@@ -394,7 +376,7 @@ static void RDBResultRowFree (RDBResultRow rowdata)
 
 static void RDBResultRowNodeDelete (void *rownode, void *arg)
 {
-    RDBResultRowFree((RDBResultRow) rownode);
+     RDBResultRowFree((RDBResultRow) rownode);
 }
 
 
@@ -1698,51 +1680,70 @@ static void RDBResultRowPrintCallback (void * _row, void * _map)
 
     RDBResultMap resultMap = (RDBResultMap)_map;
     RDBResultRow resultRow = (RDBResultRow)_row;
-    RDBFieldsMap fieldsmap = resultRow->fieldmap;
+    RDBFieldsMap propsmap = resultRow->fieldmap;
 
-    //TODO: resultMap->sqlstmt == RDBSQL_SELECT
+    if (resultMap->sqlstmt == RDBSQL_SELECT || resultMap->sqlstmt == RDBSQL_DELETE) {
+        // print rowkey values
+        for (i = 1; i <= resultMap->rowkeyid[0]; i++) {
+            int j = resultMap->rowkeyid[i];
 
-    // print rowkey values
-    for (i = 1; i <= resultMap->rowkeyid[0]; i++) {
-        int j = resultMap->rowkeyid[i];
+            RDBNameReply kvnode = NULL;
 
-        RDBNameReply kvnode = NULL;
+            HASH_FIND_STR_LEN(propsmap, resultMap->fielddes[j].fieldname, resultMap->fielddes[j].namelen, kvnode);
 
-        HASH_FIND_STR_LEN(fieldsmap, resultMap->fielddes[j].fieldname, resultMap->fielddes[j].namelen, kvnode);
+            if (cols) {
+                printf("%c%.*s", resultMap->delimiter, kvnode->sublen, kvnode->subval);
+            } else {
+                printf("%.*s", kvnode->sublen, kvnode->subval);
+            }
 
-        if (cols) {
-            printf("%c%.*s", resultMap->delimiter, kvnode->sublen, kvnode->subval);
-        } else {
-            printf("%.*s", kvnode->sublen, kvnode->subval);
+            cols++;
         }
 
-        cols++;
-    }
+        // print field values
+        for (i = 0; i < resultMap->resultfields; i++) {
+            RDBNameReply kvnode = NULL;
 
-    // print field values
-    for (i = 0; i < resultMap->resultfields; i++) {
-        RDBNameReply kvnode = NULL;
+            HASH_FIND_STR_LEN(propsmap, resultMap->fetchfields[i], resultMap->fieldnamelens[i], kvnode);
 
-        HASH_FIND_STR_LEN(fieldsmap, resultMap->fetchfields[i], resultMap->fieldnamelens[i], kvnode);
-
-        if (cols) {
-            if (kvnode->value) {
-                printf("%c%.*s", resultMap->delimiter, (int)kvnode->value->len, kvnode->value->str);
+            if (cols) {
+                if (kvnode->value) {
+                    printf("%c%.*s", resultMap->delimiter, (int)kvnode->value->len, kvnode->value->str);
+                } else {
+                    printf("%c(null)", resultMap->delimiter);
+                }
             } else {
-                printf("%c(null)", resultMap->delimiter);
+                if (kvnode->value) {
+                    printf("%.*s", (int)kvnode->value->len, kvnode->value->str);
+                } else {
+                    printf("(null)");
+                }
             }
-        } else {
-            if (kvnode->value) {
-                printf("%.*s", (int)kvnode->value->len, kvnode->value->str);
-            } else {
-                printf("(null)");
-            }
+
+            cols++;
+        }
+        printf("\n");
+    } else if (resultMap->sqlstmt == RDBSQL_INFO_SECTION) {
+        RDBNameReply propnode;
+
+        printf("$(node): %.*s\n", (int) resultRow->replykey->len, resultRow->replykey->str);
+        printf("-------------+------------------------------------+--------------------------------\n");
+        printf("[   section  |             name                   |              value            ]\n");
+        printf("-------------+------------------------------------+--------------------------------\n");
+
+        for (propnode = propsmap; propnode != NULL; propnode = propnode->hh.next) {
+            char * pname = strstr(propnode->name, "::");
+            int seclen = (int) (pname - propnode->name);
+
+            printf(" %-12.*s| %-34.*s | %.*s\n",
+                seclen, propnode->name,
+                propnode->namelen - seclen - 2, pname + 2,
+                propnode->sublen, propnode->subval);
         }
 
-        cols++;
+        printf("-------------+------------------------------------+--------------------------------\n");
+        printf("\n");
     }
-
-    printf("\n");
 }
 
 
@@ -1771,7 +1772,7 @@ void RDBResultMapPrintOut (RDBResultMap resultMap, const char *header, ...)
         va_end(args);
     }
 
-    if (resultMap->sqlstmt != RDBSQL_DESC_TABLE) {
+    if (resultMap->sqlstmt == RDBSQL_SELECT || resultMap->sqlstmt == RDBSQL_DELETE) {
         size_t len = 0;
 
         const char **vtnames = (const char **) resultMap->ctxh->env->valtypenames;
@@ -1819,9 +1820,8 @@ void RDBResultMapPrintOut (RDBResultMap resultMap, const char *header, ...)
             printf("-");
         }
         printf("\n");
-    }
 
-    if (resultMap->sqlstmt == RDBSQL_DESC_TABLE) {
+    } else if (resultMap->sqlstmt == RDBSQL_DESC_TABLE) {
         const char **vtnames = (const char **) resultMap->ctxh->env->valtypenames;
 
         printf("$(tablename): %.*s}\n", (int) (strchr(resultMap->keypattern, '$') - resultMap->keypattern - 1), resultMap->keypattern);
@@ -1846,6 +1846,9 @@ void RDBResultMapPrintOut (RDBResultMap resultMap, const char *header, ...)
                 fdes->comment);
         }
         printf("---------------------+-----------+--------+---------+--------+----------+----------\n");
+
+    } else if (resultMap->sqlstmt == RDBSQL_INFO_SECTION) {
+
 
     }
 
