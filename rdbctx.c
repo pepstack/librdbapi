@@ -355,7 +355,7 @@ static RDBAPI_RESULT RDBNodeInfoUpdate (RDBCtxNode ctxnode, RDBNodeInfoSection s
 }
 
 
-RDBAPI_RESULT RDBCtxCheckInfo (RDBCtx ctx, RDBNodeInfoSection section)
+RDBAPI_RESULT RDBCtxCheckInfo (RDBCtx ctx, RDBNodeInfoSection section, int whichnode)
 {
     if (section < NODEINFO_SERVER || section > MAX_NODEINFO_SECTIONS) {
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) RDBAPI_ERR_BADARG: invalid section(%d)", __FILE__, __LINE__, (int) section);
@@ -364,9 +364,16 @@ RDBAPI_RESULT RDBCtxCheckInfo (RDBCtx ctx, RDBNodeInfoSection section)
         threadlock_lock(&ctx->env->thrlock);
 
         RDBCtxNode ctxnode;
-        int nodeindex = RDBEnvNumNodes(ctx->env);
 
-        while (nodeindex-- > 0) {
+        int nodeindex = 0;
+        int endNodeid = RDBEnvNumNodes(ctx->env);
+
+        if (whichnode) {
+            endNodeid = whichnode;
+            nodeindex = endNodeid - 1;            
+        }
+
+        for (; nodeindex < endNodeid; nodeindex++) {
             ctxnode = RDBCtxGetNode(ctx, nodeindex);
 
             if (section == MAX_NODEINFO_SECTIONS) {

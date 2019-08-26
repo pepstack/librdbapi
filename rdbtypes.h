@@ -265,6 +265,15 @@ typedef struct _RDBResultRow_t
 } RDBResultRow_t;
 
 
+typedef struct _RDBTableCursor_t
+{
+    ub8 cursor;
+    ub8 offset;
+
+    ub4 nodeindex;
+    int finished;
+} RDBTableCursor_t, * RDBTableCursor;
+
 
 static redisReply * RDBStringReplyCreate (const char *str, size_t len)
 {
@@ -323,6 +332,7 @@ int RDBFinishRowkeyPattern (const RDBFieldDes_t *tabledes, int nfielddes, const 
 
 int RDBNodeInfoQuery (RDBCtxNode ctxnode, RDBNodeInfoSection section, const char *propname, char propvalue[RDBAPI_PROP_MAXSIZE]);
 
+RDBAPI_RESULT RDBTableScanOnNode (RDBCtxNode ctxnode, RDBTableCursor nodestate, const RDBBlob_t *patternblob, ub4 maxlimit, redisReply **outReply);
 
 #if defined(__cplusplus)
 }

@@ -275,6 +275,8 @@ typedef enum
     ,RDBSQL_DESC_TABLE = 5
     ,RDBSQL_DROP_TABLE = 6
     ,RDBSQL_INFO_SECTION = 7
+    ,RDBSQL_SHOW_DATABASES = 8
+    ,RDBSQL_SHOW_TABLES = 9
 } RDBSQLStmt;
 
 
@@ -444,7 +446,7 @@ extern redisContext * RDBCtxNodeGetRedisContext (RDBCtxNode ctxnode);
 
 extern RDBEnvNode RDBCtxNodeGetEnvNode (RDBCtxNode ctxnode);
 
-extern RDBAPI_RESULT RDBCtxCheckInfo (RDBCtx ctx, RDBNodeInfoSection section);
+extern RDBAPI_RESULT RDBCtxCheckInfo (RDBCtx ctx, RDBNodeInfoSection section, int whichnode);
 
 extern void RDBCtxPrintInfo (RDBCtx ctx, int nodeindex);
 

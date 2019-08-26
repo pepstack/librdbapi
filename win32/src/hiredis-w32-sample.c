@@ -84,7 +84,7 @@ int main(int argc, const char *argv[])
 
     printf("redis open success.\n");
 
-    RDBCtxCheckInfo(ctx, MAX_NODEINFO_SECTIONS);
+    RDBCtxCheckInfo(ctx, MAX_NODEINFO_SECTIONS, 0);
 
     RDBCtxPrintInfo(ctx, -1);
 

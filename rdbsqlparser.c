@@ -86,6 +86,10 @@ typedef struct _RDBSQLParser_t
             char tablename[RDB_KEY_NAME_MAXLEN + 1];
         } desctable;
 
+        struct SHOW_TABLES {
+            char tablespace[RDB_KEY_NAME_MAXLEN + 1];
+        } showtables;
+
         struct DROP_TABLE {
             char tablespace[RDB_KEY_NAME_MAXLEN + 1];
             char tablename[RDB_KEY_NAME_MAXLEN + 1];
@@ -93,6 +97,9 @@ typedef struct _RDBSQLParser_t
 
         struct INFO_SECTION {
             RDBNodeInfoSection section;
+
+            // 1-based. 0 for all
+            int whichnode;
         } info;
     };
 
@@ -101,13 +108,14 @@ typedef struct _RDBSQLParser_t
 } RDBSQLParser_t;
 
 
-RDBAPI_BOOL onParseSelect (RDBSQLParser_t * parser, RDBCtx ctx, char *selsql, int len);
-RDBAPI_BOOL onParseDelete (RDBSQLParser_t * parser, RDBCtx ctx, char *delsql, int len);
-RDBAPI_BOOL onParseUpdate (RDBSQLParser_t * parser, RDBCtx ctx, char *updsql, int len);
-RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *cresql, int len);
-RDBAPI_BOOL onParseDesc (RDBSQLParser_t * parser, RDBCtx ctx, char *cresql, int len);
-RDBAPI_BOOL onParseDrop (RDBSQLParser_t * parser, RDBCtx ctx, char *cresql, int len);
-RDBAPI_BOOL onParseInfo (RDBSQLParser_t * parser, RDBCtx ctx, char *cresql, int len);
+RDBAPI_BOOL onParseSelect (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len);
+RDBAPI_BOOL onParseDelete (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len);
+RDBAPI_BOOL onParseUpdate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len);
+RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len);
+RDBAPI_BOOL onParseDesc (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len);
+RDBAPI_BOOL onParseDrop (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len);
+RDBAPI_BOOL onParseInfo (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len);
+RDBSQLStmt  onParseShow (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len);
 
 
 RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQLParser *outParser)
@@ -183,6 +191,9 @@ RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQL
 
         parseOk = onParseDrop(parser, ctx, parser->sql + strlen("DROP "), parser->sqlen - (int)strlen("DROP "));
         parser->stmt = parseOk? RDBSQL_DROP_TABLE : RDBSQL_INVALID;
+
+    } else if (cstr_startwith(parser->sql, parser->sqlen, "SHOW ", (int)strlen("SHOW "))) {
+        parser->stmt = onParseShow(parser, ctx, parser->sql + strlen("SHOW "), parser->sqlen - (int)strlen("SHOW "));
 
     } else {
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_RDBSQL: invalid sql");
@@ -922,9 +933,29 @@ RDBAPI_BOOL onParseDrop (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len
 
 RDBAPI_BOOL onParseInfo (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len)
 {
-    char * sec = cstr_Rtrim_chr(sql, 32);
-    int chlen = cstr_length(sec, 20);
+    int chlen;
 
+    // 0 is for all
+    int nodeid_1_based = 0;
+    char * sec = cstr_Rtrim_chr(sql, 32);
+
+    // nodeid is 1-based
+    char * nodeid = strrchr(sec, 32);
+    if (nodeid) {
+        *nodeid++ = 0;
+
+        nodeid_1_based = atoi(nodeid);
+        if (nodeid_1_based < 0 || nodeid_1_based > RDBEnvNumNodes(ctx->env)) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) invalid node id(%s). nodeid=0,1,...,%d", __FILE__, __LINE__, nodeid, RDBEnvNumNodes(ctx->env));
+            return RDBAPI_FALSE;
+        }
+    }
+
+    parser->info.whichnode = nodeid_1_based;
+
+    sec = cstr_LRtrim_chr(sec, 32);
+
+    chlen = cstr_length(sec, 12);
     if (! chlen) {
         parser->info.section = MAX_NODEINFO_SECTIONS;
         return RDBAPI_TRUE;
@@ -946,13 +977,6 @@ RDBAPI_BOOL onParseInfo (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len
         int i = 0;
         const char *section = NULL;
         
-        sec = cstr_Ltrim_chr(sec, 32);
-        chlen = cstr_length(sec, 16);
-        if (chlen == 0) {
-            parser->info.section = MAX_NODEINFO_SECTIONS;
-            return RDBAPI_TRUE;
-        }
-
         cstr_toupper(sec, chlen);
 
         while ((section = sections[i]) != NULL) {
@@ -984,6 +1008,50 @@ RDBAPI_BOOL onParseInfo (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len
     }
 }
 
+RDBSQLStmt  onParseShow (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len)
+{
+    char *s = cstr_LRtrim_chr(cstr_LRtrim_chr(sql, 32), ';');
+
+    len = cstr_length(s, 10);
+    if (len < 6) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) bad sql. should be: SHOW DATABASES | TABLES <database>", __FILE__, __LINE__);
+        return RDBSQL_INVALID;
+    }
+
+    if (len == 9 && ! strcmp(s, "DATABASES")) {
+        // SHOW DATABASES
+        return RDBSQL_SHOW_DATABASES;
+    }
+
+    if (len == 6 && ! strcmp(s, "TABLES")) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) bad sql. database name not given. should be: SHOW TABLES database;", __FILE__, __LINE__);
+        return RDBSQL_INVALID;
+    }
+
+    if (strstr(s, "TABLES ") == s) {
+        char * dbname = cstr_Ltrim_chr(s + 7, 32);
+        len = cstr_length(dbname, RDB_KEY_NAME_MAXLEN + 1);
+        if (len < 2) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) bad sql. database name is too short: %s", __FILE__, __LINE__, dbname);
+            return RDBSQL_INVALID;
+        }
+        if (len > RDB_KEY_NAME_MAXLEN) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) bad sql. database name is too long: %.*s...", __FILE__, __LINE__, RDB_KEY_NAME_MAXLEN, dbname);
+            return RDBSQL_INVALID;
+        }
+
+        if (!strcmp(dbname, "redisdb")) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) bad sql. redisdb not allowed", __FILE__, __LINE__, RDB_KEY_NAME_MAXLEN);
+            return RDBSQL_INVALID;
+        }
+
+        snprintf_chkd_V1(parser->showtables.tablespace, sizeof(parser->showtables.tablespace), "%.*s", len, dbname);
+        return RDBSQL_SHOW_TABLES;
+    }
+
+    snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) bad sql: SHOW %s", __FILE__, __LINE__, s);
+    return RDBSQL_INVALID;
+}
 
 static void RDBResultRowDeleteCallback (void * _row, void * _map)
 {
@@ -1096,8 +1164,7 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
             return RedisDeleteKey(ctx, tabledes.table_rowkey, NULL, 0);
         }        
     } else if (parser->stmt == RDBSQL_INFO_SECTION) {
-        if (RDBCtxCheckInfo(ctx, parser->info.section) == RDBAPI_SUCCESS) {
-            int nodeindex;
+        if (RDBCtxCheckInfo(ctx, parser->info.section, parser->info.whichnode) == RDBAPI_SUCCESS) {
             int section;
 
             char keyprefix[RDBAPI_PROP_MAXSIZE];
@@ -1117,8 +1184,6 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
                 0
             };
 
-            int numnodes = RDBEnvNumNodes(ctx->env);
-
             int startInfoSecs = parser->info.section;
             int nposInfoSecs = parser->info.section + 1;
             if (parser->info.section == MAX_NODEINFO_SECTIONS) {
@@ -1130,67 +1195,213 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
 
             threadlock_lock(&ctx->env->thrlock);
 
-            for (nodeindex = 0; nodeindex < numnodes; nodeindex++) {
+            do {
+                int nodeindex = 0;
+                int endNodeid = RDBEnvNumNodes(ctx->env);
 
-                RDBCtxNode ctxnode = RDBCtxGetNode(ctx, nodeindex);
-                RDBEnvNode envnode = RDBCtxNodeGetEnvNode(ctxnode);
-
-                // node as row: {clusternode(%d)::$host:$port}
-                RDBResultRow rowdata = (RDBResultRow) RDBMemAlloc(sizeof(RDBResultRow_t));
-                int len = snprintf_chkd_V1(keyprefix, sizeof(keyprefix), "{clusternode(%d)::%s}", envnode->index, envnode->key);
-
-                rowdata->replykey = RDBStringReplyCreate(keyprefix, len);
-
-                // section as fields
-                for (section = startInfoSecs; section != nposInfoSecs; section++) {
-                    RDBPropNode propnode;
-                    RDBPropMap propmap = envnode->nodeinfo[section];
-
-                    for (propnode = propmap; propnode != NULL; propnode = propnode->hh.next) {
-                        RDBNameReply nnode;
-
-                        int namelen = snprintf_chkd_V1(keyprefix, sizeof(keyprefix), "%s::%s", sections[section], propnode->name);
-                        int valuelen = cstr_length(propnode->value, RDB_ROWKEY_MAX_SIZE);
-
-                        nnode = (RDBNameReply) RDBMemAlloc(sizeof(RDBNameReply_t) + namelen + 1 + valuelen + 1);
-
-                        nnode->name = nnode->namebuf;
-                        nnode->namelen = namelen;
-                        memcpy(nnode->namebuf, keyprefix, namelen);
-
-                        nnode->subval = &nnode->namebuf[namelen + 1];
-                        nnode->sublen = valuelen;
-                        memcpy(nnode->subval, propnode->value, valuelen);
-
-                        HASH_ADD_STR_LEN(rowdata->fieldmap, name, nnode->namelen, nnode);
-                    }
+                if (parser->info.whichnode) {
+                    endNodeid = parser->info.whichnode;                    
+                    nodeindex = endNodeid - 1;                    
                 }
 
-                do {
-                    // insert row into result
-                    int is_new_node;
-                    red_black_node_t *node = rbtree_insert_unique(&resultMap->rbtree, (void *) rowdata, &is_new_node);
+                for (; nodeindex < endNodeid; nodeindex++) {
+                    RDBCtxNode ctxnode = RDBCtxGetNode(ctx, nodeindex);
+                    RDBEnvNode envnode = RDBCtxNodeGetEnvNode(ctxnode);
 
-                    if (! node) {
-                        // out of memory
-                        RDBResultRowFree(rowdata);
-                        RDBResultMapFree(resultMap);
-                        return RDBAPI_ERR_NOMEM;
+                    // node as row: {clusternode(%d)::$host:$port}
+                    RDBResultRow rowdata = (RDBResultRow) RDBMemAlloc(sizeof(RDBResultRow_t));
+                    int len = snprintf_chkd_V1(keyprefix, sizeof(keyprefix), "{clusternode(%d)::%s}", envnode->index + 1, envnode->key);
+
+                    rowdata->replykey = RDBStringReplyCreate(keyprefix, len);
+
+                    // section as fields
+                    for (section = startInfoSecs; section != nposInfoSecs; section++) {
+                        RDBPropNode propnode;
+                        RDBPropMap propmap = envnode->nodeinfo[section];
+
+                        for (propnode = propmap; propnode != NULL; propnode = propnode->hh.next) {
+                            RDBNameReply nnode;
+
+                            int namelen = snprintf_chkd_V1(keyprefix, sizeof(keyprefix), "%s::%s", sections[section], propnode->name);
+                            int valuelen = cstr_length(propnode->value, RDB_ROWKEY_MAX_SIZE);
+
+                            nnode = (RDBNameReply) RDBMemAlloc(sizeof(RDBNameReply_t) + namelen + 1 + valuelen + 1);
+
+                            nnode->name = nnode->namebuf;
+                            nnode->namelen = namelen;
+                            memcpy(nnode->namebuf, keyprefix, namelen);
+
+                            nnode->subval = &nnode->namebuf[namelen + 1];
+                            nnode->sublen = valuelen;
+                            memcpy(nnode->subval, propnode->value, valuelen);
+
+                            HASH_ADD_STR_LEN(rowdata->fieldmap, name, nnode->namelen, nnode);
+                        }
                     }
 
-                    if (! is_new_node) {
-                        RDBResultRowFree(rowdata);
-                        RDBResultMapFree(resultMap);
-                        return RDBAPI_ERR_EXISTED;
-                    }
-                } while(0);
-            }
+                    do {
+                        // insert row into result
+                        int is_new_node;
+                        red_black_node_t *node = rbtree_insert_unique(&resultMap->rbtree, (void *) rowdata, &is_new_node);
+
+                        if (! node) {
+                            // out of memory
+                            RDBResultRowFree(rowdata);
+                            RDBResultMapFree(resultMap);
+                            return RDBAPI_ERR_NOMEM;
+                        }
+
+                        if (! is_new_node) {
+                            RDBResultRowFree(rowdata);
+                            RDBResultMapFree(resultMap);
+                            return RDBAPI_ERR_EXISTED;
+                        }
+                    } while(0);
+                }
+            } while(0);
 
             threadlock_unlock(&ctx->env->thrlock);
 
             *outResultMap = resultMap;
             return RDBAPI_SUCCESS;
         }
+    } else if (parser->stmt == RDBSQL_SHOW_DATABASES) {
+        // {redisdb::$database:*}
+        RDBResultMap resultMap;
+        redisReply *replyRows;
+
+        RDBBlob_t pattern = {0};
+
+        // result cursor state
+        RDBTableCursor_t *nodestates = RDBMemAlloc(sizeof(RDBTableCursor_t) * RDBEnvNumNodes(ctx->env));
+
+        int nodeindex = 0;
+        int prefixlen = (int) strlen(RDB_SYSTEM_TABLE_PREFIX) + 3;
+
+        RDBResultMapNew(ctx, NULL, parser->stmt, NULL, NULL, 0, NULL, NULL, &resultMap);
+
+        pattern.maxsz = prefixlen + 8;
+        pattern.str = RDBMemAlloc(pattern.maxsz);
+        pattern.length = snprintf_chkd_V1(pattern.str, pattern.maxsz, "{%s::*:*}", RDB_SYSTEM_TABLE_PREFIX);
+
+        while (nodeindex < RDBEnvNumNodes(ctx->env)) {
+            RDBEnvNode envnode = RDBEnvGetNode(ctx->env, nodeindex);
+
+            // scan only on master node
+            if (RDBEnvNodeGetMaster(envnode, NULL) == RDBAPI_TRUE) {
+                RDBCtxNode ctxnode = RDBCtxGetNode(ctx, nodeindex);
+
+                RDBTableCursor nodestate = &nodestates[nodeindex];
+                if (nodestate->finished) {
+                    // goto next node since this current node has finished
+                    nodeindex++;
+                    continue;
+                }
+
+                res = RDBTableScanOnNode(ctxnode, nodestate, &pattern, -1, &replyRows);
+
+                if (res == RDBAPI_SUCCESS) {
+                    // here we should add new rows
+                    size_t i = 0;
+
+                    for (; i != replyRows->elements; i++) {
+                        redisReply * reply = replyRows->element[i];
+
+                        if (cstr_startwith(reply->str, reply->len, pattern.str, prefixlen)) {
+                            char *end = strchr(reply->str + prefixlen, ':');
+                            if (end) {
+                                redisReply * replydb;
+
+                                *end = '\0';
+
+                                replydb = RDBStringReplyCreate(reply->str + prefixlen, end - reply->str - prefixlen);
+
+                                RDBResultMapInsert(resultMap, replydb);
+                            }
+                        }
+                    }
+
+                    RedisFreeReplyObject(&replyRows);
+                }
+            } else {
+                nodeindex++;
+            }
+        }
+
+        RDBMemFree(nodestates);
+        RDBMemFree(pattern.str);
+
+        *outResultMap = resultMap;
+        return RDBResultMapSize(resultMap);
+    } else if (parser->stmt == RDBSQL_SHOW_TABLES) {
+        // {redisdb::database:$tablename}
+        RDBResultMap resultMap;        
+        redisReply *replyRows;
+        
+        RDBBlob_t pattern = {0};
+
+        // result cursor state
+        RDBTableCursor_t *nodestates = RDBMemAlloc(sizeof(RDBTableCursor_t) * RDBEnvNumNodes(ctx->env));
+
+        int nodeindex = 0;
+        int dbnlen = cstr_length(parser->showtables.tablespace, RDB_KEY_NAME_MAXLEN);
+        int prefixlen = (int) strlen(RDB_SYSTEM_TABLE_PREFIX) + 3;
+
+        RDBResultMapNew(ctx, NULL, parser->stmt, NULL, NULL, 0, NULL, NULL, &resultMap);
+
+        pattern.maxsz = prefixlen + dbnlen + 8;
+        pattern.str = RDBMemAlloc(pattern.maxsz);
+        pattern.length = snprintf_chkd_V1(pattern.str, pattern.maxsz, "{%s::%.*s:*}", RDB_SYSTEM_TABLE_PREFIX, dbnlen, parser->showtables.tablespace);
+
+        while (nodeindex < RDBEnvNumNodes(ctx->env)) {
+            RDBEnvNode envnode = RDBEnvGetNode(ctx->env, nodeindex);
+
+            // scan only on master node
+            if (RDBEnvNodeGetMaster(envnode, NULL) == RDBAPI_TRUE) {
+                RDBCtxNode ctxnode = RDBCtxGetNode(ctx, nodeindex);
+
+                RDBTableCursor nodestate = &nodestates[nodeindex];
+                if (nodestate->finished) {
+                    // goto next node since this current node has finished
+                    nodeindex++;
+                    continue;
+                }
+
+                res = RDBTableScanOnNode(ctxnode, nodestate, &pattern, -1, &replyRows);
+
+                if (res == RDBAPI_SUCCESS) {
+                    // here we should add new rows
+                    size_t i = 0;
+
+                    for (; i != replyRows->elements; i++) {
+                        redisReply * reply = replyRows->element[i];
+
+                        char *end = strchr(reply->str + prefixlen + dbnlen + 1, ':');
+                        if (end) {
+                            redisReply * replytbl;
+
+                            *end = 0;
+                            *(reply->str + prefixlen - 1) = 0;
+                            *(reply->str + prefixlen + dbnlen) = '.';
+
+                            replytbl = RDBStringReplyCreate(reply->str + prefixlen, end - reply->str - prefixlen);
+
+                            RDBResultMapInsert(resultMap, replytbl);
+                        }
+                    }
+
+                    RedisFreeReplyObject(&replyRows);
+                }
+            } else {
+                nodeindex++;
+            }
+        }
+
+        RDBMemFree(nodestates);
+        RDBMemFree(pattern.str);
+
+        *outResultMap = resultMap;
+        return RDBResultMapSize(resultMap);
     }
 
     return (ub8) RDBAPI_ERROR;

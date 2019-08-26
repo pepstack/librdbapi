@@ -1534,12 +1534,12 @@ RDBAPI_RESULT RedisClusterCheck (RDBCtx ctx)
         return RDBAPI_ERROR;
     }
 
-    result = RDBCtxCheckInfo(ctx, NODEINFO_CLUSTER);
+    result = RDBCtxCheckInfo(ctx, NODEINFO_CLUSTER, 0);
     if (result != RDBAPI_SUCCESS) {
         return RDBAPI_ERROR;
     }
 
-    result = RDBCtxCheckInfo(ctx, NODEINFO_REPLICATION);
+    result = RDBCtxCheckInfo(ctx, NODEINFO_REPLICATION, 0);
     if (result != RDBAPI_SUCCESS) {
         return RDBAPI_ERROR;
     }
