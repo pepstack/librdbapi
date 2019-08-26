@@ -1298,7 +1298,7 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
                     continue;
                 }
 
-                res = RDBTableScanOnNode(ctxnode, nodestate, &pattern, -1, &replyRows);
+                res = RDBTableScanOnNode(ctxnode, nodestate, &pattern, 200, &replyRows);
 
                 if (res == RDBAPI_SUCCESS) {
                     // here we should add new rows
@@ -1367,7 +1367,7 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
                     continue;
                 }
 
-                res = RDBTableScanOnNode(ctxnode, nodestate, &pattern, -1, &replyRows);
+                res = RDBTableScanOnNode(ctxnode, nodestate, &pattern, 200, &replyRows);
 
                 if (res == RDBAPI_SUCCESS) {
                     // here we should add new rows
