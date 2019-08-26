@@ -210,7 +210,6 @@ typedef struct _RDBThreadCtx_t   * RDBThreadCtx;
 typedef struct _RDBSQLParser_t   * RDBSQLParser;
 
 
-
 typedef enum
 {
     // DO NOT CHANGE !
@@ -270,7 +269,7 @@ typedef enum
     RDBSQL_INVALID = 0
     ,RDBSQL_SELECT  = 1
     ,RDBSQL_DELETE  = 2
-    ,RDBSQL_UPDATE  = 3
+    ,RDBSQL_UPSERT  = 3
     ,RDBSQL_CREATE  = 4
     ,RDBSQL_DESC_TABLE = 5
     ,RDBSQL_DROP_TABLE = 6

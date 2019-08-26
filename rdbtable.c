@@ -676,7 +676,7 @@ RDBAPI_RESULT RDBResultMapInsert (RDBResultMap resultMap, redisReply *reply)
     // filter by fields
     if (resultMap->sqlstmt == RDBSQL_SELECT ||
         resultMap->sqlstmt == RDBSQL_DELETE ||
-        resultMap->sqlstmt == RDBSQL_UPDATE // TODO
+        resultMap->sqlstmt == RDBSQL_UPSERT // TODO
     ) {
         fieldmap = RDBTableFetchFields(resultMap->ctxh, fieldmap, (const char **) resultMap->fetchfields, resultMap->fieldnamelens, reply->str);
     }

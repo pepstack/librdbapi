@@ -135,6 +135,40 @@ static char * cstr_LRtrim_chr (char * str, char c)
 }
 
 
+static char * cstr_Lfind_chr (char * str, int len, char c)
+{
+    if (! str || len <= 0) {
+        return NULL;
+    } else {
+        char *p = str;
+        while ((int)(p - str) < len && *p) {
+            if (*p == c) {
+                return p;
+            }
+            p++;
+        }
+        return NULL;
+    }
+}
+
+
+static char * cstr_Rfind_chr (char * str, int len, char c)
+{
+    if (! str || len <= 0) {
+        return NULL;
+    } else {
+        char *p = &str[len-1];
+        while (len-- > 0) {
+            if (*p == c) {
+                return p;
+            }
+            p--;
+        }
+        return NULL;
+    }
+}
+
+
 static char * cstr_replace_chr (char * str, char ch, char rpl)
 {
     char *p = str;

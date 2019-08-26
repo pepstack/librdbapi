@@ -51,9 +51,9 @@ typedef struct _RDBSQLParser_t
 
             // fields filter
             int numfields;
-            char      *fields[RDBAPI_ARGV_MAXNUM];
+            char *fields[RDBAPI_ARGV_MAXNUM];
             RDBFilterExpr fieldexprs[RDBAPI_ARGV_MAXNUM];
-            char      *fieldvals[RDBAPI_ARGV_MAXNUM];
+            char *fieldvals[RDBAPI_ARGV_MAXNUM];
 
             // keys filter
             int numkeys;
@@ -68,6 +68,16 @@ typedef struct _RDBSQLParser_t
             ub8 offset;
             ub4 limit;
         } select;
+
+        struct UPSERT_INTO {
+            char tablespace[RDB_KEY_NAME_MAXLEN + 1];
+            char tablename[RDB_KEY_NAME_MAXLEN + 1];
+
+            int numfields;
+            char *fields[RDBAPI_ARGV_MAXNUM];
+            RDBFilterExpr fieldexprs[RDBAPI_ARGV_MAXNUM];
+            char *fieldvals[RDBAPI_ARGV_MAXNUM];
+        } upsert;
 
         struct CREATE_TABLE {
             char tablespace[RDB_KEY_NAME_MAXLEN + 1];
@@ -110,7 +120,7 @@ typedef struct _RDBSQLParser_t
 
 RDBAPI_BOOL onParseSelect (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len);
 RDBAPI_BOOL onParseDelete (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len);
-RDBAPI_BOOL onParseUpdate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len);
+RDBAPI_BOOL onParseUpsert (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len);
 RDBAPI_BOOL onParseCreate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len);
 RDBAPI_BOOL onParseDesc (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len);
 RDBAPI_BOOL onParseDrop (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len);
@@ -167,10 +177,10 @@ RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQL
         parseOk = onParseDelete(parser, ctx, parser->sql + strlen("DELETE FROM "), parser->sqlen - (int)strlen("DELETE FROM "));
         parser->stmt = parseOk? RDBSQL_DELETE : RDBSQL_INVALID;
 
-    } else if (cstr_startwith(parser->sql, parser->sqlen, "UPDATE ", (int)strlen("UPDATE "))) {
+    } else if (cstr_startwith(parser->sql, parser->sqlen, "UPSERT ", (int)strlen("UPSERT "))) {
 
-        parseOk = onParseUpdate(parser, ctx, parser->sql + strlen("UPDATE "), parser->sqlen - (int)strlen("UPDATE "));
-        parser->stmt = parseOk? RDBSQL_UPDATE : RDBSQL_INVALID;
+        parseOk = onParseUpsert(parser, ctx, parser->sql + strlen("UPSERT "), parser->sqlen - (int)strlen("UPSERT "));
+        parser->stmt = parseOk? RDBSQL_UPSERT : RDBSQL_INVALID;
 
     } else if (cstr_startwith(parser->sql, parser->sqlen, "CREATE TABLE ", (int)strlen("CREATE TABLE "))) {
 
@@ -231,6 +241,19 @@ void RDBSQLParserFree (RDBSQLParser parser)
                 RDBMemFree(psz);
 
                 psz = parser->select.fieldvals[i];
+                RDBMemFree(psz);
+
+                i++;
+            }
+        } else if (parser->stmt == RDBSQL_UPSERT) {
+            int i = 0;
+            while (i < RDBAPI_ARGV_MAXNUM) {
+                char *psz;
+
+                psz = parser->upsert.fields[i];
+                RDBMemFree(psz);
+
+                psz = parser->upsert.fieldvals[i];
                 RDBMemFree(psz);
 
                 i++;
@@ -357,6 +380,35 @@ static int parse_fields (char *fields, char *fieldnames[RDBAPI_ARGV_MAXNUM])
         }
 
         fieldnames[i++] = strdup(name);
+
+        p = strtok(0, ",");
+    }
+
+    return i;
+}
+
+
+static int parse_field_values (char *fields, char *fieldvalues[RDBAPI_ARGV_MAXNUM])
+{
+    char valbuf[RDB_SQL_TOTAL_LEN_MAX + 1];
+
+    char *p;
+    int i = 0;
+
+    if (fields[0] == '*') {
+        // all fields
+        return -1;
+    }
+
+    p = strtok(fields, ",");
+    while (p) {
+        char *value;
+
+        snprintf_chkd_V1(valbuf, sizeof(valbuf), "%s", p);
+
+        value = cstr_LRtrim_chr(cstr_LRtrim_chr(valbuf, 32), '\'');
+
+        fieldvalues[i++] = strdup(value);
 
         p = strtok(0, ",");
     }
@@ -685,9 +737,89 @@ RDBAPI_BOOL onParseDelete (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int l
 }
 
 
-RDBAPI_BOOL onParseUpdate (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int len)
+RDBAPI_BOOL onParseUpsert (RDBSQLParser_t * parser, RDBCtx ctx, char *sql, int sqlen)
 {
-    return RDBAPI_FALSE;
+    char table[RDB_KEY_NAME_MAXLEN * 2 + 10 + 1] = {0};
+    char fields[RDB_SQL_TOTAL_LEN_MAX + 2] = {0};
+    char wheres[RDB_SQL_WHERE_LEN_MAX + 2] = {0};
+    char *p, *q;
+
+    char *s = cstr_Ltrim_chr(sql, 32);
+    int len = cstr_length(s, sqlen);
+
+    if (! cstr_startwith(s, len, "INTO ", 5)) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "invalid sql clause for UPSERT: INTO not found");
+        return RDBAPI_FALSE; 
+    }
+
+    s += 5;
+    len -= 5;
+
+    s = cstr_Ltrim_chr(s, 32);
+    len = cstr_length(s, sqlen);
+
+    p = cstr_Lfind_chr(s, len, '(');
+    if (!p) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "invalid sql clause for UPSERT");
+        return RDBAPI_FALSE;
+    }
+
+    snprintf_chkd_V1(table, sizeof(table), "%.*s", (int)(p - s), s);
+
+    if (! parse_table(table, parser->upsert.tablespace, parser->upsert.tablename)) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "parse_table failed");
+        return RDBAPI_FALSE;
+    }
+
+    q = cstr_Lfind_chr(p, len, ')');
+    if (!q) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "invalid sql clause for UPSERT: fields not found");
+        return RDBAPI_FALSE;
+    }
+
+    *p++ = 0;
+    *q++ = 0;
+
+    parser->upsert.numfields = parse_fields(p, parser->upsert.fields);
+    if (! parser->upsert.numfields) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) parse_fields failed", __FILE__, __LINE__);
+        return RDBAPI_FALSE;
+    }
+
+    s = cstr_Ltrim_chr(q, 32);
+    len = cstr_length(s, sqlen);
+
+    if (! cstr_startwith(s, len, "VALUES", 6)) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) invalid sql clause: VALUES not found", __FILE__, __LINE__);
+        return RDBAPI_FALSE;
+    }
+
+    s += 6;
+    len -= 6;
+
+    p = cstr_Ltrim_chr(s, 32);
+    len = cstr_length(p, sqlen);
+
+    if (*p != '(') {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) invalid sql clause: '(' not found", __FILE__, __LINE__);
+        return RDBAPI_FALSE;
+    }
+
+    q = cstr_Lfind_chr(p, len, ')');
+    if (! q) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) invalid sql clause: ')' not found", __FILE__, __LINE__);
+        return RDBAPI_FALSE;
+    }
+
+    *p++ = 0;
+    *q++ = 0;
+
+    if (parse_field_values(p, parser->upsert.fieldvals) != parser->upsert.numfields) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) parse_field_values failed", __FILE__, __LINE__);
+        return RDBAPI_FALSE;
+    }
+
+    return RDBAPI_TRUE;
 }
 
 
