@@ -269,13 +269,13 @@ void redplusExecuteRdbsql (RDBEnv env, const char *rdbsql, const char *output)
 
     err = RDBCtxCreate(env, &ctx);
     if (err) {
-        printf("RDBCtxCreate error(%d).\n", err);
+        printf("# failed on RDBCtxCreate error(%d).\n", err);
         goto error_exit;
     }
 
     offset = RDBSQLExecuteSQL(ctx, &sqlblob, &resultMap);
     if (offset == RDBAPI_ERROR) {
-        printf("RDBSQLExecuteSQL failed: %s\n", RDBCtxErrMsg(ctx));
+        printf("# failed on %s\n", RDBCtxErrMsg(ctx));
         goto error_exit;
     }
 

@@ -58,6 +58,17 @@ extern "C"
 #include "common/uthash/utarray.h"
 
 
+#define RDBSQL_PATTERN_SELECT_FROM     "[\\s]*SELECT[\\s]+"
+#define RDBSQL_PATTERN_DELETE_FROM     "[\\s]*DELETE[\\s]+FROM[\\s]+"
+#define RDBSQL_PATTERN_UPSERT_INTO     "[\\s]*UPSERT[\\s]+INTO[\\s]+"
+#define RDBSQL_PATTERN_CREATE_TABLE    "[\\s]*CREATE[\\s]+TABLE[\\s]+"
+#define RDBSQL_PATTERN_DESC_TABLE      "[\\s]*DESC[\\s]+"
+#define RDBSQL_PATTERN_INFO_SECTION    "[\\s]*INFO[\\W]*"
+#define RDBSQL_PATTERN_SHOW_DATABASES  "[\\s]*SHOW[\\s]+DATABASES[\\s]*$"
+#define RDBSQL_PATTERN_SHOW_TABLES     "[\\s]*SHOW[\\s]+TABLES[\\s]+"
+#define RDBSQL_PATTERN_DROP_TABLE      "[\\s]*DROP[\\s]+TABLE[\\s]+"
+
+
 typedef struct _RDBEnvNode_t * RDBEnvNodeMap;
 
 

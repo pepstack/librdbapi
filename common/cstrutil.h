@@ -169,6 +169,39 @@ static char * cstr_Rfind_chr (char * str, int len, char c)
 }
 
 
+/**
+ * int isspace(char c);
+ *   Standard white-space characters are:
+ *    ' '   (0x20)	space (SPC) arcii=32
+ *    '\t'	(0x09)	horizontal tab (TAB)
+ *    '\n'	(0x0a)	newline (LF)
+ *    '\v'	(0x0b)	vertical tab (VT)
+ *    '\f'	(0x0c)	feed (FF)
+ *    '\r'	(0x0d)	carriage return (CR)
+ */
+static char * cstr_Ltrim_whitespace (char *str)
+{
+    char *p = str;
+    while (p && isspace(*p)) {
+        p++;
+    }
+    return p;
+}
+
+
+static int cstr_Rtrim_whitespace (char *str, int len)
+{
+    while (len-- > 0) {
+        if (isspace(str[len])) {
+            str[len] = 0;
+        } else {
+            break;
+        }
+    }
+    return len + 1;
+}
+
+
 static char * cstr_replace_chr (char * str, char ch, char rpl)
 {
     char *p = str;
