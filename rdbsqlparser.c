@@ -85,7 +85,7 @@ typedef struct _RDBSQLParser_t
             char tablename[RDB_KEY_NAME_MAXLEN + 1];
 
             int numfields;
-            RDBFieldDes_t fielddefs[RDBAPI_ARGV_MAXNUM];
+            RDBFieldDes_t fielddefs[RDBAPI_ARGV_MAXNUM + 1];
 
             char tablecomment[RDB_KEY_VALUE_SIZE];
 
@@ -809,7 +809,7 @@ void onSqlParserDelete (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
 // UPSERT INTO xsdb.test(name,id) VALUES('foo', 123);
 // UPSERT INTO xsdb.test(id, counter) VALUES(123, 0) ON DUPLICATE KEY UPDATE counter = counter + 1;
 // UPSERT INTO xsdb.test(id, my_col) VALUES(123, 0) ON DUPLICATE KEY IGNORE;
-// TODO:
+//
 void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs, const char *sqlclause)
 {
 }
@@ -825,26 +825,221 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
 //    ROWKEY (sid , connfd)
 // ) COMMENT 'log file entry';
 //
-// CREATE TABLE IF NOT EXISTS mine.test (sid UB4 NOT NULL COMMENT 'server id', connfd UB4 NOT NULL COMMENT 'socket fd', ROWKEY(sid , connfd)) COMMENT 'file entry';
+// CREATE TABLE IF NOT EXISTS mine.test ( sid UB4 NOT NULL, connfd UB4 NOT NULL COMMENT 'socket fd', host STR( 30 ), port UB4, port2 UB4 NOT NULL, maddr STR COMMENT 'hardware address', price FLT64 (14,4)  COMMENT 'property (ver1.2, build=3) ok, price', ROWKEY(sid , connfd) ) COMMENT 'file entry';
 //
+static char * parse_table_field_sql (char *sqladdr, int sqloffs,
+    char *sql, int sqlen, const char **vtnames,
+    RDBFieldDes_t *fieldes, char **rowkeys,
+    char *tblcomment, size_t tblcommsz,
+    char *buf, size_t bufsz)
+{
+    // 39= '
+    // 40= (
+    // 41= )
+    // 44= ,
+    int j, np, len, errat;
+    char *endp, *nextp;
+    char *sqlc = sql;
+
+    bzero(fieldes, sizeof(*fieldes));
+    fieldes->nullable = 1;
+
+    // name TYPE
+    np = re_match("[\\s]*[\\w]+[\\s]+[A-Z]+[\\d]*", sqlc);
+    if (np == -1) {
+        np = re_match("[\\s]*ROWKEY[\\s]*(", sqlc);
+        if (np != -1) {
+            sqlc = cstr_Ltrim_whitespace(cstr_Ltrim_whitespace(sqlc) + 6);
+            endp = strchr(sqlc, 41);
+            if (!endp) {
+                errat = (int)(sqlc - sqladdr) + sqloffs;
+                snprintf_chkd_V1(buf, bufsz, "SQLError: ROWKEY not enclosed - error char at(%d): '%s'", errat, sqladdr + errat);
+                return NULL;
+            }
+
+            *endp++ = 0;
+            sqlc++;
+
+            len = cstr_length(sqlc, endp - sqlc);
+
+            len = cstr_slpit_chr(sqlc, len, 44, rowkeys, RDBAPI_SQL_KEYS_MAX + 1);
+            if (len > RDBAPI_SQL_KEYS_MAX) {
+                errat = (int)(sqlc - sqladdr) + sqloffs;
+                snprintf_chkd_V1(buf, bufsz, "SQLError: too many keys in ROWKEY - error char at(%d): '%s'", errat, sqladdr + errat);
+                return NULL;
+            }
+
+            sqlc = endp;
+            endp = strchr(sqlc, 41);
+            if (! endp) {
+                errat = (int)(sqlc - sqladdr) + sqloffs;
+                snprintf_chkd_V1(buf, bufsz, "SQLError: CREATE not enclosed - error char at(%d): '%s'", errat, sqladdr + errat);
+                return NULL;
+            }
+
+            *endp++ = 0;
+            sqlc = endp;
+
+            // table comment
+            np = re_match("[\\s]*COMMENT[\\s]+'", sqlc);
+            if (np != -1) {
+                endp = strstr(sqlc, "COMMENT");
+                endp[7] = 0;
+                sqlc = endp + 8;
+
+                endp = strrchr(sqlc, 39);
+                sqlc = strchr(sqlc, 39);
+                if (! endp || ! sqlc || sqlc == endp) {
+                    errat = (int)(sqlc - sqladdr) + sqloffs;
+                    snprintf_chkd_V1(buf, bufsz, "SQLError: invalid COMMENT - error char at(%d): '%s'", errat, sqladdr + errat);
+                    return NULL;
+                }
+
+                *endp = 0;
+                *sqlc++ = 0;
+
+                snprintf_chkd_V1(tblcomment, tblcommsz, "%.*s", (int)(endp - sqlc), sqlc);
+            }
+
+            // finish ok
+            *buf = 0;
+            return NULL;
+        }
+
+        errat = (int)(sqlc - sqladdr) + sqloffs;
+        snprintf_chkd_V1(buf, bufsz, "SQLError: field name not found - error char at(%d): '%s'", errat, sqladdr + errat);
+        return NULL;
+    }
+
+    sqlc = cstr_Ltrim_whitespace(sqlc);
+
+    np = re_match("[\\s]+[A-Z]+[\\d]*", sqlc);
+    sqlc[np] = 0;
+
+    fieldes->namelen = snprintf_chkd_V1(fieldes->fieldname, sizeof(fieldes->fieldname), "%.*s", np, sqlc);
+
+    sqlc = &sqlc[np + 1];
+    sqlc = cstr_Ltrim_whitespace(sqlc);
+
+    // TYPE
+    np = re_match("[\\W]+", sqlc);
+    if (np == -1) {
+        errat = (int)(sqlc - sqladdr) + sqloffs;
+        snprintf_chkd_V1(buf, bufsz, "SQLError: field type not found - error char at(%d): '%s'", errat, sqladdr + errat);
+        return NULL;
+    }
+
+    snprintf_chkd_V1(buf, bufsz, "%.*s", np, sqlc);
+
+    for (j = 0; j < 256; j++) {
+        if (vtnames[j] && ! strcmp(buf, vtnames[j])) {
+            break;
+        }
+    }
+    if (j == 256) {
+        errat = (int)(sqlc - sqladdr) + sqloffs;
+        snprintf_chkd_V1(buf, bufsz, "SQLError: bad field type - error char at(%d): '%s'", errat, sqladdr + errat);
+        return NULL;                    
+    }
+    fieldes->fieldtype = (RDBValueType) j;
+
+    // (length<,scale>)
+    sqlc = cstr_Ltrim_whitespace(sqlc + np);
+    if (*sqlc == 44) {
+        // next field
+        return sqlc + 1;
+    }
+
+    if (*sqlc == 40) {
+        nextp = strchr(sqlc, 41);
+        if (!nextp) {
+            errat = (int)(sqlc - sqladdr) + sqloffs;
+            snprintf_chkd_V1(buf, bufsz, "SQLError: not enclosed - error char at(%d): '%s'", errat, sqladdr + errat);
+            return NULL;    
+        }
+
+        *nextp++ = 0;
+
+        np = re_match("([\\s]*[\\d]+[\\s]*,[\\s]*[\\d]+[\\s]*", sqlc);
+        if (np == 0) {
+            // (length, scale)
+            sqlc = cstr_Ltrim_whitespace(sqlc + 1);
+            endp = strchr(sqlc, 44);
+            *endp++ = 0;
+
+            len = cstr_Rtrim_whitespace(sqlc, (int) strlen(sqlc));
+            snprintf_chkd_V1(buf, bufsz, "%.*s", len, sqlc);
+            fieldes->length = atoi(buf);
+
+            len = cstr_Rtrim_whitespace(endp, (int) strlen(endp));
+            snprintf_chkd_V1(buf, bufsz, "%.*s", len, endp);
+            fieldes->dscale = atoi(buf);
+        } else {
+            np = re_match("([\\s]*[\\d]+[\\s]*", sqlc);
+            if (np != 0) {
+                errat = (int)(sqlc - sqladdr) + sqloffs;
+                snprintf_chkd_V1(buf, bufsz, "SQLError: invalid type length - error char at(%d): '%s'", errat, sqladdr + errat);
+                return NULL;
+            }
+
+            len = cstr_Rtrim_whitespace(sqlc, (int) strlen(sqlc));
+            snprintf_chkd_V1(buf, bufsz, "%.*s", len, sqlc);
+            fieldes->length = atoi(buf);
+        }
+
+        sqlc = cstr_Ltrim_whitespace(nextp);
+    }
+
+    np = re_match("NOT[\\s]+NULL[\\W]+", sqlc);
+    if (np == 0) {
+        fieldes->nullable = 0;
+        sqlc = strstr(sqlc, "NULL") + 4;
+        sqlc = cstr_Ltrim_whitespace(sqlc);
+    }
+
+    np = re_match("COMMENT[\\s]+'", sqlc);
+    if (np == 0) {
+        sqlc = &sqlc[np + 8];
+        sqlc = cstr_Ltrim_whitespace(sqlc) + 1;
+
+        endp = strchr(sqlc, 39);
+        if (! endp) {
+            errat = (int)(sqlc - sqladdr) + sqloffs;
+            snprintf_chkd_V1(buf, bufsz, "SQLError: invalid COMMENT - error char at(%d): '%s'", errat, sqladdr + errat);
+            return NULL;
+        }
+
+        *endp++ = 0;
+
+        snprintf_chkd_V1(fieldes->comment, sizeof(fieldes->comment), "%.*s", (int)(endp - sqlc - 1), sqlc);
+
+        sqlc = endp;  
+    }
+
+    sqlc = cstr_Ltrim_whitespace(sqlc);
+    if (*sqlc == 44) {
+        // next field
+        return sqlc+1;
+    }
+
+    // finish field
+    errat = (int)(sqlc - sqladdr) + sqloffs;
+    snprintf_chkd_V1(buf, bufsz, "SQLError: ROWKEY not found - error char at(%d): '%s'", errat, sqladdr + errat);
+    return NULL;
+}
+
+
 void onSqlParserCreate (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs, const char *sqlclause)
 {
+    int i;
+
     char *sqlc;
     int len;
 
-    char *leftp = NULL;
-    char *rightp = NULL;
+    char *sqlnext;
+    int nextlen;
 
-    const char **vtnames = (const char **) ctx->env->valtypenames;
-
-    int nrkcols = 0;
-    char *rowkeys[RDBAPI_SQL_KEYS_MAX] = {0};
-
-    int nflds = 0;
-    char *fldnames[RDBAPI_ARGV_MAXNUM] = {0};
-
-    int numfields = 0;
-    RDBFieldDes_t fielddefs[RDBAPI_ARGV_MAXNUM] = {0};
+    char *rowkeys[RDBAPI_SQL_KEYS_MAX + 1] = {0};
 
     sqlc = cstr_Ltrim_whitespace(parser->sql + start + 7);
     sqlc = cstr_Ltrim_whitespace(sqlc + 6);
@@ -858,336 +1053,77 @@ void onSqlParserCreate (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
 
     len = cstr_length(sqlc, parser->sqlen);
 
-    leftp = cstr_Lfind_chr(sqlc, len, '(');
-
-    if (sqlc[len - 1] == '\'') {
-        char *ra = cstr_Rfind_chr(sqlc, len - 1, '\'');
-        if (! ra) {
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: bad CREATE clause: '%s'", sqlclause);
-            return;
-        }
-
-        rightp = cstr_Rfind_chr(sqlc, (int)(ra - sqlc), ')');
-    } else {
-        rightp = cstr_Rfind_chr(sqlc, len, ')');
-    }
-
-    if (! leftp || ! rightp || rightp - leftp < 24) {
+    sqlnext = cstr_Lfind_chr(sqlc, len, '(');
+    if (! sqlnext) {
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: bad CREATE clause: '%s'", sqlclause);
         return;
     }
-
-    *leftp++ = 0;
-    *rightp++ = 0;
 
     if (! parser->create.fail_on_exists) {
         sqlc = strstr(sqlc, "EXISTS");
         sqlc = cstr_Ltrim_whitespace(sqlc + 6);
     }
 
-    len = cstr_Rtrim_whitespace(sqlc, cstr_length(sqlc, (int)(leftp - sqlc)));
+    len = cstr_Rtrim_whitespace(sqlc, cstr_length(sqlc, (int)(sqlnext - sqlc)));
     if (! parse_table(sqlc, parser->create.tablespace, parser->create.tablename)) {
         int errat = (int)(sqlc - parser->sql) + sqloffs;
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: parse table failed - error char at(%d): '%s'", errat, sqlclause + errat);
         return;
     }
 
-    // parse ROWKEY to rowkeys
+    // parse all fields
+    sqlnext++;
+    nextlen = cstr_length(sqlnext, parser->sqlen);
     do {
-        char *rkcols;
-        char *rkcols2;
+        sqlnext = parse_table_field_sql(parser->sql, sqloffs,
+            sqlnext, nextlen, (const char **) ctx->env->valtypenames,
+            &parser->create.fielddefs[parser->create.numfields++], rowkeys,
+            parser->create.tablecomment, sizeof(parser->create.tablecomment),
+            ctx->errmsg, sizeof(ctx->errmsg));
 
-        len = re_match("[\\s]*ROWKEY[\\s]*(*", leftp);
-        if (len == -1) {
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: ROWKEY not found: '%s'", sqlclause);
+        if (! sqlnext && *ctx->errmsg) {
+            // failed on error
+            for (i = 0; i < RDBAPI_SQL_KEYS_MAX && rowkeys[i]; i++) {
+                free(rowkeys[i++]);
+            }
             return;
         }
-
-        leftp[len] = 0;
-
-        rkcols = &leftp[len + 1];
-        if (! isspace(rkcols[6]) && rkcols[6] != '(') {
-            int errat = (int)(rkcols - parser->sql) + sqloffs;
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: ROWKEY not found - error char at(%d): '%s'", errat, sqlclause + errat);
-            return;
-        }
-
-        rkcols = cstr_Ltrim_whitespace(cstr_Ltrim_whitespace(rkcols) + 6);
-        rkcols2 = strchr(rkcols, ')');
-        if (! rkcols2) {
-            int errat = (int)(rkcols - parser->sql) + sqloffs;
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: ROWKEY not enclosed - error char at(%d): '%s'", errat, sqlclause + errat);
-            return;
-        }
-        *rkcols2 = 0;
-        *rkcols++ = 0;
-
-        len = (int)(rkcols2 - rkcols);
-
-        nrkcols = cstr_slpit_chr(rkcols, len, ',', 0, 0);
-        if (! nrkcols) {
-            int errat = (int)(rkcols - parser->sql) + sqloffs;
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: empty ROWKEY fields - error char at(%d): '%s'", errat, sqlclause + errat);
-            return;
-        }
-        if (nrkcols > RDBAPI_SQL_KEYS_MAX) {
-            int errat = (int)(rkcols - parser->sql) + sqloffs;
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: too many ROWKEY keys - error char at(%d): '%s'", errat, sqlclause + errat);
-            return;
-        }
-
-        nrkcols = cstr_slpit_chr(rkcols, len, ',', rowkeys, nrkcols);
-    } while(0);
-
-    // parse fileds
-    do {
-        int n;
-
-        leftp = cstr_Ltrim_whitespace(leftp);
-        len = cstr_length(leftp, (int)(rightp - leftp));
-
-        len = cstr_Rtrim_whitespace(leftp, len);
-        leftp = cstr_Rtrim_chr(leftp, ',');
-
-        len = cstr_length(leftp, len);
-        len = cstr_Rtrim_whitespace(leftp, len);
-
-        nflds = cstr_slpit_chr(leftp, len, ',', 0, 0);
-        if (! nflds) {
-            int errat = (int)(leftp - parser->sql) + sqloffs;
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: fields not found - error char at(%d): '%s'", errat, sqlclause + errat);
-            return;
-        }
-        if (nflds > RDBAPI_ARGV_MAXNUM) {
-            int errat = (int)(leftp - parser->sql) + sqloffs;
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: too many fields - error char at(%d): '%s'", errat, sqlclause + errat);
-            return;
-        }
-
-        nflds = cstr_slpit_chr(leftp, len, ',', fldnames, nflds);
-
-        for (n = 0; n < nflds; n++) {
-            int j, fldlen;
-            char *fldname = fldnames[n];
-            char *fldtype = NULL;
-            char *notnull = NULL;
-            char *fldcomm = NULL;
-
-            int nfldcomm = re_match("[\\s]+COMMENT[\\s]+", fldname);
-            if (nfldcomm != -1) {
-                fldcomm = strstr(fldname + nfldcomm, "COMMENT") + 7;
-                fldname[nfldcomm] = 0;
-                *fldcomm++ = 0;
-            }
-
-            if (fldcomm) {
-                char *c1 = strchr(fldcomm, '\'');
-                char *c2 = strrchr(fldcomm, '\'');
-
-                if (!c1 || !c2 || c1 == c2) {
-                    snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: unexpect COMMENT '%s'", fldcomm);
-                    return;
-                }
-
-                snprintf_chkd_V1(fielddefs[numfields].comment, sizeof(fielddefs[numfields].comment), "%.*s", (int)(c2 - c1 - 1), c1 + 1);
-            }
-
-            fldname = cstr_Ltrim_whitespace(fldname);
-
-            fldtype = strchr(fldname, 32);
-            if (! fldtype) {
-                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: field type not found: '%s'", fldname);
-                return;
-            }
-
-            *fldtype++ = 0;
-            fldtype = cstr_Ltrim_whitespace(fldtype);
-            notnull = strchr(fldtype, 32);
-            if (notnull) {
-                *notnull++ = 0;
-            }
-
-            fldlen = cstr_length(fldtype, 256);
-            fldlen = cstr_Rtrim_whitespace(fldtype, fldlen);
-
-            for (j = 0; j < 256; j++) {
-                if (vtnames[j] && ! strcmp(fldtype, vtnames[j])) {
-                    break;
-                }
-            }
-            if (j == 256) {
-                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: unknown field type: '%s'", fldname);
-                return;                    
-            }
-            fielddefs[numfields].fieldtype = (RDBValueType) j;
-
-
-        }
-
-
-    } while(0);
-
-
-/*
-  
-    do {
-        RDBFieldDes_t fielddefs[RDBAPI_ARGV_MAXNUM] = {0};
-        int numfields = 0;
-
-        int n, nflds;
-        char *flds[RDBAPI_ARGV_MAXNUM];
-
-        char *rowkeys[RDBAPI_SQL_KEYS_MAX] = {0};
-        int k, rk = 0;
-
-        n = cstr_slpit_chr(leftp + 1, (int)(rightp - leftp - 1), ',', 0, 0);
-        if (! n) {
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "field not found");
-            return RDBAPI_FALSE;
-        }
-        if (n > RDBAPI_ARGV_MAXNUM) {
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "too many fields");
-            return RDBAPI_FALSE;
-        }
-
-        nflds = cstr_slpit_chr(leftp + 1, (int)(rightp - leftp - 1), ',', flds, n);
-
-        for (n = 0; n < nflds; n++) {
-            char *pfn = flds[n];
-            char *fld = cstr_LRtrim_chr(pfn, 32);
-
-            flds[n] = strdup(fld);
-            fld = flds[n];
-
-            free(pfn);
-
-            if (cstr_startwith(fld, (int) strlen(fld), "ROWKEY", 6)) {
-                char *lp = strchr(fld, '(');
-                char *rp = strrchr(fld, ')');
-
-                if (lp && rp && rp > lp) {
-                    k = cstr_slpit_chr(lp + 1, (int)(rp - lp - 1), '|', 0, 0);
-
-                    if (! k) {
-                        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "ROWKEY not found");
-                        return RDBAPI_FALSE;
-                    }
-
-                    if (k > RDBAPI_SQL_KEYS_MAX) {
-                        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "ROWKEY too many");
-                        return RDBAPI_FALSE;
-                    }
-
-                    rk = cstr_slpit_chr(lp + 1, (int)(rp - lp - 1), '|', rowkeys, k);
-                }
-
-                break;
-            }
-        }
-
-        for (n = 0; n < nflds; n++) {
-            char *fld = flds[n];
-
-            if (! cstr_startwith(fld, (int) strlen(fld), "ROWKEY", 6)) {
-                char *comment = NULL;
-
-                char *p = strchr(fld, 32);
-                if (! p) {
-                    // ERROR
-                }
-
-                comment = strstr(fld, " COMMENT ");
-                if (comment) {
-                    *comment++ = 0;
-                }
-
-                *p++ = 0;
-
-                fld = cstr_LRtrim_chr(fld, 32);
-                snprintf_chkd_V1(fielddefs[numfields].fieldname, sizeof(fielddefs[numfields].fieldname), "%s", fld);
-
-                fld = cstr_Ltrim_chr(p, 32);
-                int j = cstr_startwith_mul(fld, (int) strlen(fld), vtnames, NULL, 256);
-                if (j == -1) {
-                    // TODO: ERROR: unknown type
-                    
-                }
-
-                fielddefs[numfields].fieldtype = (RDBValueType) j;
-
-                if (fielddefs[numfields].fieldtype == RDBVT_STR || fielddefs[numfields].fieldtype == RDBVT_BLOB) {
-                    // STR(length)
-                    char *a = strchr(fld, '(');
-                    char *b = strchr(fld, ')');
-                    char valbuf[22];
-
-                    if (!a || !b || b-a < 2) {
-                        // error
-                    }
-
-                    if (b - a > 20) {
-                        // error
-                    }
-
-                    snprintf_chkd_V1(valbuf, sizeof(valbuf), "%.*s", (int)(b - a - 1), a + 1);
-
-                    fielddefs[numfields].length = atoi(cstr_LRtrim_chr(valbuf, 32));
-                    if (fielddefs[numfields].length <= 0) {
-                        // error
-
-                    }
-                } else if (fielddefs[numfields].fieldtype == RDBVT_DEC) {
-                    // DEC(length|dscale)
-                    // error: not support now
-                }
-
-                fielddefs[numfields].rowkey = 1 + cstr_findstr_in(fielddefs[numfields].fieldname, (int)strlen(fielddefs[numfields].fieldname), (const char **)rowkeys, rk);
-
-                if (strstr(fld, " NOT NULL")) {
-                    fielddefs[numfields].nullable = 0;
-                } else {
-                    fielddefs[numfields].nullable = 1;
-                }
-
-                if (comment) {
-                    char *c1 = strchr(comment, '\'');
-                    char *c2 = strrchr(comment, '\'');
-
-                    if (!c1 || !c2 || c2 - c1 < 1) {
-                        // error
-                    }
-
-                    snprintf_chkd_V1(fielddefs[numfields].comment, sizeof(fielddefs[numfields].comment), "%.*s", (int)(c2 - c1 - 1), c1 + 1);
-                }
-
-                numfields++;
-            }
-
-            free(flds[n]);
-        }
-
-        for (k = 0; k < rk; k++) {
-            free(rowkeys[k]);
-        }
-
-        memcpy(parser->create.fielddefs, fielddefs, numfields * sizeof(fielddefs[0]));
-
-        parser->create.numfields = numfields;
-    } while (0);
-
-    if (strstr(rightp, "COMMENT ")) {
-        char *t1 = strchr(strstr(rightp, "COMMENT "), '\'');
-        char *t2 = strrchr(strstr(rightp, "COMMENT "), '\'');
-
-        if (!t1 || !t2 || t2 - t1 < 2) {
-            // error
-        }
-
-        snprintf_chkd_V1(parser->create.tablecomment, sizeof(parser->create.tablecomment), "%.*s", (int)(t2 - t1 - 1), t1 + 1);
+    } while(sqlnext && parser->create.numfields <= RDBAPI_ARGV_MAXNUM);
+
+    if (! *rowkeys) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: no keys for ROWKEY");
+        return;
     }
 
-    return RDBAPI_TRUE;
-*/
+    parser->create.numfields--;
+
+    if (parser->create.numfields < 1) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: fields not found");
+        for (i = 0; i < RDBAPI_SQL_KEYS_MAX && rowkeys[i]; i++) {
+            free(rowkeys[i++]);
+        }
+        return;
+    }
+    if (parser->create.numfields > RDBAPI_ARGV_MAXNUM) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: too many fields");
+        for (i = 0; i < RDBAPI_SQL_KEYS_MAX && rowkeys[i]; i++) {
+            free(rowkeys[i++]);
+        }
+        return;
+    }
+
+
+    for (i = 0; i < parser->create.numfields; i++) {
+        parser->create.fielddefs[i].rowkey = 1 +
+            cstr_findstr_in(parser->create.fielddefs[i].fieldname, parser->create.fielddefs[i].namelen, (const char **) rowkeys, -1);
+    }
+
+    for (i = 0; i < RDBAPI_SQL_KEYS_MAX && rowkeys[i]; i++) {
+        free(rowkeys[i++]);
+    }
+
+    // success
+    parser->stmt = RDBSQL_CREATE;
 }
 
 

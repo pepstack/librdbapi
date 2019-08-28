@@ -28,7 +28,7 @@
 *
 *   C String Utility
 *
-* 2019-08-22
+* 2019-08-28
 */
 #ifndef _CSTRUTIL_H
 #define _CSTRUTIL_H
@@ -354,31 +354,24 @@ static int cstr_to_dbl (const char *str, int slen, double *outval)
 }
 
 
-/*
-    =
-    >
-    >=
-    <
-    <=
-    !=
-    LIKE
-    MATCH
-*/
-
-static int cstr_split_substr (char *str, const char *sub, int sublen, char **offs, int maxoffs)
+/**
+ * cstr_split_substr
+ *   split string by separator string (sep) into sub strings
+ */
+static int cstr_split_substr (char *str, const char *sep, int seplen, char **subs, int maxsubs)
 {
     int i = 0;
 
     char *s = str;
 
-    while (s && i < maxoffs) {
-        char *p = strstr(s, sub);
+    while (s && i < maxsubs) {
+        char *p = strstr(s, sep);
         if (p) {
             *p = 0;
-            p += sublen;
+            p += seplen;
         }
 
-        offs[i++] = s;
+        subs[i++] = s;
 
         s = p;
     }
@@ -633,12 +626,26 @@ static int cstr_endwith_mul (const char *str, int count, const char *ends[], con
 
 static int cstr_findstr_in (const char *str, int count, const char *dests[], int destsnum)
 {
-    while (destsnum-- > 0) {
-        if (! cstr_notequal_len(str, count, dests[destsnum], (int)strlen(dests[destsnum]))) {
-            return destsnum;
+    const char *dest;
+
+    int len, i = 0;
+
+    while ((dest = dests[i]) != NULL) {
+        if (i == destsnum) {
+            break;
         }
+
+        len = cstr_length(dest, count + 1);
+        if (len == count) {
+            if (! strncmp(str, dest, count)) {
+                return i;
+            }
+        }
+
+        dest = dests[i++];
     }
 
+    // not found
     return (-1);
 }
 
