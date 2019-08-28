@@ -1127,7 +1127,7 @@ void onSqlParserDelete (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
 // UPSERT INTO xsdb.test(id, counter) VALUES(123, 0) ON DUPLICATE KEY UPDATE id=1,counter = counter + 1;
 // UPSERT INTO xsdb.test(id, my_col) VALUES(123, 0) ON DUPLICATE KEY IGNORE;
 //
-// UPSERT INTO mine.test(sid, connfd, host) VALUES(1,1,'shanghai') ON DUPLICATE KEY IGNORE;
+// UPSERT INTO mine.test(sid, connfd, host, addr) VALUES(1,1,'shang,hai','123456') ON DUPLICATE KEY UPDATE sid=666, addr='888';
 //
 void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs, const char *sqlclause)
 {
@@ -1506,9 +1506,10 @@ void onSqlParserDrop (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs, c
 }
 
 
-void RDBSQLParserPrint (RDBSQLParser sqlParser, FILE *fout)
+void RDBSQLParserPrint (RDBCtx ctx, RDBSQLParser sqlParser, FILE *fout)
 {
     int j;
+    int rowids[RDBAPI_KEYS_MAXNUM + 1] = {0};
 
     switch (sqlParser->stmt) {
     case RDBSQL_UPSERT:
@@ -1532,6 +1533,71 @@ void RDBSQLParserPrint (RDBSQLParser sqlParser, FILE *fout)
             }
         }
         fprintf(fout, ";\n");
+        break;
+
+    case RDBSQL_CREATE:
+        if (! sqlParser->create.fail_on_exists) {
+            fprintf(fout, "  CREATE TABLE IF NOT EXISTS %s.%s (\n", sqlParser->create.tablespace, sqlParser->create.tablename);
+        } else {
+            fprintf(fout, "  CREATE TABLE %s.%s (\n", sqlParser->create.tablespace, sqlParser->create.tablename);
+        }
+
+        for (j = 0; j < sqlParser->create.numfields; j++) {
+            const RDBFieldDes_t *fdes = &sqlParser->create.fielddefs[j];
+
+            if (fdes->rowkey) {
+                rowids[fdes->rowkey] = j;
+                rowids[0] += 1;
+            }
+
+            fprintf(fout, "    %-20.*s"
+                " %s",
+                fdes->namelen, fdes->fieldname,
+                ctx->env->valtypenames[fdes->fieldtype]);
+
+            if (fdes->length) {
+                fprintf(fout, "(%d", fdes->length);
+
+                if (fdes->dscale) {
+                    fprintf(fout, ",%d)", fdes->dscale);
+                } else {
+                    fprintf(fout, ")");
+                }
+            }
+
+            if (! fdes->nullable) {
+                fprintf(fout, " NOT NULL");
+            }
+
+            if (*fdes->comment) {
+                fprintf(fout, " COMMENT '%s'", fdes->comment);
+            }
+
+            fprintf(fout, ",\n");
+        }
+
+        fprintf(fout, "    ROWKEY (");
+        for (j = 1; j <= rowids[0]; j++) {
+            // colindex: 0-based
+            int colindex = rowids[j];
+
+            if (j == 1) {
+                fprintf(fout, "%.*s",
+                    sqlParser->create.fielddefs[colindex].namelen,
+                    sqlParser->create.fielddefs[colindex].fieldname);
+            } else {
+                fprintf(fout, ", %.*s",
+                    sqlParser->create.fielddefs[colindex].namelen,
+                    sqlParser->create.fielddefs[colindex].fieldname);
+            }            
+        }
+        fprintf(fout, ")");
+
+        if (*sqlParser->create.tablecomment) {
+            fprintf(fout, "\n  ) COMMENT '%s';\n", sqlParser->create.tablecomment);
+        } else {
+            fprintf(fout, "\n  );\n");
+        }
         break;
     }
 }
@@ -1908,7 +1974,7 @@ ub8 RDBSQLExecuteSQL (RDBCtx ctx, const RDBBlob_t *sqlblob, RDBResultMap *outRes
     }
 
 #ifdef _DEBUG
-    RDBSQLParserPrint(sqlparser, stdout);
+    RDBSQLParserPrint(ctx, sqlparser, stdout);
 #endif
 
     offset = RDBSQLExecute(ctx, sqlparser, &resultMap);

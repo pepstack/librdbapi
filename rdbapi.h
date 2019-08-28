@@ -669,7 +669,7 @@ extern RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen,
 
 extern void RDBSQLParserFree (RDBSQLParser sqlParser);
 
-extern void RDBSQLParserPrint (RDBSQLParser sqlParser, FILE *fout);
+extern void RDBSQLParserPrint (RDBCtx ctx, RDBSQLParser sqlParser, FILE *fout);
 
 extern RDBSQLStmt RDBSQLParserGetStmt (RDBSQLParser sqlParser, char **parsedClause, int pretty);
 
