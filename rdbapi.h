@@ -669,6 +669,8 @@ extern RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen,
 
 extern void RDBSQLParserFree (RDBSQLParser sqlParser);
 
+extern void RDBSQLParserPrint (RDBSQLParser sqlParser, FILE *fout);
+
 extern RDBSQLStmt RDBSQLParserGetStmt (RDBSQLParser sqlParser, char **parsedClause, int pretty);
 
 extern ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser sqlParser, RDBResultMap *outResultMap);

@@ -52,6 +52,21 @@ extern "C"
 #define cstr_bool_false  0
 
 
+static void cstr_varray_free (char ** varr, int maxnum)
+{
+    char *p;
+
+    int i = 0;
+    while ((p = varr[i++]) != NULL) {
+        free(p);
+
+        if (i == maxnum) {
+            break;
+        }
+    }
+}
+
+
 static char * cstr_toupper (char * s, int num)
 {
     char *p = s;

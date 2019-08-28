@@ -1,10 +1,15 @@
 /**
- *
+ * 2019-08-28
  * Mini regex-module inspired by Rob Pike's regex code described in:
  *
  * http://www.cs.princeton.edu/courses/archive/spr09/cos333/beautiful.html
  *
+ * ascii:
  *
+ *  39= '
+ *  40= (
+ *  41= )
+ *  44= ,
  *
  * Supports:
  * ---------
