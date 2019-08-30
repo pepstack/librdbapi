@@ -682,8 +682,7 @@ static char * parse_create_field (char *sqladdr, int sqloffs,
 
     fieldes->namelen = snprintf_chkd_V1(fieldes->fieldname, sizeof(fieldes->fieldname), "%.*s", np, sqlc);
 
-    sqlc = &sqlc[np + 1];
-    sqlc = cstr_Ltrim_whitespace(sqlc);
+    sqlc = cstr_Ltrim_whitespace(sqlc + np + 1);
 
     // TYPE
     np = re_match("[\\W]+", sqlc);
@@ -746,6 +745,7 @@ static char * parse_create_field (char *sqladdr, int sqloffs,
                 return NULL;
             }
 
+            sqlc = cstr_Ltrim_whitespace(sqlc + 1);
             len = cstr_Rtrim_whitespace(sqlc, (int) strlen(sqlc));
             snprintf_chkd_V1(buf, bufsz, "%.*s", len, sqlc);
             fieldes->length = atoi(buf);
@@ -1123,16 +1123,41 @@ void onSqlParserDelete (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
 }
 
 
+// -1: failed
+//  0: ok but bot a rowkey
+// >0: is a rowkey
+//
+static int check_upsert_field (const char *fieldname, const RDBTableDes_t *tabledes)
+{
+    int j;
+    int fieldnamelen = cstr_length(fieldname, -1);
+
+    for (j = 0; j < tabledes->nfields; j++) {
+        const RDBFieldDes_t *fldes = &tabledes->fielddes[j];
+
+        if (! cstr_compare_len(fldes->fieldname, fldes->namelen, fieldname, fieldnamelen)) {
+            // success
+            return fldes->rowkey;            
+        }
+    }
+
+    // error
+    return (-1);
+}
+
+
 // UPSERT INTO xsdb.test(name,id) VALUES('foo', 123);
 // UPSERT INTO xsdb.test(id, counter) VALUES(123, 0) ON DUPLICATE KEY UPDATE id=1,counter = counter + 1;
 // UPSERT INTO xsdb.test(id, my_col) VALUES(123, 0) ON DUPLICATE KEY IGNORE;
 //
-// UPSERT INTO mine.test(sid, connfd, host, addr) VALUES(1,1,'shang,hai','123456') ON DUPLICATE KEY UPDATE sid=666, addr='888';
+// UPSERT INTO xsdb.connect(sid, connfd, host) VALUES(1,1,'127.0.0.1') ON DUPLICATE KEY UPDATE sid=666, addr='888';
 //
 void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs, const char *sqlclause)
 {
     char *sqlc;
-    int np, len;
+    int i, np, len, errat;
+
+    RDBTableDes_t tabledes = {0};
 
     char *startp, *endp;
 
@@ -1146,14 +1171,21 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
     sqlc = cstr_Ltrim_whitespace(sqlc + 5);
     startp = strchr(sqlc, 40);
     if (! startp) {
+        errat = (int)(sqlc - parser->sql) + sqloffs;
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: table name not found - error char at(%d): '%s'", errat, sqlclause + errat);
         return;
     }
     *startp++ = 0;
 
     len = cstr_Rtrim_whitespace(sqlc, cstr_length(sqlc, parser->sqlen));
     if (! parse_table(sqlc, parser->select.tablespace, parser->select.tablename)) {
-        int errat = (int)(sqlc - parser->sql) + sqloffs;
+        errat = (int)(sqlc - parser->sql) + sqloffs;
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: bad table name - error char at(%d): '%s'", errat, sqlclause + errat);
+        return;
+    }
+
+    if (RDBTableDescribe(ctx, parser->upsert.tablespace, parser->upsert.tablename, &tabledes) != RDBAPI_SUCCESS) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: table cannot be described: '%s.%s'", parser->upsert.tablespace, parser->upsert.tablename);
         return;
     }
 
@@ -1161,6 +1193,8 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
     sqlc = cstr_Ltrim_whitespace(startp);
     endp = strchr(sqlc, 41);
     if (! endp) {
+        errat = (int)(sqlc - parser->sql) + sqloffs;
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: error char at(%d): '%s'", errat, sqlclause + errat);
         return;
     }
     *endp++ = 0;
@@ -1168,16 +1202,26 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
     len = cstr_Rtrim_whitespace(sqlc, cstr_length(sqlc, parser->sqlen));
     numfields = cstr_slpit_chr(sqlc, len, 44, parser->upsert.fieldnames, RDBAPI_ARGV_MAXNUM + 1);
     if (numfields == 0) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: fields not found");
         return;
     }
     if (numfields > RDBAPI_ARGV_MAXNUM) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: too many fields");
         return;
+    }
+    for (i = 0; i < numfields; i++) {
+        if (check_upsert_field(parser->upsert.fieldnames[i], &tabledes) < 0) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: undefined field: '%s'", parser->upsert.fieldnames[i]);
+            return;
+        }
     }
 
     // VALUES
     sqlc = cstr_Ltrim_whitespace(endp);
     np = re_match("VALUES[\\s]*(", sqlc);
     if (np != 0) {
+        errat = (int)(sqlc - parser->sql) + sqloffs;
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: VALUES not found - error char at(%d): '%s'", errat, sqlclause + errat);
         return;
     }
 
@@ -1191,6 +1235,8 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
     }
 
     if (!endp) {
+        errat = (int)(sqlc - parser->sql) + sqloffs;
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: error char at(%d): '%s'", errat, sqlclause + errat);
         return;
     }
     *endp++ = 0;
@@ -1208,6 +1254,7 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
     }
 
     if (numvalues != numfields) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: unmatched VALUES with fields");
         return;
     }
 
@@ -1218,6 +1265,8 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
         if (np == -1) {
             np = re_match("ON[\\s]+DUPLICATE[\\s]+KEY[\\s]+IGNORE[\\W]*", sqlc);
             if (np == -1) {
+                errat = (int)(sqlc - parser->sql) + sqloffs;
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: error char at(%d): '%s'", errat, sqlclause + errat);
                 return;
             }
         } else {
@@ -1248,9 +1297,22 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
             parser->upsert.numupdates++;
         }
     }
-
     if (! parser->upsert.numupdates) {
         return;
+    }
+
+    // check update fields
+    for (i = 0; i < parser->upsert.numupdates; i++) {
+        np = check_upsert_field(parser->upsert.updatenames[i], &tabledes);
+
+        if (np < 0) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: undefined update field: '%s'", parser->upsert.updatenames[i]);
+            return;
+        }
+        if (np > 0) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: update on rowkey field: '%s'", parser->upsert.updatenames[i]);
+            return;
+        }
     }
 
     // success
@@ -1655,6 +1717,9 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
             RDBResultMapFree(resultMap);
             return 0;
         }
+    } else if (parser->stmt == RDBSQL_UPSERT) {
+       
+
     } else if (parser->stmt == RDBSQL_CREATE) {
         RDBTableDes_t tabledes = {0};
         res = RDBTableDescribe(ctx, parser->create.tablespace, parser->create.tablename, &tabledes);
