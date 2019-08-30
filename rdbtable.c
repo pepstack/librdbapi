@@ -436,7 +436,7 @@ int RDBBuildRowkeyPattern (const char * tablespace, const char * tablename,
         if (k > 0 && k <= RDBAPI_KEYS_MAXNUM) {
             if (! rowkeyid[ k ]) {
                 rowkeyid[ k ] = j;
-                rowkeyid[0] = rowkeyid[0] + 1;
+                rowkeyid[0] += 1;
             }
         }
     }

@@ -40,6 +40,11 @@
 #include "common/re.h"
 
 
+#define UPSERT_MODE_INSERT     0
+#define UPSERT_MODE_IGNORE     1
+#define UPSERT_MODE_UPDATE     2
+
+
 typedef struct _RDBSQLParser_t
 {
     RDBSQLStmt stmt;
@@ -74,6 +79,13 @@ typedef struct _RDBSQLParser_t
             char tablespace[RDB_KEY_NAME_MAXLEN + 1];
             char tablename[RDB_KEY_NAME_MAXLEN + 1];
 
+            // check_upsert_fields
+            int rowkeys[RDBAPI_KEYS_MAXNUM + 1];
+            int rowkeyid[RDBAPI_KEYS_MAXNUM + 1];
+            char *rowkeypattern;
+
+            RDBBlob_t rkpattern;
+
             int numfields;
             char *fieldnames[RDBAPI_ARGV_MAXNUM + 1];
             char *fieldvalues[RDBAPI_ARGV_MAXNUM + 1];
@@ -85,6 +97,22 @@ typedef struct _RDBSQLParser_t
             char *updatevalues[RDBAPI_ARGV_MAXNUM + 1];
             char updateindex[RDBAPI_ARGV_MAXNUM + 1];
 
+            // RedisExecCommand
+            // <ON DUPLICATE KEY IGNORE| UPDATE>
+            int upsert_mode;
+            char hmset_cmd[6];
+
+            // INSERT new ...
+            int argcNew;
+            const char *argvNew[RDBAPI_ARGV_MAXNUM + 4];
+            size_t argvlenNew[RDBAPI_ARGV_MAXNUM + 4];
+
+            // UPDATE exist...
+            int argcUpd;
+            const char *argvUpd[RDBAPI_ARGV_MAXNUM + 4];
+            size_t argvlenUpd[RDBAPI_ARGV_MAXNUM + 4];
+
+            // DESC table
             RDBTableDes_t tabledes;
         } upsert;
 
@@ -268,6 +296,9 @@ void RDBSQLParserFree (RDBSQLParser parser)
             cstr_varray_free(parser->select.fields, RDBAPI_ARGV_MAXNUM);
             cstr_varray_free(parser->select.fieldvals, RDBAPI_ARGV_MAXNUM);
         } else if (parser->stmt == RDBSQL_UPSERT) {
+            RDBMemFree(parser->upsert.rowkeypattern);
+            RDBMemFree(parser->upsert.rkpattern.str);
+
             cstr_varray_free(parser->upsert.fieldnames, RDBAPI_ARGV_MAXNUM);
             cstr_varray_free(parser->upsert.fieldvalues, RDBAPI_ARGV_MAXNUM);
             cstr_varray_free(parser->upsert.updatenames, RDBAPI_ARGV_MAXNUM);
@@ -1131,34 +1162,136 @@ void onSqlParserDelete (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
 }
 
 
+// UPSERT INTO xsdb.logentry (uid, entrykey, sid, filemd5) VALUES (1, 'fc8397137a6bc16d38f383c524460b87', 1, 'haha') ON DUPLICATE KEY UPDATE status=999;
+// UPSERT INTO xsdb.logentry (uid, entrykey, sid, filemd5) VALUES (1, 'fc8397137a6bc16d38f383c524460b8a', 1, 'hahahaha') ON DUPLICATE KEY IGNORE;
+// UPSERT INTO xsdb.logentry (uid, entrykey, sid, filemd5) VALUES (1, 'fc8397137a6bc16d38f383c524460b8b', 1, 'haha');
+//
 static int check_upsert_fields (RDBSQLParser parser, RDBCtx ctx)
 {
-    int i, j, fieldnamelen, ok;
-    const char *fieldname;
-    const RDBFieldDes_t *fldes;
+    int i, j, fieldnamelen, offlen;
+    const char *fieldname, *fieldvalue;
+
+    int argc = 2;
+
+    int *rowkeys = &parser->upsert.rowkeys[0];
 
     for (i = 0; i < parser->upsert.numfields; i++) {
+        const RDBFieldDes_t *fldes = NULL;
+
         fieldname = parser->upsert.fieldnames[i];
         fieldnamelen = cstr_length(fieldname, -1);
 
-        ok = 0;
+        fieldvalue = parser->upsert.fieldvalues[i];
 
         for (j = 0; j < parser->upsert.tabledes.nfields; j++) {
             fldes = &parser->upsert.tabledes.fielddes[j];
 
             if (! cstr_compare_len(fldes->fieldname, fldes->namelen, fieldname, fieldnamelen)) {
                 // success
-                ok = 1;
                 parser->upsert.fieldindex[i] = j;
+
+                if (fldes->rowkey) {
+                    if (rowkeys[0] < RDBAPI_KEYS_MAXNUM) {
+                        if (rowkeys[fldes->rowkey]) {
+                            // error
+                            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: duplicated field: '%.*s'", fieldnamelen, fieldname);
+                            return 0;
+                        }
+                        rowkeys[fldes->rowkey] = i + 1;
+                        rowkeys[0] += 1;
+                    } else {
+                        // error
+                        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: too many field: '%.*s'", fieldnamelen, fieldname);
+                        return 0;
+                    }
+                }
+
+                // find ok here
+                fldes = NULL;
                 break;
             }
         }
 
-        if (! ok) {
+        if (fldes) {
             // error
             snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: undefined field: '%.*s'", fieldnamelen, fieldname);
             return 0;
         }
+
+        fldes = &parser->upsert.tabledes.fielddes[j];
+        if (! fldes->rowkey) {
+            // only non rowkey field can be updated!
+            parser->upsert.argvNew[argc] = fieldname;
+            parser->upsert.argvlenNew[argc] = fieldnamelen;
+
+            if (fieldvalue[0] == 39) {
+                parser->upsert.argvNew[argc + 1] = &fieldvalue[1];
+                parser->upsert.argvlenNew[argc + 1] = cstr_length(fieldvalue, -1) - 2;
+            } else {
+                parser->upsert.argvNew[argc + 1] = fieldvalue;
+                parser->upsert.argvlenNew[argc + 1] = cstr_length(fieldvalue, -1);
+            }
+
+            argc += 2;
+        }
+    }
+
+    parser->upsert.rkpattern.maxsz = RDBAPI_SQL_PATTERN_SIZE;
+    parser->upsert.rkpattern.length = 0;
+    parser->upsert.rkpattern.str = RDBMemAlloc(parser->upsert.rkpattern.maxsz);
+
+    parser->upsert.rkpattern.length = snprintf_chkd_V1(parser->upsert.rkpattern.str, parser->upsert.rkpattern.maxsz,
+                "{%s::%s", parser->upsert.tablespace,  parser->upsert.tablename);
+
+    for (i = 1; i <= parser->upsert.rowkeyid[0]; i++) {
+        const char *fldval = NULL;
+
+        j = rowkeys[i];
+        if (j) {
+            fldval = parser->upsert.fieldvalues[j-1];
+
+            offlen = cstr_length(fldval, RDBAPI_SQL_PATTERN_SIZE);
+            if (offlen == RDBAPI_SQL_PATTERN_SIZE) {
+                // error
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: too long value: '%.*s'", offlen, parser->upsert.fieldvalues[j-1]);
+                return 0;
+            }
+
+            if (fldval[0] == 39) {
+                fldval++;
+                offlen -= 2;
+            }
+        } else {
+            // key field not given
+            offlen = 1;
+        }
+
+        if (parser->upsert.rkpattern.length + offlen > parser->upsert.rkpattern.maxsz - 4) {
+            parser->upsert.rkpattern.str = RDBMemRealloc(parser->upsert.rkpattern.str, parser->upsert.rkpattern.maxsz, parser->upsert.rkpattern.maxsz + RDBAPI_SQL_PATTERN_SIZE);
+            if (! parser->upsert.rkpattern.str || parser->upsert.rkpattern.maxsz > RDBAPI_SQL_PATTERN_SIZE * 4) {
+                // error
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: no memory for too many values");
+                return 0;
+            }
+            parser->upsert.rkpattern.maxsz += RDBAPI_SQL_PATTERN_SIZE;
+        }
+
+        if (fldval) {
+            offlen = snprintf_chkd_V1(parser->upsert.rkpattern.str + parser->upsert.rkpattern.length, parser->upsert.rkpattern.maxsz - parser->upsert.rkpattern.length,
+                        ":%.*s", offlen, fldval);
+        } else {
+            offlen = snprintf_chkd_V1(parser->upsert.rkpattern.str + parser->upsert.rkpattern.length, parser->upsert.rkpattern.maxsz - parser->upsert.rkpattern.length,
+                        ":*");
+        }
+        parser->upsert.rkpattern.length += offlen;
+    }
+
+    parser->upsert.rkpattern.length += snprintf_chkd_V1(parser->upsert.rkpattern.str + parser->upsert.rkpattern.length, parser->upsert.rkpattern.maxsz - parser->upsert.rkpattern.length, "}");
+
+    if (parser->upsert.rowkeys[0] == parser->upsert.rowkeyid[0]) {
+        parser->upsert.argvNew[0] = parser->upsert.hmset_cmd;
+        parser->upsert.argvlenNew[0] = 5;
+        parser->upsert.argcNew = argc;
     }
 
     // success
@@ -1168,13 +1301,16 @@ static int check_upsert_fields (RDBSQLParser parser, RDBCtx ctx)
 
 static int check_upsert_updates (RDBSQLParser parser, RDBCtx ctx)
 {
-    int i, j, fieldnamelen, ok;
-    const char *fieldname;
+    int i, j, fieldnamelen, fieldvaluelen, ok;
+    const char *fieldname, *fieldvalue;
     const RDBFieldDes_t *fldes;
 
     for (i = 0; i < parser->upsert.numupdates; i++) {
         fieldname = parser->upsert.updatenames[i];
         fieldnamelen = cstr_length(fieldname, -1);
+
+        fieldvalue = parser->upsert.updatevalues[i];
+        fieldvaluelen = cstr_length(fieldvalue, -1);
 
         ok = -1;
 
@@ -1199,7 +1335,19 @@ static int check_upsert_updates (RDBSQLParser parser, RDBCtx ctx)
             snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: update rowkey field: '%.*s'", fieldnamelen, fieldname);
             return 0;
         }
+
+        parser->upsert.argvUpd[i*2 + 2] = fieldname;
+        parser->upsert.argvUpd[i*2 + 3] = fieldvalue;
+
+        parser->upsert.argvlenUpd[i*2 + 2] = fieldnamelen;
+        parser->upsert.argvlenUpd[i*2 + 3] = fieldvaluelen;
     }
+
+    // hmset rkey f1 v1 f2 v2 ...
+    parser->upsert.argvUpd[0] = parser->upsert.hmset_cmd;
+    parser->upsert.argvlenUpd[0] = 5;
+
+    parser->upsert.argcUpd = parser->upsert.numupdates * 2 + 2;
 
     // success
     return 1;
@@ -1211,6 +1359,7 @@ static int check_upsert_updates (RDBSQLParser parser, RDBCtx ctx)
 // UPSERT INTO xsdb.test(id, my_col) VALUES(123, 0) ON DUPLICATE KEY IGNORE;
 //
 // UPSERT INTO xsdb.connect(sid, connfd, host) VALUES(1,1,'127.0.0.1') ON DUPLICATE KEY UPDATE sid=666, addr='888';
+// UPSERT INTO xsdb.connect(sid, connfd, host) VALUES(1,1,'127.0.0.1') ON DUPLICATE KEY UPDATE sid='888';
 //
 void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs, const char *sqlclause)
 {
@@ -1236,7 +1385,7 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
     *startp++ = 0;
 
     len = cstr_Rtrim_whitespace(sqlc, cstr_length(sqlc, parser->sqlen));
-    if (! parse_table(sqlc, parser->select.tablespace, parser->select.tablename)) {
+    if (! parse_table(sqlc, parser->upsert.tablespace, parser->upsert.tablename)) {
         errat = (int)(sqlc - parser->sql) + sqloffs;
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: bad table name - error char at(%d): '%s'", errat, sqlclause + errat);
         return;
@@ -1246,6 +1395,10 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: table cannot be described: '%s.%s'", parser->upsert.tablespace, parser->upsert.tablename);
         return;
     }
+
+    RDBBuildRowkeyPattern(parser->upsert.tablespace, parser->upsert.tablename,
+        parser->upsert.tabledes.fielddes, parser->upsert.tabledes.nfields,
+        parser->upsert.rowkeyid, &parser->upsert.rowkeypattern);
 
     // fieldnames
     sqlc = cstr_Ltrim_whitespace(startp);
@@ -1265,9 +1418,6 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
     }
     if (numfields > RDBAPI_ARGV_MAXNUM) {
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: too many fields");
-        return;
-    }
-    if (! check_upsert_fields(parser, ctx)) {
         return;
     }
 
@@ -1316,6 +1466,8 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
         return;
     }
 
+    parser->upsert.upsert_mode = UPSERT_MODE_INSERT;
+
     sqlc = endp;
     if (np != -1) {
         np = re_match("ON[\\s]+DUPLICATE[\\s]+KEY[\\s]+UPDATE[\\s]+", sqlc);
@@ -1327,18 +1479,23 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
                 snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: error char at(%d): '%s'", errat, sqlclause + errat);
                 return;
             }
+            parser->upsert.upsert_mode = UPSERT_MODE_IGNORE;
         } else {
             startp = strstr(sqlc, "UPDATE") + 6;
             *startp++ = 0;
             sqlc = cstr_Ltrim_whitespace(startp);
-            update = 1;
+
+            parser->upsert.upsert_mode = UPSERT_MODE_UPDATE;
         }
     }
 
     parser->upsert.numfields = numfields;
+    if (! check_upsert_fields(parser, ctx)) {
+        return;
+    }
 
-    if (! update) {
-        // IGNORE
+    if (parser->upsert.upsert_mode != UPSERT_MODE_UPDATE) {
+        snprintf_chkd_V1(parser->upsert.hmset_cmd, sizeof(parser->upsert.hmset_cmd), "hmset");
         parser->stmt = RDBSQL_UPSERT;
         return;
     }
@@ -1364,6 +1521,7 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
     }
 
     // success
+    snprintf_chkd_V1(parser->upsert.hmset_cmd, sizeof(parser->upsert.hmset_cmd), "hmset");
     parser->stmt = RDBSQL_UPSERT;
 }
 
@@ -1766,8 +1924,115 @@ ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser parser, RDBResultMap *outResultMap)
             return 0;
         }
     } else if (parser->stmt == RDBSQL_UPSERT) {
-       
+        RDBResultMap resultMap;
 
+        ub8 existedkeys = 0;
+        ub8 updatedkeys = 0;
+
+        int nodeindex = 0;
+
+        // result cursor state
+        RDBTableCursor_t *nodestates = RDBMemAlloc(sizeof(RDBTableCursor_t) * RDBEnvNumNodes(ctx->env));
+
+        RDBResultMapNew(ctx, NULL, parser->stmt, NULL, NULL, 0, NULL, NULL, &resultMap);
+
+        while (nodeindex < RDBEnvNumNodes(ctx->env)) {
+            RDBEnvNode envnode = RDBEnvGetNode(ctx->env, nodeindex);
+
+            // scan only on master node
+            if (RDBEnvNodeGetMaster(envnode, NULL) == RDBAPI_TRUE) {
+                redisReply *replyRows;
+
+                RDBCtxNode ctxnode = RDBCtxGetNode(ctx, nodeindex);
+
+                RDBTableCursor nodestate = &nodestates[nodeindex];
+                if (nodestate->finished) {
+                    // goto next node since this current node has finished
+                    nodeindex++;
+                    continue;
+                }
+
+                res = RDBTableScanOnNode(ctxnode, nodestate, &parser->upsert.rkpattern, 200, &replyRows);
+
+                if (res == RDBAPI_SUCCESS) {
+                    // here we should add new rows
+                    size_t i = 0;
+
+                    for (; i != replyRows->elements; i++) {
+                        redisReply * replyUpdate = NULL;
+                        redisReply * reply = replyRows->element[i];
+
+                        existedkeys++;
+
+                        if (parser->upsert.upsert_mode == UPSERT_MODE_UPDATE) {
+                            // with ON DUPLICATE KEY UPDATE field1=value1, field2=value2, ...
+                            parser->upsert.argvUpd[1] = reply->str;
+                            parser->upsert.argvlenUpd[1] = reply->len;
+
+                            // here we found existed key, then set its value use below command:
+                            //   "hmset key field1 value1 field2 value2"
+                            replyUpdate = RedisExecCommand(ctx, parser->upsert.argcUpd, parser->upsert.argvUpd, parser->upsert.argvlenUpd);
+
+                            if (! RedisCheckReplyStatus(replyUpdate, "OK", 2)) {
+                                printf("(%s:%d) TODO: fail to update key: %.*s - (%s) \n", __FILE__, __LINE__, reply->len, reply->str, ctx->errmsg);
+                            } else {
+                                updatedkeys++;
+                            }
+                        } else if (parser->upsert.upsert_mode == UPSERT_MODE_INSERT) {
+                            // without ON DUPLICATE KEY ...
+                            parser->upsert.argvNew[1] = reply->str;
+                            parser->upsert.argvlenNew[1] = reply->len;
+
+                            replyUpdate = RedisExecCommand(ctx, parser->upsert.argcNew, parser->upsert.argvNew, parser->upsert.argvlenNew);
+
+                            if (! RedisCheckReplyStatus(replyUpdate, "OK", 2)) {
+                                printf("(%s:%d) TODO: fail to update key: %.*s - (%s) \n", __FILE__, __LINE__, reply->len, reply->str, ctx->errmsg);
+                            } else {
+                                updatedkeys++;
+                            }
+                        }
+
+                        RedisFreeReplyObject(&replyUpdate);
+                    }
+
+                    RedisFreeReplyObject(&replyRows);
+                }
+            } else {
+                nodeindex++;
+            }
+        }
+
+        RDBMemFree(nodestates);
+
+        if (! existedkeys) {
+            // no matter what ON DUPLICATE KEY ...
+            if (parser->upsert.argcNew) {
+                redisReply * replyNew;
+
+                // rowkey must be full patternized
+                parser->upsert.argvNew[1] = parser->upsert.rkpattern.str;
+                parser->upsert.argvlenNew[1] = parser->upsert.rkpattern.length;
+
+                replyNew = RedisExecCommand(ctx, parser->upsert.argcNew, parser->upsert.argvNew, parser->upsert.argvlenNew);
+                if (! RedisCheckReplyStatus(replyNew, "OK", 2)) {
+                    printf("(%s:%d) TODO: fail to insert key: %.*s - (%s)\n",
+                        __FILE__, __LINE__,
+                        parser->upsert.rkpattern.length, parser->upsert.rkpattern.str,
+                        ctx->errmsg);
+                } else {
+                    printf("upsert 1 new key OK: %.*s.\n", parser->upsert.rkpattern.length, parser->upsert.rkpattern.str);
+                }
+
+                RedisFreeReplyObject(&replyNew);
+            } else {
+                printf("(%s:%d) TODO: warning insert key not valid: %.*s\n", __FILE__, __LINE__, parser->upsert.rkpattern.length, parser->upsert.rkpattern.str);
+            }
+        } else {
+            printf("upsert %"PRIu64" existed keys OK.\n", updatedkeys);
+        }
+
+        *outResultMap = resultMap;
+        return RDBResultMapSize(resultMap);
     } else if (parser->stmt == RDBSQL_CREATE) {
         RDBTableDes_t tabledes = {0};
         res = RDBTableDescribe(ctx, parser->create.tablespace, parser->create.tablename, &tabledes);
