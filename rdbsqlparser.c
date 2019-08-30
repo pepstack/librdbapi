@@ -77,11 +77,15 @@ typedef struct _RDBSQLParser_t
             int numfields;
             char *fieldnames[RDBAPI_ARGV_MAXNUM + 1];
             char *fieldvalues[RDBAPI_ARGV_MAXNUM + 1];
+            char fieldindex[RDBAPI_ARGV_MAXNUM + 1];
 
             // 0 for IGNORE, > 0 for UPDATE
             int numupdates;
             char *updatenames[RDBAPI_ARGV_MAXNUM + 1];
             char *updatevalues[RDBAPI_ARGV_MAXNUM + 1];
+            char updateindex[RDBAPI_ARGV_MAXNUM + 1];
+
+            RDBTableDes_t tabledes;
         } upsert;
 
         struct CREATE_TABLE {
@@ -805,6 +809,10 @@ static char * parse_upsert_value (char *sqladdr, int sqloffs, char *sql, char **
 
     *value = NULL;
 
+    if (*valp == '\0') {
+        return NULL;
+    }
+
     if (*valp == 39) {
         valp++;
 
@@ -1123,26 +1131,78 @@ void onSqlParserDelete (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
 }
 
 
-// -1: failed
-//  0: ok but bot a rowkey
-// >0: is a rowkey
-//
-static int check_upsert_field (const char *fieldname, const RDBTableDes_t *tabledes)
+static int check_upsert_fields (RDBSQLParser parser, RDBCtx ctx)
 {
-    int j;
-    int fieldnamelen = cstr_length(fieldname, -1);
+    int i, j, fieldnamelen, ok;
+    const char *fieldname;
+    const RDBFieldDes_t *fldes;
 
-    for (j = 0; j < tabledes->nfields; j++) {
-        const RDBFieldDes_t *fldes = &tabledes->fielddes[j];
+    for (i = 0; i < parser->upsert.numfields; i++) {
+        fieldname = parser->upsert.fieldnames[i];
+        fieldnamelen = cstr_length(fieldname, -1);
 
-        if (! cstr_compare_len(fldes->fieldname, fldes->namelen, fieldname, fieldnamelen)) {
-            // success
-            return fldes->rowkey;            
+        ok = 0;
+
+        for (j = 0; j < parser->upsert.tabledes.nfields; j++) {
+            fldes = &parser->upsert.tabledes.fielddes[j];
+
+            if (! cstr_compare_len(fldes->fieldname, fldes->namelen, fieldname, fieldnamelen)) {
+                // success
+                ok = 1;
+                parser->upsert.fieldindex[i] = j;
+                break;
+            }
+        }
+
+        if (! ok) {
+            // error
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: undefined field: '%.*s'", fieldnamelen, fieldname);
+            return 0;
         }
     }
 
-    // error
-    return (-1);
+    // success
+    return 1;
+}
+
+
+static int check_upsert_updates (RDBSQLParser parser, RDBCtx ctx)
+{
+    int i, j, fieldnamelen, ok;
+    const char *fieldname;
+    const RDBFieldDes_t *fldes;
+
+    for (i = 0; i < parser->upsert.numupdates; i++) {
+        fieldname = parser->upsert.updatenames[i];
+        fieldnamelen = cstr_length(fieldname, -1);
+
+        ok = -1;
+
+        for (j = 0; j < parser->upsert.tabledes.nfields; j++) {
+            fldes = &parser->upsert.tabledes.fielddes[j];
+
+            if (! cstr_compare_len(fldes->fieldname, fldes->namelen, fieldname, fieldnamelen)) {
+                // success
+                ok = fldes->rowkey;
+                parser->upsert.updateindex[i] = j;
+                break;
+            }
+        }
+
+        if (ok < 0) {
+            // error
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: undefined update field: '%.*s'", fieldnamelen, fieldname);
+            return 0;
+        }
+        if (ok > 0) {
+            // error
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: update rowkey field: '%.*s'", fieldnamelen, fieldname);
+            return 0;
+        }
+    }
+
+    // success
+    return 1;
 }
 
 
@@ -1155,9 +1215,7 @@ static int check_upsert_field (const char *fieldname, const RDBTableDes_t *table
 void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs, const char *sqlclause)
 {
     char *sqlc;
-    int i, np, len, errat;
-
-    RDBTableDes_t tabledes = {0};
+    int np, len, errat;
 
     char *startp, *endp;
 
@@ -1184,7 +1242,7 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
         return;
     }
 
-    if (RDBTableDescribe(ctx, parser->upsert.tablespace, parser->upsert.tablename, &tabledes) != RDBAPI_SUCCESS) {
+    if (RDBTableDescribe(ctx, parser->upsert.tablespace, parser->upsert.tablename, &parser->upsert.tabledes) != RDBAPI_SUCCESS) {
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: table cannot be described: '%s.%s'", parser->upsert.tablespace, parser->upsert.tablename);
         return;
     }
@@ -1209,11 +1267,8 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: too many fields");
         return;
     }
-    for (i = 0; i < numfields; i++) {
-        if (check_upsert_field(parser->upsert.fieldnames[i], &tabledes) < 0) {
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: undefined field: '%s'", parser->upsert.fieldnames[i]);
-            return;
-        }
+    if (! check_upsert_fields(parser, ctx)) {
+        return;
     }
 
     // VALUES
@@ -1245,7 +1300,7 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
     len = cstr_Rtrim_whitespace(sqlc, cstr_length(sqlc, parser->sqlen));
 
     // ( a,b,'hello,shanghai' )
-    while (sqlc && numvalues < numfields) {
+    while (sqlc && numvalues < numfields + 1) {
         char *value = NULL;
         sqlc = parse_upsert_value(parser->sql, sqloffs, sqlc, &value, ctx->errmsg, sizeof(ctx->errmsg));
         if (value) {
@@ -1253,8 +1308,11 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
         }
     }
 
-    if (numvalues != numfields) {
-        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: unmatched VALUES with fields");
+    if (numvalues > numfields) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: found excess field value: '%s'", parser->upsert.fieldvalues[numfields]);
+        return;
+    } else if (numvalues < numfields) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: found excess field name: '%s'", parser->upsert.fieldnames[numvalues]);
         return;
     }
 
@@ -1301,18 +1359,8 @@ void onSqlParserUpsert (RDBSQLParser parser, RDBCtx ctx, int start, int sqloffs,
         return;
     }
 
-    // check update fields
-    for (i = 0; i < parser->upsert.numupdates; i++) {
-        np = check_upsert_field(parser->upsert.updatenames[i], &tabledes);
-
-        if (np < 0) {
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: undefined update field: '%s'", parser->upsert.updatenames[i]);
-            return;
-        }
-        if (np > 0) {
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: update on rowkey field: '%s'", parser->upsert.updatenames[i]);
-            return;
-        }
+    if (! check_upsert_updates(parser, ctx)) {
+        return;
     }
 
     // success
