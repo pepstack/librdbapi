@@ -24,12 +24,12 @@
 ***********************************************************************/
 
 /**
- * rdbstmt.c
+ * rdbresultmap.c
  *
  * @author: master@pepstack.com
  *
  * @version: 1.0.0
- * @create: 2019-06-14
+ * @create: 2019-08-31
  * @update:
  */
 #include "rdbapi.h"

@@ -144,7 +144,7 @@ static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_
 
             // get ip:port
             if (cstr_slpit_chr(nodenames[nodeindex], (int)strlen(nodenames[nodeindex]), ':', hpouts, 2) == 2) {
-                if (cstr_slpit_chr(outs[1], (int)strlen(outs[1]), ':', hpouts, 2) == 2) {
+                if (cstr_slpit_chr(outs[1], cstr_length(outs[1], -1), ':', hpouts, 2) == 2) {
                     host = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[0], 32), '\''));
                     port = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[1], 32), '\''));
                 }
@@ -158,7 +158,7 @@ static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_
 
             authpass = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(outs[0], 32), '\''));
 
-            if (cstr_slpit_chr(outs[1], (int)strlen(outs[1]), ':', hpouts, 2) == 2) {
+            if (cstr_slpit_chr(outs[1], cstr_length(outs[1], -1), ':', hpouts, 2) == 2) {
                 host = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[0], 32), '\''));
                 port = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[1], 32), '\''));
             }

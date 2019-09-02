@@ -242,7 +242,7 @@ void redplusExecuteSqlfile (RDBEnv env, const char *sqlfile, const char *output)
         return;
     }
 
-    nmaps = RDBSQLExecuteFile(ctx, sqlfile, &resultMaps);
+    nmaps = RDBCtxExecuteFile(ctx, sqlfile, &resultMaps);
 
     RDBResultMapListFree(resultMaps, nmaps);
 
@@ -257,7 +257,7 @@ void redplusExecuteRdbsql (RDBEnv env, const char *rdbsql, const char *output)
     RDBCtx ctx = NULL;
 
     RDBResultMap resultMap = NULL;
-    RDBSQLParser sqlparser = NULL;
+    RDBSQLStmt sqlstmt = NULL;
 
     RDBBlob_t sqlblob;
 
@@ -273,7 +273,7 @@ void redplusExecuteRdbsql (RDBEnv env, const char *rdbsql, const char *output)
         goto error_exit;
     }
 
-    offset = RDBSQLExecuteSQL(ctx, &sqlblob, &resultMap);
+    offset = RDBCtxExecuteSQL(ctx, &sqlblob, &resultMap);
     if (offset == RDBAPI_ERROR) {
         printf("# failed on %s\n", RDBCtxErrMsg(ctx));
         goto error_exit;

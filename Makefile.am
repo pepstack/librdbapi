@@ -8,10 +8,10 @@ librdbapi_a_SOURCES = common/red_black_tree.c \
     rdbenv.c \
     rdbmapr.c \
     rdbparam.c \
-    rdbstmt.c \
+    rdbsqlstmt.c \
+    rdbresultmap.c \
     rdbtable.c \
     rdbexpr.c \
-    rdbsqlparser.c \
     rdbapi.c
 
 # static link to hiredis

@@ -492,7 +492,7 @@ int RDBFinishRowkeyPattern (const RDBFieldDes_t *fielddes, int nfielddes, const 
 
 
 ///////////////////////////// PUBLIC API /////////////////////////////
-void RDBResultMapNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmt sqlstmt, const char *tablespace, const char *tablename, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap)
+void RDBResultMapNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmtType sqlstmt, const char *tablespace, const char *tablename, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap)
 {
     RDBResultMap hMap = (RDBResultMap) RDBMemAlloc(sizeof(RDBResultMap_t) + sizeof(RDBFieldDes_t) * numfields);
     if (! hMap) {
@@ -785,14 +785,14 @@ ub8 RDBResultMapGetOffset (RDBResultMap hResultMap)
 }
 
 
-RDBSQLStmt RDBResultMapGetStmt (RDBResultMap resultMap)
+RDBSQLStmtType RDBResultMapGetStmt (RDBResultMap resultMap)
 {
     return resultMap->sqlstmt;
 }
 
 
 static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
-    RDBSQLStmt sqlstmt,
+    RDBSQLStmtType sqlstmt,
     const char *tablespace,   // must valid
     const char *tablename,    // must valid
     const char *desctable,    // if DESC table, take it as key
@@ -947,7 +947,7 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
 
 
 RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
-    RDBSQLStmt sqlstmt,
+    RDBSQLStmtType sqlstmt,
     const char *tablespace,   // must valid
     const char *tablename,    // must valid
     int numkeys,

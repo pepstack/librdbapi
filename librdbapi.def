@@ -46,6 +46,8 @@ EXPORTS
 	RDBCtxNodeGetEnvNode
 	RDBCtxCheckInfo
 	RDBCtxPrintInfo
+	RDBCtxExecuteSQL
+	RDBCtxExecuteFile
 
 	RedisCheckReplyStatus
 	RedisFreeReplyObject
@@ -96,10 +98,8 @@ EXPORTS
 	RDBFieldsMapGetField
 	RDBFieldsMapFree
 
-	RDBSQLParserNew
-	RDBSQLParserFree
-	RDBSQLParserPrint
-	RDBSQLParserGetStmt
-	RDBSQLExecute
-	RDBSQLExecuteSQL
-	RDBSQLExecuteFile
+	RDBSQLStmtCreate
+	RDBSQLStmtFree
+	RDBSQLStmtPrint
+	RDBSQLStmtGetType
+	RDBSQLStmtExecute

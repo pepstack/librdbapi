@@ -165,7 +165,7 @@ typedef int RDBAPI_BOOL;
 #define RDB_PORT_NUMB_MIN              1024
 #define RDB_PORT_NUMB_MAX              65535
 
-#define RDB_ERROR_MSG_LEN              127
+#define RDB_ERROR_MSG_LEN              255
 
 #define RDB_KEY_NAME_MAXLEN            32
 #define RDB_KEY_VALUE_SIZE             256
@@ -180,8 +180,11 @@ typedef int RDBAPI_BOOL;
 #define RDB_FIELD_FLT_SCALE_MIN        (-84)
 #define RDB_FIELD_FLT_SCALE_MAX        127
 
-#define RDB_SQL_TOTAL_LEN_MAX          4000
-#define RDB_SQL_WHERE_LEN_MAX          1000
+// max length for sqlstmt clause
+#define RDB_SQLSTMT_SQLBLOCK_MAXLEN    4000
+
+// max length for where sub-clause
+#define RDB_SQLSTMT_WHERE_MAXLEN       1000
 
 /**********************************************************************
  *
@@ -207,7 +210,7 @@ typedef struct _RDBNameReply_t   * RDBFieldsMap;
 
 typedef struct _RDBThreadCtx_t   * RDBThreadCtx;
 
-typedef struct _RDBSQLParser_t   * RDBSQLParser;
+typedef struct _RDBSQLStmt_t   * RDBSQLStmt;
 
 
 typedef enum
@@ -276,7 +279,7 @@ typedef enum
     ,RDBSQL_INFO_SECTION = 7
     ,RDBSQL_SHOW_DATABASES = 8
     ,RDBSQL_SHOW_TABLES = 9
-} RDBSQLStmt;
+} RDBSQLStmtType;
 
 
 typedef struct _RDBFieldDes_t
@@ -596,7 +599,7 @@ extern RDBAPI_RESULT RedisIncrFloatField (RDBCtx ctx, const char *key, const cha
  *
  *********************************************************************/
 extern RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
-    RDBSQLStmt sqlstmt,
+    RDBSQLStmtType sqlstmt,
     const char *tablespace,
     const char *tablename,
     int filter_numkeys,
@@ -656,28 +659,28 @@ extern void RDBResultMapPrintOut (RDBResultMap hResultMap, const char *header, .
 
 extern void RDBResultMapListFree (RDBResultMap *resultMaps, int count);
 
-extern RDBSQLStmt RDBResultMapGetStmt (RDBResultMap resultMap);
+extern RDBSQLStmtType RDBResultMapGetStmt (RDBResultMap resultMap);
 
 
 /**********************************************************************
  *
- * RDBSQLParser API
+ * RDBSQLStmt API
  *
  *********************************************************************/
 
-extern RDBAPI_RESULT RDBSQLParserNew (RDBCtx ctx, const char *sql, size_t sqlen, RDBSQLParser *outSqlParser);
+extern RDBAPI_RESULT RDBSQLStmtCreate (RDBCtx ctx, const char *sql_block, size_t sql_len, RDBSQLStmt *outsqlstmt);
 
-extern void RDBSQLParserFree (RDBSQLParser sqlParser);
+extern void RDBSQLStmtFree (RDBSQLStmt sqlstmt);
 
-extern void RDBSQLParserPrint (RDBCtx ctx, RDBSQLParser sqlParser, FILE *fout);
+extern void RDBSQLStmtPrint (RDBSQLStmt sqlstmt, FILE *fout);
 
-extern RDBSQLStmt RDBSQLParserGetStmt (RDBSQLParser sqlParser, char **parsedClause, int pretty);
+extern RDBSQLStmtType RDBSQLStmtGetType (RDBSQLStmt sqlstmt, char **parsedClause, int pretty);
 
-extern ub8 RDBSQLExecute (RDBCtx ctx, RDBSQLParser sqlParser, RDBResultMap *outResultMap);
+extern ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap);
 
-extern ub8 RDBSQLExecuteSQL (RDBCtx ctx, const RDBBlob_t *sqlblob, RDBResultMap *outResultMap);
+extern ub8 RDBCtxExecuteSQL (RDBCtx ctx, const RDBBlob_t *sqlblob, RDBResultMap *outResultMap);
 
-extern int RDBSQLExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResultMap **outResultMaps);
+extern int RDBCtxExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResultMap **outResultMaps);
 
 #if defined(__cplusplus)
 }

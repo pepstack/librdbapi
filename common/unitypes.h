@@ -170,10 +170,7 @@ static int snprintf_chkd_V1 (char *outputbuf, size_t bufsize, const char *format
     len = vsnprintf(outputbuf, bufsize, format, args);
     va_end(args);
 
-    if (len < 0) {
-        len = 0;
-        *outputbuf = '\0';
-    } else if (len >= (int) bufsize) {
+    if (len < 0 || len >= (int) bufsize) {
         /* output was truncated due to bufsize limit */
         len = (int) bufsize - 1;
 
@@ -200,16 +197,7 @@ static int snprintf_chkd_V2 (int exitcode, char *outputbuf, size_t bufsize, cons
     len = vsnprintf(outputbuf, bufsize, format, args);
     va_end(args);
 
-    if (len < 0) {
-        len = 0;
-        *outputbuf = '\0';
-
-        /* exit on error if exitcode given (not 0) */
-        if (exitcode) {
-            fprintf(stderr, "(%s:%d) fatal: output error is encountered.\n", __FILE__, __LINE__);
-            exit(exitcode);
-        }
-    } else if (len >= (int) bufsize) {
+    if (len < 0 || len >= (int) bufsize) {
         /* output was truncated due to bufsize limit */
         len = (int) bufsize - 1;
 
