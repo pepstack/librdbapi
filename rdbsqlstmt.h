@@ -41,8 +41,7 @@ extern "C"
 {
 #endif
 
-#include "rdbapi.h"
-#include "rdbtypes.h"
+#include "rdbresultmap.h"
 
 
 #define RDBSQL_PATTERN_SELECT_FROM     "SELECT[\\s]+"

@@ -13,6 +13,12 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="tpl">
+      <UniqueIdentifier>{d723397a-d79c-413a-9017-763325f5e0ff}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="tpl\win">
+      <UniqueIdentifier>{dbd1e0ce-0724-4b8e-bffe-c688600a6cf1}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\rdbapi.c">
@@ -33,9 +39,6 @@
     <ClCompile Include="..\..\..\rdbparam.c">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\rdbstmt.c">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\common\red_black_tree.c">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -48,15 +51,24 @@
     <ClCompile Include="..\..\..\common\tiny-regex-c\re.c">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\rdbsqlparser.c">
+    <ClCompile Include="..\..\..\rdbresultmap.c">
       <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\rdbsqlstmt.c">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\common\tpl\tpl.c">
+      <Filter>tpl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\common\tpl\win\mmap.c">
+      <Filter>tpl\win</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\common\tpl\win\nonempty.c">
+      <Filter>tpl\win</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\rdbapi.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\rdbtypes.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\unitypes.h">
@@ -70,6 +82,21 @@
     </ClInclude>
     <ClInclude Include="..\..\..\common\cstrutil.h">
       <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\rdbresultmap.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\rdbsqlstmt.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\rdbcommon.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\tpl\tpl.h">
+      <Filter>tpl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\tpl\win\mman.h">
+      <Filter>tpl\win</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -32,8 +32,7 @@
  * @create: 2019-06-14
  * @update:
  */
-#include "rdbapi.h"
-#include "rdbtypes.h"
+#include "rdbcommon.h"
 
 #define RDBTABLE_FILTER_ACCEPT    1
 #define RDBTABLE_FILTER_REJECT    0
@@ -764,7 +763,7 @@ RDBAPI_BOOL RDBResultMapExist (RDBResultMap hResultMap, redisReply *reply)
     return (node? RDBAPI_TRUE : RDBAPI_FALSE);
 }
 
-
+//DEL
 void RDBResultMapTraverse (RDBResultMap hResultMap, void (onRowNodeCallback)(void *, void *), void *arg)
 {
     rbtree_traverse(&hResultMap->rbtree, onRowNodeCallback, arg);

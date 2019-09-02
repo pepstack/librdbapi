@@ -42,8 +42,7 @@
  * @create: 2019-06-14
  * @update:
  */
-#include "rdbapi.h"
-#include "rdbtypes.h"
+#include "rdbcommon.h"
 
 #include <time.h>
 
@@ -324,6 +323,43 @@ void * RDBMemRealloc (void *oldp, size_t oldsizeb, size_t newsizeb)
 void RDBMemFree (void *addr)
 {
     mem_free(addr);
+}
+
+
+/**********************************************************************
+ *
+ * RDBZString API
+ *
+ *********************************************************************/
+
+RDBZString RDBZStringNew (const char *str, ub4 len)
+{
+    RDBZString_t *p = (RDBZString_t *) RDBMemAlloc(sizeof(*p) + len + 1);
+    if (! p) {
+        fprintf(stderr, "(%s:%d) out of memory.\n", __FILE__, __LINE__);
+        exit(EXIT_FAILURE);
+    }
+    memcpy(p->str, str, len);
+    p->len = len;
+    return p;
+}
+
+
+void RDBZStringFree (RDBZString zs)
+{
+    RDBMemFree(zs);
+}
+
+
+ub4 RDBZStringLen (RDBZString zs)
+{
+    return zs->len;
+}
+
+
+char * RDBZStringAddr (RDBZString zs)
+{
+    return zs->str;
 }
 
 
@@ -712,6 +748,25 @@ void RedisReplyObjectPrint (redisReply *reply, RDBCtxNode ctxnode)
     }
 
     RedisReplyObjectWatch(reply, redisReplyWatchCallbackPrint, (void*) 0);
+}
+
+
+char * RedisReplyDetachString (redisReply *reply, int *len)
+{
+    char *str = NULL;
+
+    if (reply->type == REDIS_REPLY_STRING || reply->type == REDIS_REPLY_ERROR || reply->type == REDIS_REPLY_STATUS) {
+        str = reply->str;
+
+        if (len) {
+            *len = (int) reply->len;
+        }
+
+        reply->str = NULL;
+        reply->len = 0;
+    }
+
+    return str;
 }
 
 

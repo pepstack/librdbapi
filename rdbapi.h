@@ -210,7 +210,13 @@ typedef struct _RDBNameReply_t   * RDBFieldsMap;
 
 typedef struct _RDBThreadCtx_t   * RDBThreadCtx;
 
-typedef struct _RDBSQLStmt_t   * RDBSQLStmt;
+typedef struct _RDBSQLStmt_t     * RDBSQLStmt;
+
+typedef struct _RDBZString_t     * RDBZString;
+
+typedef struct _RDBRowset_t  * RDBRowset;
+typedef struct _RDBCell_t    * RDBCell;
+typedef struct _RDBRow_t     * RDBRow;
 
 
 typedef enum
@@ -251,6 +257,18 @@ typedef enum
 } RDBValueType;
 
 
+typedef enum
+{
+    RDB_CELLTYPE_INVALID     = 0
+    ,RDB_CELLTYPE_STRING     = 1
+    ,RDB_CELLTYPE_INTEGER    = 2
+    ,RDB_CELLTYPE_DOUBLE     = 3
+    ,RDB_CELLTYPE_BINARY     = 4
+    ,RDB_CELLTYPE_REPLY      = 5
+    ,RDB_CELLTYPE_RESULTMAP  = 6  // nested result map
+} RDBCellType;
+
+
 // DO NOT CHANGE BELOW!
 typedef enum
 {
@@ -280,6 +298,21 @@ typedef enum
     ,RDBSQL_SHOW_DATABASES = 8
     ,RDBSQL_SHOW_TABLES = 9
 } RDBSQLStmtType;
+
+
+typedef struct _RDBSheetStyle_t
+{
+    union {
+        struct {
+            ub1 minwidth;
+            ub1 maxwidth;
+            ub1 align;
+            char delimiter;
+        };
+
+        ub1 style[4];
+    };
+} RDBSheetStyle_t;
 
 
 typedef struct _RDBFieldDes_t
@@ -335,7 +368,7 @@ typedef struct _RDBBlob_t
 
 /**********************************************************************
  *
- * time API
+ * pulbic helper API
  *
  *********************************************************************/
 
@@ -351,6 +384,15 @@ extern void * RDBMemRealloc (void *oldp, size_t oldsizeb, size_t newsizeb);
 extern void RDBMemFree (void *addr);
 
 extern int RDBExprValues (RDBValueType vt, const char *val1, int len1, RDBFilterExpr expr, const char *val2, int len2);
+
+
+extern RDBZString RDBZStringNew (const char *str, ub4 len);
+
+extern void RDBZStringFree (RDBZString zs);
+
+extern ub4 RDBZStringLen (RDBZString zs);
+
+extern char * RDBZStringAddr (RDBZString zs);
 
 
 /**********************************************************************

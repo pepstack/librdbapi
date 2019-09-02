@@ -13,6 +13,9 @@
   <ItemGroup>
     <ClCompile Include="..\..\..\common\red_black_tree.c" />
     <ClCompile Include="..\..\..\common\tiny-regex-c\re.c" />
+    <ClCompile Include="..\..\..\common\tpl\tpl.c" />
+    <ClCompile Include="..\..\..\common\tpl\win\mmap.c" />
+    <ClCompile Include="..\..\..\common\tpl\win\nonempty.c" />
     <ClCompile Include="..\..\..\rdbactx.c" />
     <ClCompile Include="..\..\..\rdbapi.c" />
     <ClCompile Include="..\..\..\rdbctx.c" />
@@ -20,16 +23,20 @@
     <ClCompile Include="..\..\..\rdbexpr.c" />
     <ClCompile Include="..\..\..\rdbmapr.c" />
     <ClCompile Include="..\..\..\rdbparam.c" />
-    <ClCompile Include="..\..\..\rdbsqlparser.c" />
-    <ClCompile Include="..\..\..\rdbstmt.c" />
+    <ClCompile Include="..\..\..\rdbresultmap.c" />
+    <ClCompile Include="..\..\..\rdbsqlstmt.c" />
     <ClCompile Include="..\..\..\rdbtable.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\common\cstrutil.h" />
     <ClInclude Include="..\..\..\common\red_black_tree.h" />
     <ClInclude Include="..\..\..\common\tiny-regex-c\re.h" />
+    <ClInclude Include="..\..\..\common\tpl\tpl.h" />
+    <ClInclude Include="..\..\..\common\tpl\win\mman.h" />
     <ClInclude Include="..\..\..\rdbapi.h" />
-    <ClInclude Include="..\..\..\rdbtypes.h" />
+    <ClInclude Include="..\..\..\rdbcommon.h" />
+    <ClInclude Include="..\..\..\rdbresultmap.h" />
+    <ClInclude Include="..\..\..\rdbsqlstmt.h" />
     <ClInclude Include="..\..\..\unitypes.h" />
   </ItemGroup>
   <ItemGroup>
@@ -83,7 +90,7 @@
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <PreprocessorDefinitions>WIN32;_WIN64;_DEBUG;_WINDOWS;_USRDLL;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_WIN64;_DEBUG;_WINDOWS;_USRDLL;TPL_EXPORTS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeaderFile />
     </ClCompile>
     <Link>
@@ -99,7 +106,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>WIN32;_WIN64;NDEBUG;_WINDOWS;_USRDLL;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_WIN64;NDEBUG;_WINDOWS;_USRDLL;TPL_EXPORTS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>false</GenerateDebugInformation>

@@ -24,8 +24,8 @@
 ***********************************************************************/
 
 /**
- * rdbtypes.h
- *   rdb types
+ * rdbcommon.h
+ *   rdb common types
  *
  * @author: master@pepstack.com
  *
@@ -33,8 +33,8 @@
  * @create: 2019-06-14
  * @update:
  */
-#ifndef RDBTYPES_H_INCLUDED
-#define RDBTYPES_H_INCLUDED
+#ifndef RDBCOMMON_H_INCLUDED
+#define RDBCOMMON_H_INCLUDED
 
 #if defined(__cplusplus)
 extern "C"
@@ -57,8 +57,18 @@ extern "C"
 #include "common/uthash/uthash.h"
 #include "common/uthash/utarray.h"
 
+#include "common/tpl/tpl.h"
+
 
 typedef struct _RDBEnvNode_t * RDBEnvNodeMap;
+
+
+/* Zero ended Ansi string */
+typedef struct _RDBZString_t
+{
+    ub4 len;
+    char str[0];
+} RDBZString_t;
 
 
 typedef struct _RDBProp_t
@@ -338,4 +348,4 @@ RDBAPI_RESULT RDBTableScanOnNode (RDBCtxNode ctxnode, RDBTableCursor nodestate, 
 }
 #endif
 
-#endif /* RDBTYPES_H_INCLUDED */
+#endif /* RDBCOMMON_H_INCLUDED */

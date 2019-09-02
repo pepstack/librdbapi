@@ -358,7 +358,7 @@ static char * parse_create_field (const char *sqlblockaddr,
     char *tblcomment, size_t tblcommsz,
     char *buf, size_t bufsz)
 {
-    int j, np, len, errat;
+    int j, np, len;
     char *endp, *nextp;
     char *sqlc = sql;
 
@@ -1491,8 +1491,6 @@ void SQLStmtParseDrop (RDBCtx ctx, RDBSQLStmt sqlstmt)
 
 RDBAPI_RESULT RDBSQLStmtCreate (RDBCtx ctx, const char *sql_block, size_t sql_len, RDBSQLStmt *outsqlstmt)
 {
-    int idx;
-
     RDBSQLStmt sqlstmt;
 
     // check sql_block length if sql_len = -1
@@ -1520,7 +1518,7 @@ RDBAPI_RESULT RDBSQLStmtCreate (RDBCtx ctx, const char *sql_block, size_t sql_le
     memcpy(sqlstmt->sqlblock, sql_block, sql_len);
     sqlstmt->sqlblocksize = (ub4) (sql_len + 1);
 
-    sql_len = cstr_Rtrim_whitespace(sqlstmt->sqlblock, sql_len);
+    sql_len = cstr_Rtrim_whitespace(sqlstmt->sqlblock, (int) sql_len);
 
     cstr_Rtrim_chr(sqlstmt->sqlblock, ';');
 
@@ -1932,6 +1930,36 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         if (RDBTableDescribe(ctx, sqlstmt->desctable.tablespace, sqlstmt->desctable.tablename, &tabledes) != RDBAPI_SUCCESS) {
             return (ub8) RDBAPI_ERROR;
         } else {
+            RDBRowset rowsmap;
+
+            const char *colnames[] = {
+                "fieldname",
+                "fieldtype",
+                "length",
+                "scale",
+                "rowkey",
+                "nullable",
+                "comment"
+            };
+
+            RDBRowsetCreate(7, colnames, &rowsmap);
+
+            RDBSheetStyle_t styles[] = {
+                {20, 30, 0, '|'},
+                {20, 20, 0, '|'},
+                {10, 10, 0, '|'},
+                {8,   8, 0, '|'},
+                {8,   8, 0, '|'},
+                {10, 10, 0, '|'},
+                {20, 20, 0, '|'}
+            };
+
+            RDBRowsetPrint(rowsmap, styles, stdout);
+
+            RDBRowsetDestroy(rowsmap);
+
+
+            /////////////////////////////
             RDBResultMap resultMap;
             RDBResultMapNew(ctx, NULL, sqlstmt->stmt, sqlstmt->create.tablespace, sqlstmt->create.tablename, tabledes.nfields, tabledes.fielddes, NULL, &resultMap);
 

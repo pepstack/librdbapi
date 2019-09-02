@@ -32,5 +32,4 @@
  * @create: 2019-06-14
  * @update:
  */
-#include "rdbapi.h"
-#include "rdbtypes.h"
+#include "rdbcommon.h"

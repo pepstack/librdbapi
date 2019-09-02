@@ -7,6 +7,11 @@ EXPORTS
 	RDBMemRealloc
 	RDBMemFree
 	RDBExprValues
+	
+	RDBZStringNew
+	RDBZStringFree
+	RDBZStringLen
+	RDBZStringAddr
 
 	RDBThreadCtxCreate
 	RDBThreadCtxAttach
@@ -58,6 +63,7 @@ EXPORTS
 	RedisExecCommandOnNode
 	RedisReplyObjectWatch
 	RedisReplyObjectPrint
+	RedisReplyDetachString
 	RedisExpireKey
 	RedisSetKey
 	RedisHMSet
