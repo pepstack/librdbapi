@@ -265,6 +265,34 @@ typedef struct _RDBResultMap_t
 } RDBResultMap_t;
 
 
+typedef struct _RDBResultFilter_t
+{
+    RDBCtx ctx;
+
+    RDBTableFilter filter;
+
+    RDBSQLStmtType sqlstmt;
+
+    // constants: rowkeyid[0] is count for keys
+    int rowkeyid[RDBAPI_SQL_KEYS_MAX + 1];
+
+    int kplen;
+    char *keypattern;
+
+    // count for result fields
+    int resultfields;
+
+    // which fields to fetch
+    char *fetchfields[RDBAPI_ARGV_MAXNUM + 1];
+
+    // length of fieldname
+    int fieldnamelens[RDBAPI_ARGV_MAXNUM + 1];
+
+    int numfields;
+    RDBFieldDes_t fielddes[0];
+} RDBResultFilter_t, *RDBResultFilter;
+
+
 typedef struct _RDBResultRow_t
 {
     // rowkeys value
@@ -327,10 +355,15 @@ static redisReply * RDBArrayReplyCreate (size_t elements)
     return replyArr;
 }
 
+//DEL??
 void RDBResultRowFree (RDBResultRow rowdata);
 
+//DEL??
 void RDBResultMapNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmtType sqlstmt, const char *tablespace, const char *tablename, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap);
 
+RDBResultFilter RDBResultFilterNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmtType stmt, int numfields, const RDBFieldDes_t *fielddes, ub1 resultfields[]);
+
+void RDBResultFilterFree (RDBResultFilter filter);
 
 int RDBBuildRowkeyPattern (const char * tablespace, const char * tablename,
     const RDBFieldDes_t *fielddes, int numfields,

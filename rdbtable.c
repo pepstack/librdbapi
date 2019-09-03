@@ -32,7 +32,7 @@
  * @create: 2019-06-14
  * @update:
  */
-#include "rdbcommon.h"
+#include "rdbresultmap.h"
 
 #define RDBTABLE_FILTER_ACCEPT    1
 #define RDBTABLE_FILTER_REJECT    0
@@ -130,6 +130,22 @@ static int RDBFieldIsRowid (RDBResultMap hMap, int fieldindex)
 
     for (k = 1; k <= hMap->rowkeyid[0]; k++) {
         if (fieldindex == hMap->rowkeyid[k]) {
+            // in rowkey
+            return k;
+        }
+    }
+
+    // not in rowkey
+    return 0;
+}
+
+
+static int RDBFieldGetRowid (int rowkeyid[], int fieldindex)
+{
+    int k;
+
+    for (k = 1; k <= rowkeyid[0]; k++) {
+        if (fieldindex == rowkeyid[k]) {
             // in rowkey
             return k;
         }
@@ -490,7 +506,80 @@ int RDBFinishRowkeyPattern (const RDBFieldDes_t *fielddes, int nfielddes, const 
 }
 
 
-///////////////////////////// PUBLIC API /////////////////////////////
+RDBResultFilter RDBResultFilterNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmtType sqlstmt, int numfields, const RDBFieldDes_t *fielddes, ub1 resultfields[])
+{
+    int i, j, k;
+
+    RDBResultFilter res = (RDBResultFilter) RDBMemAlloc(sizeof(RDBResultFilter_t) + sizeof(RDBFieldDes_t) * numfields);
+
+    if (! res) {
+        exit(EXIT_FAILURE);
+    }
+
+    res->ctx = ctx;
+    res->filter = filter;
+    res->sqlstmt = sqlstmt;
+
+    res->kplen = RDBBuildRowkeyPattern(filter->tablespace, filter->tablename, fielddes, numfields, res->rowkeyid, &res->keypattern);
+
+    memcpy(res->fielddes, fielddes, sizeof(RDBFieldDes_t) * numfields);
+    res->numfields = numfields;
+
+    if (resultfields) {
+        // set all of result fields
+        k = 0;
+        for (i = 0; i < resultfields[0]; i++) {
+            j = resultfields[i + 1] - 1;
+
+            if (! RDBFieldGetRowid(res->rowkeyid, j)) {
+                res->fetchfields[k] = res->fielddes[j].fieldname;
+                res->fieldnamelens[k] = cstr_length(res->fielddes[j].fieldname, RDB_KEY_NAME_MAXLEN);
+
+                k++;
+            }
+        }
+
+        res->resultfields = k;
+    }
+
+    RDBKeyVal fldfilter;
+
+    // set all of filter fields
+    i = 0;
+    while ((fldfilter = res->filter->fldfilters[i++]) != NULL) {
+        int found = 0;
+
+        for (j = 0; res->fetchfields[j] != NULL; j++) {
+            if (! strcmp(fldfilter->key, res->fetchfields[j])) {
+                // skip existed
+                found = 1;
+                break;
+            }
+        }
+
+        if (! found) {
+            res->fetchfields[j] = fldfilter->key;
+            res->fieldnamelens[j] = fldfilter->klen;
+        }
+    }
+
+    res->fetchfields[RDBAPI_ARGV_MAXNUM] = NULL;
+    res->fieldnamelens[RDBAPI_ARGV_MAXNUM] = 0;
+
+    return res;
+}
+
+
+void RDBResultFilterFree (RDBResultFilter resfilter)
+{
+    if (resfilter) {
+        RDBMemFree(resfilter->keypattern);
+        RDBTableFilterFree(resfilter->filter);
+        RDBMemFree(resfilter);
+    }
+}
+
+
 void RDBResultMapNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmtType sqlstmt, const char *tablespace, const char *tablename, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap)
 {
     RDBResultMap hMap = (RDBResultMap) RDBMemAlloc(sizeof(RDBResultMap_t) + sizeof(RDBFieldDes_t) * numfields);
@@ -791,7 +880,7 @@ RDBSQLStmtType RDBResultMapGetStmt (RDBResultMap resultMap)
 
 
 static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
-    RDBSQLStmtType sqlstmt,
+    RDBSQLStmtType stmt,
     const char *tablespace,   // must valid
     const char *tablename,    // must valid
     const char *desctable,    // if DESC table, take it as key
@@ -817,6 +906,7 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
 
     RDBTableDes_t tabledes = {0};
 
+    // index of result fields refer to tabledes.fielddes
     ub1 resultfields[RDBAPI_ARGV_MAXNUM + 1] = {0};
 
     if (numkeys > RDBAPI_SQL_KEYS_MAX) {
@@ -933,8 +1023,17 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
         return RDBAPI_ERROR;
     }
 
-    // MUST after RDBTableFilterInit
-    RDBResultMapNew(ctx, filter, sqlstmt, filter->tablespace, filter->tablename, tabledes.nfields, tabledes.fielddes, resultfields, &resultMap);
+    //@@@ DEL???
+    RDBResultMapNew(ctx, filter, stmt, filter->tablespace, filter->tablename, tabledes.nfields, tabledes.fielddes, resultfields, &resultMap);
+
+    //???RDBRowset resltmap;
+    //???const char *colnames[RDBAPI_ARGV_MAXNUM] = {0};
+
+    //???RDBRowsetCreate(resultfields[0], 0, &resltmap);
+    //???resltmap->resfilter = RDBResultFilterNew(ctx, filter, stmt, tabledes.nfields, tabledes.fielddes, resultfields);
+    //???for (nodeindex = 0; nodeindex < RDBEnvNumNodes(ctx->env); nodeindex++) {
+    //???    RDBResultNodeState(resltmap->resfilter, nodeindex)->nodeindex = nodeindex;
+    //???}
 
     for (nodeindex = 0; nodeindex < RDBEnvNumNodes(ctx->env); nodeindex++) {
         RDBResultNodeState(resultMap, nodeindex)->nodeindex = nodeindex;

@@ -72,6 +72,9 @@ void RDBRowsetDestroy (RDBRowset resultmap)
         }
 
         RDBRowsetCleanRows(resultmap);
+
+        RDBResultFilterFree(resultmap->resfilter);
+
         RDBMemFree(resultmap);
     }
 }

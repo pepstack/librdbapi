@@ -1878,6 +1878,7 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         // result cursor state
         RDBTableCursor_t *nodestates = RDBMemAlloc(sizeof(RDBTableCursor_t) * RDBEnvNumNodes(ctx->env));
 
+        // @@@
         RDBResultMapNew(ctx, NULL, sqlstmt->stmt, NULL, NULL, 0, NULL, NULL, &resultMap);
 
         while (nodeindex < RDBEnvNumNodes(ctx->env)) {

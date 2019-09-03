@@ -92,10 +92,8 @@ typedef struct _RDBRowIter_t
 /* ResultMap */
 typedef struct _RDBRowset_t
 {
-    /* cached environment variables */
-    //RDBCtx ctx;
-    //RDBTableFilter filter;
-    //RDBSQLStmtType stmt;
+    /* only for query */
+    RDBResultFilter resfilter;
 
     /* rowsmap deletion-safe iteration */
     RDBRowIter_t rowiter;
