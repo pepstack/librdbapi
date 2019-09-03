@@ -79,17 +79,17 @@ void RDBRowsetDestroy (RDBRowset resultmap)
 
 RDBAPI_RESULT RDBRowsetInsertRow (RDBRowset resultmap, RDBRow row)
 {
-    RDBRowNode rownode;
-
-    HASH_FIND_STR_LEN(resultmap->rowsmap, row->key, row->keylen, rownode);
-
-    if (rownode) {
-        return RDBAPI_ERR_EXISTED;
+    if (RDBRowsetSize(resultmap) == (ub4)(UB4MAXVAL - 1)) {
+        return RDBAPI_ERROR;
+    } else {
+        RDBRowNode rownode;
+        HASH_FIND_STR_LEN(resultmap->rowsmap, row->key, row->keylen, rownode);
+        if (rownode) {
+            return RDBAPI_ERR_EXISTED;
+        }
+        HASH_ADD_STR_LEN(resultmap->rowsmap, key, row->keylen, row);
+        return RDBAPI_SUCCESS;
     }
-
-    HASH_ADD_STR_LEN(resultmap->rowsmap, key, row->keylen, row);
-
-    return RDBAPI_SUCCESS;
 }
 
 
@@ -177,6 +177,16 @@ RDBRow RDBRowIterGetRow (RDBRowIter iter)
 }
 
 
+ub4 RDBRowsetSize (RDBRowset resultmap)
+{
+    if (resultmap && resultmap->rowsmap) {
+        return (ub4) HASH_COUNT(resultmap->rowsmap);
+    }
+
+    return 0;
+}
+
+
 void RDBRowsetPrint (RDBRowset resultmap, FILE *fout)
 {
     // print cols header
@@ -206,19 +216,21 @@ void RDBRowsetPrint (RDBRowset resultmap, FILE *fout)
 
 RDBAPI_RESULT RDBRowNew (RDBRowset resultmap, const char *key, int keylen, RDBRow *outrow)
 {
-    if (keylen == (-1)) {
-        keylen = cstr_length(key, RDB_KEY_VALUE_SIZE);
-    }
+    if (! key) {
+        char kbuf[22];
 
-    if (keylen > 0 && keylen < RDB_KEY_VALUE_SIZE) {
-        RDBRow row = (RDBRow) RDBMemAlloc(sizeof(RDBRow_t) + sizeof(RDBCell_t) * RDBRowsetColHeaders(resultmap) + keylen + 1);
+        ub4 rowid = RDBRowsetSize(resultmap);
+
+        int klen = snprintf_chkd_V1(kbuf, sizeof(kbuf), "%"PRIu64, (ub8)(rowid + 1));
+
+        RDBRow row = (RDBRow) RDBMemAlloc(sizeof(RDBRow_t) + sizeof(RDBCell_t) * RDBRowsetColHeaders(resultmap) + klen + 1);
         if (row) {
             row->count = RDBRowsetColHeaders(resultmap);
 
             row->key = (char *) &row->cells[row->count];
-            row->keylen = keylen;
+            row->keylen = klen;
     
-            memcpy(row->key, key, keylen);
+            memcpy(row->key, kbuf, klen);
 
             *outrow = row;
             return RDBAPI_SUCCESS;
@@ -226,7 +238,28 @@ RDBAPI_RESULT RDBRowNew (RDBRowset resultmap, const char *key, int keylen, RDBRo
             return RDBAPI_ERR_NOMEM;
         }
     } else {
-        return RDBAPI_ERR_BADARG;
+        if (keylen == (-1)) {
+            keylen = cstr_length(key, RDB_KEY_VALUE_SIZE);
+        }
+
+        if (keylen > 0 && keylen < RDB_KEY_VALUE_SIZE) {
+            RDBRow row = (RDBRow) RDBMemAlloc(sizeof(RDBRow_t) + sizeof(RDBCell_t) * RDBRowsetColHeaders(resultmap) + keylen + 1);
+            if (row) {
+                row->count = RDBRowsetColHeaders(resultmap);
+
+                row->key = (char *) &row->cells[row->count];
+                row->keylen = keylen;
+    
+                memcpy(row->key, key, keylen);
+
+                *outrow = row;
+                return RDBAPI_SUCCESS;
+            } else {
+                return RDBAPI_ERR_NOMEM;
+            }
+        } else {
+            return RDBAPI_ERR_BADARG;
+        }
     }
 }
 

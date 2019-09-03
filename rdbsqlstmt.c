@@ -1820,6 +1820,10 @@ static void RDBResultRowDeleteCallback (void * _row, void * _map)
 ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
 {
     RDBAPI_RESULT res;
+
+    int keylen;
+    char keybuf[RDB_KEY_VALUE_SIZE];
+
     RDBCtx ctx = sqlstmt->ctx;
     const char **vtnames = (const char **) ctx->env->valtypenames;
 
@@ -1975,6 +1979,7 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         return RDBResultMapSize(resultMap);
 
     } else if (sqlstmt->stmt == RDBSQL_CREATE) {
+
         RDBTableDes_t tabledes = {0};
         res = RDBTableDescribe(ctx, sqlstmt->create.tablespace, sqlstmt->create.tablename, &tabledes);
 
@@ -2005,7 +2010,9 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                 return RDBAPI_SUCCESS;
             }
         }
+
     } else if (sqlstmt->stmt == RDBSQL_DESC_TABLE) {
+
         RDBTableDes_t tabledes = {0};
 
         if (RDBTableDescribe(ctx, sqlstmt->desctable.tablespace, sqlstmt->desctable.tablename, &tabledes) != RDBAPI_SUCCESS) {
@@ -2028,6 +2035,7 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
             *outResultMap = resultMap;
             return RDBAPI_SUCCESS;
         }
+
     } else if (sqlstmt->stmt == RDBSQL_DROP_TABLE) {
 
         RDBTableDes_t tabledes = {0};
@@ -2045,14 +2053,13 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         }        
 
     } else if (sqlstmt->stmt == RDBSQL_INFO_SECTION) {
+
         if (RDBCtxCheckInfo(ctx, sqlstmt->info.section, sqlstmt->info.whichnode) == RDBAPI_SUCCESS) {
             /**
              * infomap => [nodeid, hostp, section, name, value]
              */
             RDBRowset infomap = NULL;
-
-            int len;
-            char str[RDB_KEY_VALUE_SIZE];
+            const char *names[] = {"nodeid", "hostp", "section", "name", "value"};
 
             const char *sections[] = {
                 "Server",        // 0
@@ -2074,16 +2081,14 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                 nposInfoSecs = MAX_NODEINFO_SECTIONS;
             }
 
+            RDBRowsetCreate(5, names, &infomap);
+
             threadlock_lock(&ctx->env->thrlock);
 
             do {
                 int section;
                 int nodeindex = 0;
                 int endNodeid = RDBEnvNumNodes(ctx->env);
-
-                const char *names[] = {"nodeid", "hostp", "section", "name", "value"};
-
-                RDBRowsetCreate(5, names, &infomap); 
 
                 if (sqlstmt->info.whichnode) {
                     endNodeid = sqlstmt->info.whichnode;                    
@@ -2102,13 +2107,10 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
 
                         for (propnode = propmap; propnode != NULL; propnode = propnode->hh.next) {
                             RDBRow row = NULL;
+                            RDBRowNew(infomap, NULL, 0, &row);
 
-                            // build rowkey = {nodeid::section:prop}
-                            len = snprintf_chkd_V1(str, sizeof(str), "{%d::%s:%s}", envnode->index + 1, sections[section], propnode->name);
-                            RDBRowNew(infomap, str, len, &row);
-
-                            len = snprintf_chkd_V1(str, sizeof(str), "%d", envnode->index + 1);
-                            RDBCellSetString(RDBRowCell(row, 0), str, len);
+                            keylen = snprintf_chkd_V1(keybuf, sizeof(keybuf), "%d", envnode->index + 1);
+                            RDBCellSetString(RDBRowCell(row, 0), keybuf, keylen);
 
                             RDBCellSetString(RDBRowCell(row, 1), envnode->key, -1);
                             RDBCellSetString(RDBRowCell(row, 2), sections[section], -1);
@@ -2136,10 +2138,11 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
 
     } else if (sqlstmt->stmt == RDBSQL_SHOW_DATABASES) {
 
-        // {redisdb::$database:*}
-        RDBResultMap resultMap;
-        redisReply *replyRows;
+        RDBRowset remap = NULL;
+        const char *names[] = {"database"};
+        RDBRowsetCreate(1, names, &remap); 
 
+        redisReply *replyRows;
         RDBBlob_t pattern = {0};
 
         // result cursor state
@@ -2147,8 +2150,6 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
 
         int nodeindex = 0;
         int prefixlen = (int) strlen(RDB_SYSTEM_TABLE_PREFIX) + 3;
-
-        RDBResultMapNew(ctx, NULL, sqlstmt->stmt, NULL, NULL, 0, NULL, NULL, &resultMap);
 
         pattern.maxsz = prefixlen + 8;
         pattern.str = RDBMemAlloc(pattern.maxsz);
@@ -2180,13 +2181,10 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                         if (cstr_startwith(reply->str, reply->len, pattern.str, prefixlen)) {
                             char *end = strchr(reply->str + prefixlen, ':');
                             if (end) {
-                                redisReply * replydb;
-
-                                *end = '\0';
-
-                                replydb = RDBStringReplyCreate(reply->str + prefixlen, end - reply->str - prefixlen);
-
-                                RDBResultMapInsert(resultMap, replydb);
+                                RDBRow row = NULL;
+                                RDBRowNew(remap, NULL, 0, &row);
+                                RDBCellSetString(RDBRowCell(row, 0), reply->str + prefixlen, (int)(end - reply->str - prefixlen));
+                                RDBRowsetInsertRow(remap, row);
                             }
                         }
                     }
@@ -2201,15 +2199,23 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         RDBMemFree(nodestates);
         RDBMemFree(pattern.str);
 
+        //TODO:
+        RDBRowsetDestroy(remap);
+
+        ///////////////////////DEL??
+        RDBResultMap resultMap;
+        RDBResultMapNew(ctx, NULL, sqlstmt->stmt, NULL, NULL, 0, NULL, NULL, &resultMap);
         *outResultMap = resultMap;
         return RDBResultMapSize(resultMap);
 
     } else if (sqlstmt->stmt == RDBSQL_SHOW_TABLES) {
 
+        RDBRowset remap = NULL;
+        const char *names[] = {"database.tablename"};
+
         // {redisdb::database:$tablename}
-        RDBResultMap resultMap;        
         redisReply *replyRows;
-        
+
         RDBBlob_t pattern = {0};
 
         // result cursor state
@@ -2219,11 +2225,11 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         int dbnlen = cstr_length(sqlstmt->showtables.tablespace, RDB_KEY_NAME_MAXLEN);
         int prefixlen = (int) strlen(RDB_SYSTEM_TABLE_PREFIX) + 3;
 
-        RDBResultMapNew(ctx, NULL, sqlstmt->stmt, NULL, NULL, 0, NULL, NULL, &resultMap);
-
         pattern.maxsz = prefixlen + dbnlen + 8;
         pattern.str = RDBMemAlloc(pattern.maxsz);
         pattern.length = snprintf_chkd_V1(pattern.str, pattern.maxsz, "{%s::%.*s:*}", RDB_SYSTEM_TABLE_PREFIX, dbnlen, sqlstmt->showtables.tablespace);
+
+        RDBRowsetCreate(1, names, &remap);
 
         while (nodeindex < RDBEnvNumNodes(ctx->env)) {
             RDBEnvNode envnode = RDBEnvGetNode(ctx->env, nodeindex);
@@ -2250,15 +2256,15 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
 
                         char *end = strchr(reply->str + prefixlen + dbnlen + 1, ':');
                         if (end) {
-                            redisReply * replytbl;
+                            RDBRow row = NULL;
 
                             *end = 0;
                             *(reply->str + prefixlen - 1) = 0;
                             *(reply->str + prefixlen + dbnlen) = '.';
 
-                            replytbl = RDBStringReplyCreate(reply->str + prefixlen, end - reply->str - prefixlen);
-
-                            RDBResultMapInsert(resultMap, replytbl);
+                            RDBRowNew(remap, NULL, 0, &row);
+                            RDBCellSetString(RDBRowCell(row, 0), reply->str + prefixlen, (int)(end - reply->str - prefixlen));
+                            RDBRowsetInsertRow(remap, row);
                         }
                     }
 
@@ -2271,6 +2277,13 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
 
         RDBMemFree(nodestates);
         RDBMemFree(pattern.str);
+
+        //TODO:
+        RDBRowsetDestroy(remap);
+
+        ///////////////////DEL??
+        RDBResultMap resultMap; 
+        RDBResultMapNew(ctx, NULL, sqlstmt->stmt, NULL, NULL, 0, NULL, NULL, &resultMap);
 
         *outResultMap = resultMap;
         return RDBResultMapSize(resultMap);

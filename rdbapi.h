@@ -751,6 +751,7 @@ extern RDBZString RDBRowsetColHeaderName (RDBRowset resultmap, int colindex);
 extern RDBRowIter RDBRowsetFirstRow (RDBRowset resultmap);
 extern RDBRowIter RDBRowsetNextRow (RDBRowIter rowiter);
 extern RDBRow RDBRowIterGetRow (RDBRowIter iter);
+extern ub4 RDBRowsetSize (RDBRowset resultmap);
 extern void RDBRowsetPrint (RDBRowset resultmap, FILE *fout);
 
 

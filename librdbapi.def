@@ -110,6 +110,7 @@ EXPORTS
 	RDBRowsetNextRow
 	RDBRowIterGetRow
 	RDBRowsetPrint
+	RDBRowsetSize
 
 	RDBRowNew
 	RDBRowFree
