@@ -39,6 +39,86 @@
 #include "common/re.h"
 
 
+static RDBRowset RDBResultMapBuildTableDes (const char *tablespace, const char *tablename, const char **vtnames, RDBTableDes_t *tabledes)
+{
+    RDBAPI_RESULT res;
+
+    int j, len;
+    char buf[RDB_KEY_VALUE_SIZE];
+
+    RDBRowset tablemap;
+    RDBRowset fieldsmap;
+
+    RDBRow tablerow;
+
+    const char *tblnames[] = {
+        "tablespace",
+        "tablename",
+        "datetime",
+        "timestamp",
+        "comment",
+        "fields"
+    };
+
+    const char *fldnames[] = {
+        "fieldname",
+        "fieldtype",
+        "length",
+        "scale",
+        "rowkey",
+        "nullable",
+        "comment"
+    };
+
+    res = RDBRowsetCreate(6, tblnames, &tablemap);
+
+    res = RDBRowsetCreate(7, fldnames, &fieldsmap);
+
+    res = RDBRowNew(tablemap, tabledes->table_rowkey, -1, &tablerow);
+
+    RDBCellSetString(RDBRowCell(tablerow, 0), tablespace, -1);
+    RDBCellSetString(RDBRowCell(tablerow, 1), tablename, -1);
+    RDBCellSetString(RDBRowCell(tablerow, 2), tabledes->table_datetime, -1);
+
+    len = snprintf_chkd_V1(buf, sizeof(buf), "%"PRIu64, tabledes->table_timestamp);
+    RDBCellSetString(RDBRowCell(tablerow, 3), buf, len);
+    RDBCellSetString(RDBRowCell(tablerow, 4), tabledes->table_comment, -1);
+    RDBCellSetResult(RDBRowCell(tablerow, 5), fieldsmap);
+
+    RDBRowsetInsertRow(tablemap, tablerow);
+
+    for (j = 0;  j < tabledes->nfields; j++) {
+        RDBRow fieldrow;
+        RDBFieldDes_t *fldes = &tabledes->fielddes[j];
+
+        len = snprintf_chkd_V1(buf, sizeof(buf), "{%s::%s:%.*s}", tablespace, tablename, fldes->namelen, fldes->fieldname);
+
+        RDBRowNew(fieldsmap, buf, len, &fieldrow);
+
+        RDBCellSetString(RDBRowCell(fieldrow, 0), fldes->fieldname, fldes->namelen);
+        RDBCellSetString(RDBRowCell(fieldrow, 1), vtnames[fldes->fieldtype], -1);
+
+        len = snprintf_chkd_V1(buf, sizeof(buf), "%d", fldes->length);
+        RDBCellSetString(RDBRowCell(fieldrow, 2), buf, len);
+
+        len = snprintf_chkd_V1(buf, sizeof(buf), "%d", fldes->dscale);
+        RDBCellSetString(RDBRowCell(fieldrow, 3), buf, len);
+
+        len = snprintf_chkd_V1(buf, sizeof(buf), "%d", fldes->rowkey);
+        RDBCellSetString(RDBRowCell(fieldrow, 4), buf, len);
+
+        len = snprintf_chkd_V1(buf, sizeof(buf), "%c", fldes->nullable? 'y' : 'N');
+        RDBCellSetString(RDBRowCell(fieldrow, 5), buf, len);
+
+        RDBCellSetString(RDBRowCell(fieldrow, 6), fldes->comment, -1);
+
+        RDBRowsetInsertRow(fieldsmap, fieldrow);
+    }
+
+    return tablemap;
+}
+
+
 static int RDBSQLNameValidate (const char *name, int len, int maxlen)
 {
     const char *pch;
@@ -1895,7 +1975,6 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         return RDBResultMapSize(resultMap);
 
     } else if (sqlstmt->stmt == RDBSQL_CREATE) {
-
         RDBTableDes_t tabledes = {0};
         res = RDBTableDescribe(ctx, sqlstmt->create.tablespace, sqlstmt->create.tablename, &tabledes);
 
@@ -1905,13 +1984,17 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         }
 
         res = RDBTableCreate(ctx, sqlstmt->create.tablespace, sqlstmt->create.tablename, sqlstmt->create.tablecomment, sqlstmt->create.numfields, sqlstmt->create.fielddefs);
-
         if (res == RDBAPI_SUCCESS) {
             bzero(&tabledes, sizeof(tabledes));
 
             res = RDBTableDescribe(ctx, sqlstmt->create.tablespace, sqlstmt->create.tablename, &tabledes);
-
             if (res == RDBAPI_SUCCESS && tabledes.nfields == sqlstmt->create.numfields) {
+               RDBRowset tablemap = RDBResultMapBuildTableDes(sqlstmt->create.tablespace, sqlstmt->create.tablename, vtnames, &tabledes);
+
+                // TODO:
+                RDBRowsetDestroy(tablemap);
+
+                //////////////////DEL??
                 RDBResultMap resultMap;
 
                 RDBResultMapNew(ctx, NULL, sqlstmt->stmt, sqlstmt->create.tablespace, sqlstmt->create.tablename, tabledes.nfields, tabledes.fielddes, NULL, &resultMap);
@@ -1922,88 +2005,18 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                 return RDBAPI_SUCCESS;
             }
         }
-
     } else if (sqlstmt->stmt == RDBSQL_DESC_TABLE) {
         RDBTableDes_t tabledes = {0};
 
         if (RDBTableDescribe(ctx, sqlstmt->desctable.tablespace, sqlstmt->desctable.tablename, &tabledes) != RDBAPI_SUCCESS) {
             return (ub8) RDBAPI_ERROR;
         } else {
-            int j, len;
-            char buf[RDB_KEY_VALUE_SIZE];
+            RDBRowset tablemap = RDBResultMapBuildTableDes(sqlstmt->desctable.tablespace, sqlstmt->desctable.tablename, vtnames, &tabledes);
 
-            RDBRowset tablemap;
-            RDBRowset fieldsmap;
-
-            RDBRow tablerow;
-
-            const char *tblnames[] = {
-                "tablespace",
-                "tablename",
-                "datetime",
-                "timestamp",
-                "comment",
-                "fields"
-            };
-
-            const char *fldnames[] = {
-                "fieldname",
-                "fieldtype",
-                "length",
-                "scale",
-                "rowkey",
-                "nullable",
-                "comment"
-            };
-
-            RDBRowsetCreate(6, tblnames, &tablemap);
-            RDBRowsetCreate(7, fldnames, &fieldsmap);
-
-            RDBRowNew(6, tabledes.table_rowkey, -1, &tablerow);
-
-            RDBCellSetString(RDBRowGetCell(tablerow, 0), sqlstmt->desctable.tablespace, -1);
-            RDBCellSetString(RDBRowGetCell(tablerow, 1), sqlstmt->desctable.tablename, -1);
-            RDBCellSetString(RDBRowGetCell(tablerow, 2), tabledes.table_datetime, -1);
-
-            len = snprintf_chkd_V1(buf, sizeof(buf), "%"PRIu64, tabledes.table_timestamp);
-            RDBCellSetString(RDBRowGetCell(tablerow, 3), buf, len);
-            RDBCellSetString(RDBRowGetCell(tablerow, 4), tabledes.table_comment, -1);
-            RDBCellSetResult(RDBRowGetCell(tablerow, 5), fieldsmap);
-
-            RDBRowsetInsertRow(tablemap, tablerow);
-
-            for (j = 0;  j < tabledes.nfields; j++) {
-                RDBRow fieldrow;
-                RDBFieldDes_t *fldes = &tabledes.fielddes[j];
-
-                RDBRowNew(7, fldes->fieldname, fldes->namelen, &fieldrow);
-
-                RDBCellSetString(RDBRowGetCell(fieldrow, 0), fldes->fieldname, fldes->namelen);
-                RDBCellSetString(RDBRowGetCell(fieldrow, 1), vtnames[fldes->fieldtype], -1);
-
-                len = snprintf_chkd_V1(buf, sizeof(buf), "%d", fldes->length);
-                RDBCellSetString(RDBRowGetCell(fieldrow, 2), buf, len);
-
-                len = snprintf_chkd_V1(buf, sizeof(buf), "%d", fldes->dscale);
-                RDBCellSetString(RDBRowGetCell(fieldrow, 3), buf, len);
-
-                len = snprintf_chkd_V1(buf, sizeof(buf), "%d", fldes->rowkey);
-                RDBCellSetString(RDBRowGetCell(fieldrow, 4), buf, len);
-
-                len = snprintf_chkd_V1(buf, sizeof(buf), "%c", fldes->nullable? 'y' : 'N');
-                RDBCellSetString(RDBRowGetCell(fieldrow, 5), buf, len);
-
-                RDBCellSetString(RDBRowGetCell(fieldrow, 6), fldes->comment, -1);
-
-                RDBRowsetInsertRow(fieldsmap, fieldrow);
-            }
-
-            RDBRowsetPrint(tablemap, stdout);
-
+            // TODO:
             RDBRowsetDestroy(tablemap);
 
-
-            /////////////////////////////
+            /////////////////////////////DEL??
             RDBResultMap resultMap;
             RDBResultMapNew(ctx, NULL, sqlstmt->stmt, sqlstmt->create.tablespace, sqlstmt->create.tablename, tabledes.nfields, tabledes.fielddes, NULL, &resultMap);
 
@@ -2015,7 +2028,6 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
             *outResultMap = resultMap;
             return RDBAPI_SUCCESS;
         }
-
     } else if (sqlstmt->stmt == RDBSQL_DROP_TABLE) {
 
         RDBTableDes_t tabledes = {0};
@@ -2033,13 +2045,14 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         }        
 
     } else if (sqlstmt->stmt == RDBSQL_INFO_SECTION) {
-
         if (RDBCtxCheckInfo(ctx, sqlstmt->info.section, sqlstmt->info.whichnode) == RDBAPI_SUCCESS) {
-            int section;
+            /**
+             * infomap => [nodeid, hostp, section, name, value]
+             */
+            RDBRowset infomap = NULL;
 
-            char keyprefix[RDBAPI_PROP_MAXSIZE];
-
-            RDBResultMap resultMap;
+            int len;
+            char str[RDB_KEY_VALUE_SIZE];
 
             const char *sections[] = {
                 "Server",        // 0
@@ -2061,13 +2074,16 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                 nposInfoSecs = MAX_NODEINFO_SECTIONS;
             }
 
-            RDBResultMapNew(ctx, NULL, sqlstmt->stmt, NULL, NULL, 0, NULL, NULL, &resultMap);
-
             threadlock_lock(&ctx->env->thrlock);
 
             do {
+                int section;
                 int nodeindex = 0;
                 int endNodeid = RDBEnvNumNodes(ctx->env);
+
+                const char *names[] = {"nodeid", "hostp", "section", "name", "value"};
+
+                RDBRowsetCreate(5, names, &infomap); 
 
                 if (sqlstmt->info.whichnode) {
                     endNodeid = sqlstmt->info.whichnode;                    
@@ -2075,62 +2091,44 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                 }
 
                 for (; nodeindex < endNodeid; nodeindex++) {
+                    RDBRow noderow = NULL;
+
                     RDBCtxNode ctxnode = RDBCtxGetNode(ctx, nodeindex);
                     RDBEnvNode envnode = RDBCtxNodeGetEnvNode(ctxnode);
 
-                    // node as row: {clusternode(%d)::$host:$port}
-                    RDBResultRow rowdata = (RDBResultRow) RDBMemAlloc(sizeof(RDBResultRow_t));
-                    int len = snprintf_chkd_V1(keyprefix, sizeof(keyprefix), "{clusternode(%d)::%s}", envnode->index + 1, envnode->key);
-
-                    rowdata->replykey = RDBStringReplyCreate(keyprefix, len);
-
-                    // section as fields
                     for (section = startInfoSecs; section != nposInfoSecs; section++) {
                         RDBPropNode propnode;
                         RDBPropMap propmap = envnode->nodeinfo[section];
 
                         for (propnode = propmap; propnode != NULL; propnode = propnode->hh.next) {
-                            RDBNameReply nnode;
+                            RDBRow row = NULL;
 
-                            int namelen = snprintf_chkd_V1(keyprefix, sizeof(keyprefix), "%s::%s", sections[section], propnode->name);
-                            int valuelen = cstr_length(propnode->value, RDB_ROWKEY_MAX_SIZE);
+                            // build rowkey = {nodeid::section:prop}
+                            len = snprintf_chkd_V1(str, sizeof(str), "{%d::%s:%s}", envnode->index + 1, sections[section], propnode->name);
+                            RDBRowNew(infomap, str, len, &row);
 
-                            nnode = (RDBNameReply) RDBMemAlloc(sizeof(RDBNameReply_t) + namelen + 1 + valuelen + 1);
+                            len = snprintf_chkd_V1(str, sizeof(str), "%d", envnode->index + 1);
+                            RDBCellSetString(RDBRowCell(row, 0), str, len);
 
-                            nnode->name = nnode->namebuf;
-                            nnode->namelen = namelen;
-                            memcpy(nnode->namebuf, keyprefix, namelen);
+                            RDBCellSetString(RDBRowCell(row, 1), envnode->key, -1);
+                            RDBCellSetString(RDBRowCell(row, 2), sections[section], -1);
+                            RDBCellSetString(RDBRowCell(row, 3), propnode->name, -1);
+                            RDBCellSetString(RDBRowCell(row, 4), propnode->value, -1);
 
-                            nnode->subval = &nnode->namebuf[namelen + 1];
-                            nnode->sublen = valuelen;
-                            memcpy(nnode->subval, propnode->value, valuelen);
-
-                            HASH_ADD_STR_LEN(rowdata->fieldmap, name, nnode->namelen, nnode);
+                            RDBRowsetInsertRow(infomap, row);
                         }
                     }
-
-                    do {
-                        // insert row into result
-                        int is_new_node;
-                        red_black_node_t *node = rbtree_insert_unique(&resultMap->rbtree, (void *) rowdata, &is_new_node);
-
-                        if (! node) {
-                            // out of memory
-                            RDBResultRowFree(rowdata);
-                            RDBResultMapFree(resultMap);
-                            return RDBAPI_ERR_NOMEM;
-                        }
-
-                        if (! is_new_node) {
-                            RDBResultRowFree(rowdata);
-                            RDBResultMapFree(resultMap);
-                            return RDBAPI_ERR_EXISTED;
-                        }
-                    } while(0);
                 }
             } while(0);
 
             threadlock_unlock(&ctx->env->thrlock);
+
+            // TODO:
+            RDBRowsetDestroy(infomap);
+
+            ///////////////////////////////////////////////////////////////DEL??
+            RDBResultMap resultMap;
+            RDBResultMapNew(ctx, NULL, sqlstmt->stmt, NULL, NULL, 0, NULL, NULL, &resultMap);
 
             *outResultMap = resultMap;
             return RDBAPI_SUCCESS;

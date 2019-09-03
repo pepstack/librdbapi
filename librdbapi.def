@@ -114,8 +114,8 @@ EXPORTS
 	RDBRowNew
 	RDBRowFree
 	RDBRowGetKey
-	RDBRowGetCells
-	RDBRowGetCell
+	RDBRowCells
+	RDBRowCell
 
 	RDBCellSetValue
 	RDBCellGetValue

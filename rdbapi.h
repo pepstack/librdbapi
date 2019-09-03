@@ -741,27 +741,16 @@ extern int RDBCtxExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResultMap **ou
  *
  *********************************************************************/
 extern RDBAPI_RESULT RDBRowsetCreate (int numcols, const char *names[], RDBRowset *outresultmap);
-
 extern void RDBRowsetDestroy (RDBRowset resultmap);
-
 extern RDBAPI_RESULT RDBRowsetInsertRow (RDBRowset resultmap, RDBRow row);
-
 extern RDBRow RDBRowsetFindRow (RDBRowset resultmap, const char *rowkey, int keylen);
-
 extern void RDBRowsetDeleteRow (RDBRowset resultmap, RDBRow row);
-
 extern void RDBRowsetCleanRows (RDBRowset resultmap);
-
 extern int RDBRowsetColHeaders (RDBRowset resultmap);
-
 extern RDBZString RDBRowsetColHeaderName (RDBRowset resultmap, int colindex);
-
 extern RDBRowIter RDBRowsetFirstRow (RDBRowset resultmap);
-
 extern RDBRowIter RDBRowsetNextRow (RDBRowIter rowiter);
-
 extern RDBRow RDBRowIterGetRow (RDBRowIter iter);
-
 extern void RDBRowsetPrint (RDBRowset resultmap, FILE *fout);
 
 
@@ -771,15 +760,11 @@ extern void RDBRowsetPrint (RDBRowset resultmap, FILE *fout);
  *
  *************************************/
 
-extern RDBAPI_RESULT RDBRowNew (int numcells, const char *key, int keylen, RDBRow *outrow);
-
+extern RDBAPI_RESULT RDBRowNew (RDBRowset resultmap, const char *key, int keylen, RDBRow *outrow);
 extern void RDBRowFree (RDBRow row);
-
 extern const char * RDBRowGetKey (RDBRow row, int *keylen);
-
-extern int RDBRowGetCells (RDBRow row);
-
-extern RDBCell RDBRowGetCell (RDBRow row, int colindex);
+extern int RDBRowCells (RDBRow row);
+extern RDBCell RDBRowCell (RDBRow row, int colindex);
 
 
 /**************************************

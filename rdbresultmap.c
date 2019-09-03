@@ -204,18 +204,18 @@ void RDBRowsetPrint (RDBRowset resultmap, FILE *fout)
  *
  **************************************/
 
-RDBAPI_RESULT RDBRowNew (int numcells, const char *key, int keylen, RDBRow *outrow)
+RDBAPI_RESULT RDBRowNew (RDBRowset resultmap, const char *key, int keylen, RDBRow *outrow)
 {
     if (keylen == (-1)) {
         keylen = cstr_length(key, RDB_KEY_VALUE_SIZE);
     }
 
     if (keylen > 0 && keylen < RDB_KEY_VALUE_SIZE) {
-        RDBRow row = (RDBRow) RDBMemAlloc(sizeof(RDBRow_t) + sizeof(RDBCell_t) * numcells + keylen+1);
+        RDBRow row = (RDBRow) RDBMemAlloc(sizeof(RDBRow_t) + sizeof(RDBCell_t) * RDBRowsetColHeaders(resultmap) + keylen + 1);
         if (row) {
-            row->count = numcells;
+            row->count = RDBRowsetColHeaders(resultmap);
 
-            row->key = (char *) &row->cells[numcells];
+            row->key = (char *) &row->cells[row->count];
             row->keylen = keylen;
     
             memcpy(row->key, key, keylen);
@@ -234,7 +234,7 @@ RDBAPI_RESULT RDBRowNew (int numcells, const char *key, int keylen, RDBRow *outr
 void RDBRowFree (RDBRow row)
 {
     while (row->count-- > 0) {
-        RDBCellClean(RDBRowGetCell(row, row->count));
+        RDBCellClean(RDBRowCell(row, row->count));
     }
 
     RDBMemFree(row);
@@ -250,13 +250,13 @@ const char * RDBRowGetKey (RDBRow row, int *keylen)
 }
 
 
-int RDBRowGetCells (RDBRow row)
+int RDBRowCells (RDBRow row)
 {
     return row->count;
 }
 
 
-RDBCell RDBRowGetCell (RDBRow row, int colindex)
+RDBCell RDBRowCell (RDBRow row, int colindex)
 {
     return &row->cells[colindex];
 }
