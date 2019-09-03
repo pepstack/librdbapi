@@ -264,28 +264,23 @@ RDBCell RDBRowGetCell (RDBRow row, int colindex)
 
 /**************************************
  *
- * RDBCell
+ * RDBCell API
  *
- **************************************/
+ *************************************/
 
-RDBCell RDBCellInit (RDBCell cell, RDBCellType type, void *value)
+RDBCell RDBCellSetValue (RDBCell cell, RDBCellType type, void *value)
 {
+    if (cell->type != RDB_CELLTYPE_INVALID) {
+        RDBCellClean(cell);
+    }
+
     switch (type) {
-    case RDB_CELLTYPE_STRING:
+    case RDB_CELLTYPE_ZSTRING:
         cell->zstr = (RDBZString) value;
         break;
 
-    case RDB_CELLTYPE_INTEGER:
-        memcpy(&cell->lval, (sb8 *)value, sizeof(sb8));
-        break;
-
-    case RDB_CELLTYPE_DOUBLE:
-        memcpy(&cell->dval, (double *)value, sizeof(double));
-        break;
-
     case RDB_CELLTYPE_BINARY:
-        cell->bval.addr = ((tpl_bin *) value)->addr;
-        cell->bval.sz = ((tpl_bin *) value)->sz;
+        cell->bin = (RDBBinary) value;
         break;
 
     case RDB_CELLTYPE_REPLY:
@@ -306,15 +301,91 @@ RDBCell RDBCellInit (RDBCell cell, RDBCellType type, void *value)
 }
 
 
+RDBCellType RDBCellGetValue (RDBCell cell, void **outvalue)
+{
+    switch (cell->type) {
+    case RDB_CELLTYPE_ZSTRING:
+        *outvalue = (void*) cell->zstr;
+        break;
+
+    case RDB_CELLTYPE_BINARY:
+        *outvalue = (void*) cell->bin;
+        break;
+
+    case RDB_CELLTYPE_REPLY:
+        *outvalue = (void*)cell->reply;
+        break;
+
+    case RDB_CELLTYPE_RESULTMAP:
+        *outvalue = (void*)cell->resultmap;
+        break;
+
+    default:
+        *outvalue = NULL;
+        break;
+    }
+
+    return cell->type;
+}
+
+
+RDBCell RDBCellSetString (RDBCell cell, const char *str, int len)
+{
+    return RDBCellSetValue(cell, RDB_CELLTYPE_ZSTRING, (void*) RDBZStringNew(str, len));
+}
+
+
+RDBCell RDBCellSetBinary (RDBCell cell, const void *addr, ub4 sz)
+{
+    return RDBCellSetValue(cell, RDB_CELLTYPE_RESULTMAP, (void*) RDBBinaryNew(addr, sz));
+}
+
+
+RDBCell RDBCellSetReply (RDBCell cell, redisReply *replyString)
+{
+    return RDBCellSetValue(cell, RDB_CELLTYPE_RESULTMAP, (void*) replyString);
+}
+
+
+RDBCell RDBCellSetResult (RDBCell cell, RDBRowset resultmap)
+{
+    return RDBCellSetValue(cell, RDB_CELLTYPE_RESULTMAP, (void*) resultmap);
+}
+
+
+RDBZString RDBCellGetString (RDBCell cell)
+{
+    return cell->zstr;
+}
+
+
+RDBBinary RDBCellGetBinary (RDBCell cell)
+{
+    return cell->bin;
+}
+
+
+redisReply* RDBCellGetReply (RDBCell cell)
+{
+    return cell->reply;
+}
+
+
+RDBRowset RDBCellGetResult (RDBCell cell)
+{
+    return cell->resultmap;
+}
+
+
 void RDBCellClean (RDBCell cell)
 {
     switch (cell->type) {
-    case RDB_CELLTYPE_STRING:
+    case RDB_CELLTYPE_ZSTRING:
         RDBZStringFree(cell->zstr);
         break;
 
     case RDB_CELLTYPE_BINARY:
-        RDBMemFree(cell->bval.addr);
+        RDBBinaryFree(cell->bin);
         break;
 
     case RDB_CELLTYPE_REPLY:
@@ -327,35 +398,4 @@ void RDBCellClean (RDBCell cell)
     }
 
     bzero(cell, sizeof(RDBCell_t));
-}
-
-
-void RDBCellPrint (RDBRowset resultmap, RDBCell cell, FILE *fout)
-{
-    switch (cell->type) {
-    case RDB_CELLTYPE_STRING:
-        fprintf(fout, "%.*s", (int)cell->zstr->len, cell->zstr->str);
-        break;
-
-    case RDB_CELLTYPE_INTEGER:
-        fprintf(fout, "%"PRId64, cell->lval);
-        break;
-
-    case RDB_CELLTYPE_DOUBLE:
-        fprintf(fout, "%lf", cell->dval);
-        break;
-
-    case RDB_CELLTYPE_BINARY:
-        // TODO
-        fprintf(fout, "(binary:%d)", (int)cell->bval.sz);
-        break;
-
-    case RDB_CELLTYPE_REPLY:
-        // TODO:
-        break;
-
-    case RDB_CELLTYPE_RESULTMAP:
-        RDBRowsetPrint(cell->resultmap, fout);
-        break;
-    }
 }

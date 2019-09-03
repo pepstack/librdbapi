@@ -50,17 +50,11 @@ typedef struct _RDBCell_t
     RDBCellType type;
 
     union {
-        // RDB_COLTYPE_INTEGER
-        sb8        lval;
-
-        // RDB_COLTYPE_DOUBLE
-        double     dval;
-
         // RDB_COLTYPE_STRING
         RDBZString zstr;
 
         // RDB_COLTYPE_BINARY
-        tpl_bin    bval;
+        RDBBinary  bin;
 
         // RDB_COLTYPE_REPLY
         redisReply *reply;

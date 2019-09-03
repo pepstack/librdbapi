@@ -326,6 +326,36 @@ void RDBMemFree (void *addr)
 }
 
 
+RDBBinary RDBBinaryNew (const void *addr, ub4 sz)
+{
+    RDBBinary bin;
+
+    bin = RDBMemAlloc(sizeof(RDBBinary_t));
+    if (bin) {
+        bin->addr = RDBMemAlloc(sz);
+        if (bin->addr) {
+            memcpy(bin->addr, addr, sz);
+            bin->sz = sz;
+            return bin;
+        } else {
+            RDBMemFree(bin);
+            return NULL;
+        }
+    }
+
+    return NULL;
+}
+
+
+void RDBBinaryFree (RDBBinary bin)
+{
+    if (bin) {
+        RDBMemFree(bin->addr);
+        RDBMemFree(bin);
+    }
+}
+
+
 /**********************************************************************
  *
  * RDBZString API

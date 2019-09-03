@@ -220,6 +220,13 @@ typedef struct _RDBRow_t         * RDBRow;
 typedef struct _RDBRowIter_t     * RDBRowIter;
 
 
+typedef struct _RDBBinary_t
+{
+    void *addr;
+    uint32_t sz;
+} RDBBinary_t, *RDBBinary;
+
+
 typedef enum
 {
     // DO NOT CHANGE !
@@ -261,12 +268,10 @@ typedef enum
 typedef enum
 {
     RDB_CELLTYPE_INVALID     = 0
-    ,RDB_CELLTYPE_STRING     = 1
-    ,RDB_CELLTYPE_INTEGER    = 2
-    ,RDB_CELLTYPE_DOUBLE     = 3
-    ,RDB_CELLTYPE_BINARY     = 4
-    ,RDB_CELLTYPE_REPLY      = 5
-    ,RDB_CELLTYPE_RESULTMAP  = 6  // nested result map
+    ,RDB_CELLTYPE_ZSTRING    = 1
+    ,RDB_CELLTYPE_BINARY     = 2  // tpl_bin
+    ,RDB_CELLTYPE_REPLY      = 3  // reply string
+    ,RDB_CELLTYPE_RESULTMAP  = 4  // nested result map
 } RDBCellType;
 
 
@@ -385,6 +390,10 @@ extern void * RDBMemRealloc (void *oldp, size_t oldsizeb, size_t newsizeb);
 extern void RDBMemFree (void *addr);
 
 extern int RDBExprValues (RDBValueType vt, const char *val1, int len1, RDBFilterExpr expr, const char *val2, int len2);
+
+extern RDBBinary RDBBinaryNew (const void *addr, ub4 sz);
+
+extern void RDBBinaryFree (RDBBinary bin);
 
 
 extern RDBZString RDBZStringNew (const char *str, ub4 len);
@@ -756,6 +765,12 @@ extern RDBRow RDBRowIterGetRow (RDBRowIter iter);
 extern void RDBRowsetPrint (RDBRowset resultmap, FILE *fout);
 
 
+/**************************************
+ *
+ * RDBRow API
+ *
+ *************************************/
+
 extern RDBAPI_RESULT RDBRowNew (int numcells, const char *key, int keylen, RDBRow *outrow);
 
 extern void RDBRowFree (RDBRow row);
@@ -767,12 +782,26 @@ extern int RDBRowGetCells (RDBRow row);
 extern RDBCell RDBRowGetCell (RDBRow row, int colindex);
 
 
-extern RDBCell RDBCellInit (RDBCell cell, RDBCellType type, void *value);
+/**************************************
+ *
+ * RDBCell API
+ *
+ *************************************/
+
+extern RDBCell RDBCellSetValue (RDBCell cell, RDBCellType type, void *value);
+extern RDBCellType RDBCellGetValue (RDBCell cell, void **outvalue);
+
+extern RDBCell RDBCellSetString (RDBCell cell, const char *str, int len);
+extern RDBCell RDBCellSetBinary (RDBCell cell, const void *addr, ub4 sz);
+extern RDBCell RDBCellSetReply (RDBCell cell, redisReply *replyString);
+extern RDBCell RDBCellSetResult (RDBCell cell, RDBRowset resultmap);
+
+extern RDBZString RDBCellGetString (RDBCell cell);
+extern RDBBinary RDBCellGetBinary (RDBCell cell);
+extern redisReply* RDBCellGetReply (RDBCell cell);
+extern RDBRowset RDBCellGetResult (RDBCell cell);
 
 extern void RDBCellClean (RDBCell cell);
-
-extern void RDBCellPrint (RDBRowset resultmap, RDBCell cell, FILE *fout);
-
 
 #if defined(__cplusplus)
 }
