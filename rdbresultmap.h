@@ -73,15 +73,26 @@ typedef struct _RDBCell_t
 
 typedef struct _RDBRow_t
 {
-    RDBZString rowkey;
-    redisReply  *replyKey;
+    char *key;
+    int keylen;
 
-    /* number of cells if replyRow is NULL */
-    int ncols;
+    /* makes this structure hashable */
+    UT_hash_handle hh;
+
+    /* count of cells */
+    int count;
 
     /* cell values of row */
-    RDBCell_t colvals[0];
-} RDBRow_t;
+    RDBCell_t cells[0];
+} RDBRow_t, *RDBRowNode, *RDBRowsHashMap;
+
+
+typedef struct _RDBRowIter_t
+{
+    RDBRowNode head;
+    RDBRowNode el;
+    RDBRowNode tmp;
+} RDBRowIter_t;
 
 
 /* ResultMap */
@@ -91,52 +102,17 @@ typedef struct _RDBRowset_t
     //RDBCtx ctx;
     //RDBTableFilter filter;
     //RDBSQLStmtType stmt;
-    char delimiter;
 
-    /* result rows saved in rbtree as a map */
-    red_black_tree_t  rowstree;
+    /* rowsmap deletion-safe iteration */
+    RDBRowIter_t rowiter;
 
-    /* number of columns and column headers */
-    ub4 numcols;
-    ub1 displaywidths[RDBAPI_ARGV_MAXNUM + 4];
-    RDBZString names[0];
+    /* result rows saved in hashmap */
+    RDBRowsHashMap rowsmap;
+
+    /* number of columns and names for column headers */
+    int numcolheaders;
+    RDBZString colheadernames[0];
 } RDBRowset_t;
-
-
-RDBCell RDBCellInit (RDBCell cell, RDBCellType type, void *value);
-
-void RDBCellClean (RDBCell cell);
-
-RDBRow RDBRowNew (ub4 numcols, redisReply *replyKey, char *rowkey, int keylen);
-
-void RDBRowFree (RDBRow row);
-
-const char * RDBRowGetKey (RDBRow row, ub4 *keylen);
-
-ub4 RDBRowGetCells (RDBRow row);
-
-RDBCell RDBRowGetCell (RDBRow row, int colindex);
-
-void RDBCellPrint (RDBRowset resultmap, RDBCell cell, FILE *fout);
-
-RDBAPI_RESULT RDBRowsetCreate (int numcols, const char *names[], RDBRowset *outresultmap);
-
-// extern
-void RDBRowsetDestroy (RDBRowset resultmap);
-
-// extern
-void RDBRowsetCleanRows (RDBRowset resultmap);
-
-// extern
-int RDBRowsetGetCols (RDBRowset resultmap);
-
-// extern
-RDBZString RDBRowsetGetColName (RDBRowset resultmap, int colindex);
-
-// extern
-void RDBRowsetPrint (RDBRowset resultmap, const RDBSheetStyle_t *styles, FILE *fout);
-
-void RDBRowsetTraverse (RDBRowset resultmap, void (ResultRowCbFunc)(void *, void *), void *arg);
 
 
 #if defined(__cplusplus)

@@ -35,52 +35,238 @@
 #include "rdbresultmap.h"
 
 
-typedef struct {
-    FILE *fout;
+/**************************************
+ *
+ * RDBRowset
+ *
+ **************************************/
 
-    RDBRowset resultmap;
-} RDBPrintCbArg_t, *RDBPrintCbArg;
-
-
-static int RDBResultRowCompareCb (void *newObject, void *nodeObject)
+RDBAPI_RESULT RDBRowsetCreate (int numcolheaders, const char *colheadernames[], RDBRowset *outresultmap)
 {
-    if (newObject == nodeObject) {
-        return 0;
+    if (numcolheaders < 1 || numcolheaders > RDBAPI_ARGV_MAXNUM) {
+        return RDBAPI_ERR_BADARG;
     } else {
-        RDBRow A = (RDBRow) newObject;
-        RDBRow B = (RDBRow) nodeObject;
+        RDBRowset resultmap = (RDBRowset) RDBMemAlloc(sizeof(RDBRowset_t) + sizeof(RDBZString) * numcolheaders);
+        if (resultmap) {
+            int col = 0;
+            for (; col < numcolheaders; col++) {
+                resultmap->colheadernames[col] = RDBZStringNew(colheadernames[col], cstr_length(colheadernames[col], RDB_KEY_NAME_MAXLEN));
+            }
 
-        return cstr_compare_len(A->rowkey->str, A->rowkey->len, B->rowkey->str, B->rowkey->len);
+            resultmap->numcolheaders = col;
+
+            *outresultmap = resultmap;
+            return RDBAPI_SUCCESS;
+        } else {
+            return RDBAPI_ERR_NOMEM;
+        }
     }
 }
 
 
-static void RDBResultRowDeleteCb (void *rowobject, void *rowsmap)
+void RDBRowsetDestroy (RDBRowset resultmap)
 {
-     RDBRowFree((RDBRow) rowobject);
+    if (resultmap) {
+        while (resultmap->numcolheaders-- > 0) {
+            RDBZStringFree(resultmap->colheadernames[resultmap->numcolheaders]);
+        }
+
+        RDBRowsetCleanRows(resultmap);
+        RDBMemFree(resultmap);
+    }
 }
 
 
-static void RDBResultRowPrintCb (void *rowobject, void *cbarg)
+RDBAPI_RESULT RDBRowsetInsertRow (RDBRowset resultmap, RDBRow row)
 {
+    RDBRowNode rownode;
+
+    HASH_FIND_STR_LEN(resultmap->rowsmap, row->key, row->keylen, rownode);
+
+    if (rownode) {
+        return RDBAPI_ERR_EXISTED;
+    }
+
+    HASH_ADD_STR_LEN(resultmap->rowsmap, key, row->keylen, row);
+
+    return RDBAPI_SUCCESS;
+}
+
+
+RDBRow RDBRowsetFindRow (RDBRowset resultmap, const char *rowkey, int keylen)
+{
+    RDBRowNode node;
+
+    if (keylen == -1) {
+        HASH_FIND_STR(resultmap->rowsmap, rowkey, node);
+    } else {
+        HASH_FIND_STR_LEN(resultmap->rowsmap, rowkey, keylen, node);
+    }
+
+    return node;
+}
+
+
+void RDBRowsetDeleteRow (RDBRowset resultmap, RDBRow row)
+{
+    HASH_DEL(resultmap->rowsmap, row);
+    RDBRowFree(row);
+}
+
+
+void RDBRowsetCleanRows (RDBRowset resultmap)
+{
+    RDBRowNode curnode, tmpnode;
+    HASH_ITER(hh, resultmap->rowsmap, curnode, tmpnode) {
+        HASH_DEL(resultmap->rowsmap, curnode);
+        RDBRowFree(curnode);
+    }
+}
+
+
+int RDBRowsetColHeaders (RDBRowset resultmap)
+{
+    return resultmap->numcolheaders;
+}
+
+
+RDBZString RDBRowsetColHeaderName (RDBRowset resultmap, int colindex)
+{
+    return resultmap->colheadernames[colindex];
+}
+
+
+RDBRowIter RDBRowsetFirstRow (RDBRowset resultmap)
+{
+    RDBRowIter iter = &resultmap->rowiter;
+
+    iter->head = resultmap->rowsmap;
+    iter->el = iter->head;
+
+#ifdef NO_DECLTYPE
+    (*(char**)(&iter->tmp)) = (char*) (iter->head != NULL? iter->head->hh.next : NULL);
+#else
+    iter->tmp = DECLTYPE(iter->el)(iter->head != NULL? iter->head->hh.next : NULL);
+#endif
+
+    return (iter->el != NULL ? iter : NULL);
+}
+
+
+RDBRowIter RDBRowsetNextRow (RDBRowIter iter)
+{
+    if (! iter) {
+        return NULL;
+    }
+
+    iter->el = iter->tmp;
+
+#ifdef NO_DECLTYPE
+    (*(char**)(&iter->tmp)) = (char*)(iter->tmp != NULL? iter->tmp->hh.next : NULL);
+#else
+    iter->tmp = DECLTYPE(el)(iter->tmp != NULL? iter->tmp->hh.next : NULL);
+#endif
+
+    return (iter->el != NULL ? iter : NULL);
+}
+
+
+RDBRow RDBRowIterGetRow (RDBRowIter iter)
+{
+    return (iter? iter->el : NULL);
+}
+
+
+void RDBRowsetPrint (RDBRowset resultmap, FILE *fout)
+{
+    // print cols header
     int col;
-    RDBCell cell;
 
-    RDBRow row = (RDBRow) rowobject;
+    for (col = 0; col < RDBRowsetColHeaders(resultmap); col++) {
+        RDBZString zstr = RDBRowsetColHeaderName(resultmap, col);
+        if (col == 0) {
+            fprintf(fout, " %-20.*s", (int) RDBZStringLen(zstr), RDBZStringAddr(zstr));
+        } else {
+            fprintf(fout, "| %-20.*s", (int) RDBZStringLen(zstr), RDBZStringAddr(zstr));
+        }
+    }
 
-    RDBPrintCbArg pcba = (RDBPrintCbArg) cbarg;
+    fprintf(fout, "\n");
 
-    // RDBRowGetKey(row, );
+    // print rows
+}
 
-    int cells = RDBRowGetCells(row);
 
-    for (col = 0; col < cells; col++) {
-        cell = RDBRowGetCell(row, col);
 
-        RDBCellPrint(pcba->resultmap, cell, (FILE *) pcba->fout);
+/**************************************
+ *
+ * RDBRow
+ *
+ **************************************/
+
+RDBAPI_RESULT RDBRowNew (int numcells, const char *key, int keylen, RDBRow *outrow)
+{
+    if (keylen == (-1)) {
+        keylen = cstr_length(key, RDB_KEY_VALUE_SIZE);
+    }
+
+    if (keylen > 0 && keylen < RDB_KEY_VALUE_SIZE) {
+        RDBRow row = (RDBRow) RDBMemAlloc(sizeof(RDBRow_t) + sizeof(RDBCell_t) * numcells + keylen+1);
+        if (row) {
+            row->count = numcells;
+
+            row->key = (char *) &row->cells[numcells];
+            row->keylen = keylen;
+    
+            memcpy(row->key, key, keylen);
+
+            *outrow = row;
+            return RDBAPI_SUCCESS;
+        } else {
+            return RDBAPI_ERR_NOMEM;
+        }
+    } else {
+        return RDBAPI_ERR_BADARG;
     }
 }
 
+
+void RDBRowFree (RDBRow row)
+{
+    while (row->count-- > 0) {
+        RDBCellClean(RDBRowGetCell(row, row->count));
+    }
+
+    RDBMemFree(row);
+}
+
+
+const char * RDBRowGetKey (RDBRow row, int *keylen)
+{
+    if (keylen) {
+        *keylen = row->keylen;
+    }
+    return row->key;
+}
+
+
+int RDBRowGetCells (RDBRow row)
+{
+    return row->count;
+}
+
+
+RDBCell RDBRowGetCell (RDBRow row, int colindex)
+{
+    return &row->cells[colindex];
+}
+
+
+/**************************************
+ *
+ * RDBCell
+ *
+ **************************************/
 
 RDBCell RDBCellInit (RDBCell cell, RDBCellType type, void *value)
 {
@@ -136,7 +322,7 @@ void RDBCellClean (RDBCell cell)
         break;
 
     case RDB_CELLTYPE_RESULTMAP:
-        //TODO: RDBResultMapDestroy(cell->resultmap);
+        RDBRowsetDestroy(cell->resultmap);
         break;
     }
 
@@ -169,164 +355,7 @@ void RDBCellPrint (RDBRowset resultmap, RDBCell cell, FILE *fout)
         break;
 
     case RDB_CELLTYPE_RESULTMAP:
-        RDBRowsetPrint(cell->resultmap, NULL, fout);
+        RDBRowsetPrint(cell->resultmap, fout);
         break;
     }
-}
-
-
-RDBRow RDBRowNew (ub4 numcols, redisReply *replyKey, char *rowkey, int keylen)
-{
-    if (replyKey && replyKey->type == REDIS_REPLY_STRING) {
-        RDBRow row = (RDBRow) RDBMemAlloc(sizeof(RDBRow_t) + sizeof(RDBCell_t) * numcols);
-        row->ncols = numcols;
-        row->replyKey = replyKey;
-        return row;
-    } else if (rowkey) {
-        RDBRow row = (RDBRow) RDBMemAlloc(sizeof(RDBRow_t) + sizeof(RDBCell_t) * numcols);
-        row->ncols = numcols;
-        row->rowkey = RDBZStringNew(rowkey, (ub4) keylen);
-        return row;
-    } else {
-        fprintf(stderr, "(%s:%d) application error.\n", __FILE__, __LINE__);
-        return NULL;
-    }
-}
-
-
-void RDBRowFree (RDBRow row)
-{
-    while (row->ncols-- > 0) {
-        RDBCellClean(RDBRowGetCell(row, row->ncols));
-    }
-
-    if (row->replyKey) {
-        freeReplyObject(row->replyKey);
-    } else {
-        RDBZStringFree(row->rowkey);
-    }
-
-    RDBMemFree(row);
-}
-
-
-const char * RDBRowGetKey (RDBRow row, ub4 *keylen)
-{
-    if (row->replyKey) {
-        if (keylen) {
-            *keylen = (ub4) row->replyKey->len;
-        }
-        return row->replyKey->str;
-    } else {
-        if (keylen) {
-            *keylen = row->rowkey->len;
-        }
-        return row->rowkey->str;
-    }
-}
-
-
-ub4 RDBRowGetCells (RDBRow row)
-{
-    return row->ncols;
-}
-
-
-RDBCell RDBRowGetCell (RDBRow row, int colindex)
-{
-    return &row->colvals[colindex];
-}
-
-
-RDBAPI_RESULT RDBRowsetCreate (int numcols, const char *names[], RDBRowset *outresultmap)
-{
-    if (numcols > RDBAPI_ARGV_MAXNUM) {
-        return RDBAPI_ERROR;
-    } else {
-        int col;
-        RDBRowset resultmap = (RDBRowset) RDBMemAlloc(sizeof(RDBRowset_t) + sizeof(RDBZString) * numcols);
-        if (! resultmap) {
-            fprintf(stderr, "(%s:%d) out of memory.\n", __FILE__, __LINE__);
-            exit(EXIT_FAILURE);
-        }
-
-        resultmap->delimiter = RDB_TABLE_DELIMITER_CHAR;
-
-        for (col = 0; col < numcols; col++) {
-            resultmap->names[col] = RDBZStringNew(names[col], cstr_length(names[col], RDB_KEY_NAME_MAXLEN));
-        }
-
-        resultmap->numcols = col;
-        rbtree_init(&resultmap->rowstree, (fn_comp_func*) RDBResultRowCompareCb);
-
-        *outresultmap = resultmap;
-        return RDBAPI_SUCCESS;
-    }
-}
-
-
-void RDBRowsetDestroy (RDBRowset resultmap)
-{
-    if (resultmap) {
-        while (resultmap->numcols-- > 0) {
-            RDBZStringFree(resultmap->names[resultmap->numcols]);
-        }
-
-        RDBRowsetCleanRows(resultmap);
-        RDBMemFree(resultmap);
-    }
-}
-
-
-int RDBRowsetGetCols (RDBRowset resultmap)
-{
-    return resultmap->numcols;
-}
-
-
-RDBZString RDBRowsetGetColName (RDBRowset resultmap, int colindex)
-{
-    return resultmap->names[colindex];
-}
-
-
-void RDBRowsetCleanRows (RDBRowset resultmap)
-{
-    if (resultmap) {
-        rbtree_traverse(&resultmap->rowstree, RDBResultRowDeleteCb, (void *) resultmap);
-
-        rbtree_clean(&resultmap->rowstree);
-    }
-}
-
-
-void RDBRowsetTraverse (RDBRowset resultmap, void (ResultRowCbFunc)(void *, void *), void *arg)
-{
-    rbtree_traverse(&resultmap->rowstree, ResultRowCbFunc, arg);
-}
-
-
-void RDBRowsetPrint (RDBRowset resultmap, const RDBSheetStyle_t *styles, FILE *fout)
-{
-    int col;
-    RDBPrintCbArg_t pcba = {0};
-
-    pcba.fout = fout;
-    pcba.resultmap = resultmap;
-
-    // print cols header
-    for (col = 0; col < RDBRowsetGetCols(resultmap); col++) {
-        RDBZString zstr = RDBRowsetGetColName(resultmap, col);
-        if (col == 0) {
-            fprintf(fout, " %-20.*s", (int) RDBZStringLen(zstr), RDBZStringAddr(zstr));
-        } else {
-            fprintf(fout, "| %-20.*s", (int) RDBZStringLen(zstr), RDBZStringAddr(zstr));
-        }
-    }
-
-    fprintf(fout, "\n");
-
-    // print rows
-
-    RDBRowsetTraverse(resultmap, RDBResultRowPrintCb, (void *)&pcba);
 }

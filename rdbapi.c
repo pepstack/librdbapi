@@ -334,14 +334,24 @@ void RDBMemFree (void *addr)
 
 RDBZString RDBZStringNew (const char *str, ub4 len)
 {
-    RDBZString_t *p = (RDBZString_t *) RDBMemAlloc(sizeof(*p) + len + 1);
-    if (! p) {
-        fprintf(stderr, "(%s:%d) out of memory.\n", __FILE__, __LINE__);
-        exit(EXIT_FAILURE);
+    if (! str) {
+        return NULL;
+    } else {
+        RDBZString_t *pzs;
+        if (len == (ub4)(-1)) {
+            len = (ub4) cstr_length(str, -1);
+        }
+
+        pzs = (RDBZString_t *) RDBMemAlloc(sizeof(*pzs) + len + 1);
+        if (! pzs) {
+            fprintf(stderr, "(%s:%d) out of memory.\n", __FILE__, __LINE__);
+            exit(EXIT_FAILURE);
+        }
+
+        memcpy(pzs->str, str, len);
+        pzs->len = len;
+        return pzs;
     }
-    memcpy(p->str, str, len);
-    p->len = len;
-    return p;
 }
 
 

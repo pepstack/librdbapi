@@ -214,9 +214,10 @@ typedef struct _RDBSQLStmt_t     * RDBSQLStmt;
 
 typedef struct _RDBZString_t     * RDBZString;
 
-typedef struct _RDBRowset_t  * RDBRowset;
-typedef struct _RDBCell_t    * RDBCell;
-typedef struct _RDBRow_t     * RDBRow;
+typedef struct _RDBRowset_t      * RDBRowset;
+typedef struct _RDBCell_t        * RDBCell;
+typedef struct _RDBRow_t         * RDBRow;
+typedef struct _RDBRowIter_t     * RDBRowIter;
 
 
 typedef enum
@@ -723,6 +724,55 @@ extern ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap);
 extern ub8 RDBCtxExecuteSQL (RDBCtx ctx, const RDBBlob_t *sqlblob, RDBResultMap *outResultMap);
 
 extern int RDBCtxExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResultMap **outResultMaps);
+
+
+/**********************************************************************
+ *
+ * RDBResultMap API
+ *
+ *********************************************************************/
+extern RDBAPI_RESULT RDBRowsetCreate (int numcols, const char *names[], RDBRowset *outresultmap);
+
+extern void RDBRowsetDestroy (RDBRowset resultmap);
+
+extern RDBAPI_RESULT RDBRowsetInsertRow (RDBRowset resultmap, RDBRow row);
+
+extern RDBRow RDBRowsetFindRow (RDBRowset resultmap, const char *rowkey, int keylen);
+
+extern void RDBRowsetDeleteRow (RDBRowset resultmap, RDBRow row);
+
+extern void RDBRowsetCleanRows (RDBRowset resultmap);
+
+extern int RDBRowsetColHeaders (RDBRowset resultmap);
+
+extern RDBZString RDBRowsetColHeaderName (RDBRowset resultmap, int colindex);
+
+extern RDBRowIter RDBRowsetFirstRow (RDBRowset resultmap);
+
+extern RDBRowIter RDBRowsetNextRow (RDBRowIter rowiter);
+
+extern RDBRow RDBRowIterGetRow (RDBRowIter iter);
+
+extern void RDBRowsetPrint (RDBRowset resultmap, FILE *fout);
+
+
+extern RDBAPI_RESULT RDBRowNew (int numcells, const char *key, int keylen, RDBRow *outrow);
+
+extern void RDBRowFree (RDBRow row);
+
+extern const char * RDBRowGetKey (RDBRow row, int *keylen);
+
+extern int RDBRowGetCells (RDBRow row);
+
+extern RDBCell RDBRowGetCell (RDBRow row, int colindex);
+
+
+extern RDBCell RDBCellInit (RDBCell cell, RDBCellType type, void *value);
+
+extern void RDBCellClean (RDBCell cell);
+
+extern void RDBCellPrint (RDBRowset resultmap, RDBCell cell, FILE *fout);
+
 
 #if defined(__cplusplus)
 }

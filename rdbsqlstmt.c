@@ -1924,15 +1924,30 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         }
 
     } else if (sqlstmt->stmt == RDBSQL_DESC_TABLE) {
-
         RDBTableDes_t tabledes = {0};
 
         if (RDBTableDescribe(ctx, sqlstmt->desctable.tablespace, sqlstmt->desctable.tablename, &tabledes) != RDBAPI_SUCCESS) {
             return (ub8) RDBAPI_ERROR;
         } else {
-            RDBRowset rowsmap;
+            int j, len;
+            char buf[RDB_KEY_VALUE_SIZE];
 
-            const char *colnames[] = {
+            RDBRowset tablemap;
+            RDBRowset fieldsmap;
+
+            RDBRow tablerow;
+            RDBCell tablecell;
+
+            const char *tblnames[] = {
+                "tablespace",
+                "tablename",
+                "datetime",
+                "timestamp",
+                "comment",
+                "fields"
+            };
+
+            const char *fldnames[] = {
                 "fieldname",
                 "fieldtype",
                 "length",
@@ -1942,21 +1957,69 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                 "comment"
             };
 
-            RDBRowsetCreate(7, colnames, &rowsmap);
+            RDBRowsetCreate(6, tblnames, &tablemap);
+            RDBRowsetCreate(7, fldnames, &fieldsmap);
 
-            RDBSheetStyle_t styles[] = {
-                {20, 30, 0, '|'},
-                {20, 20, 0, '|'},
-                {10, 10, 0, '|'},
-                {8,   8, 0, '|'},
-                {8,   8, 0, '|'},
-                {10, 10, 0, '|'},
-                {20, 20, 0, '|'}
-            };
+            RDBRowNew(6, tabledes.table_rowkey, -1, &tablerow);
 
-            RDBRowsetPrint(rowsmap, styles, stdout);
+            tablecell = RDBRowGetCell(tablerow, 0);
+            RDBCellInit(tablecell, RDB_CELLTYPE_STRING, RDBZStringNew(sqlstmt->desctable.tablespace, -1));
 
-            RDBRowsetDestroy(rowsmap);
+            tablecell = RDBRowGetCell(tablerow, 1);
+            RDBCellInit(tablecell, RDB_CELLTYPE_STRING, RDBZStringNew(sqlstmt->desctable.tablename, -1));
+
+            tablecell = RDBRowGetCell(tablerow, 2);
+            RDBCellInit(tablecell, RDB_CELLTYPE_STRING, RDBZStringNew(tabledes.table_datetime, -1));
+
+            tablecell = RDBRowGetCell(tablerow, 3);
+            RDBCellInit(tablecell, RDB_CELLTYPE_INTEGER, &tabledes.table_timestamp);
+
+            tablecell = RDBRowGetCell(tablerow, 4);
+            RDBCellInit(tablecell, RDB_CELLTYPE_STRING, RDBZStringNew(tabledes.table_comment, -1));
+
+            tablecell = RDBRowGetCell(tablerow, 5);
+            RDBCellInit(tablecell, RDB_CELLTYPE_RESULTMAP, fieldsmap);
+
+            RDBRowsetInsertRow(tablemap, tablerow);
+
+            for (j = 0;  j < tabledes.nfields; j++) {
+                RDBRow fieldrow;
+                RDBCell fieldcell;
+                RDBFieldDes_t * fldes = &tabledes.fielddes[j];
+
+                RDBRowNew(7, fldes->fieldname, fldes->namelen, &fieldrow);
+
+                fieldcell = RDBRowGetCell(fieldrow, 0);
+                RDBCellInit(fieldcell, RDB_CELLTYPE_STRING, RDBZStringNew(fldes->fieldname, fldes->namelen));
+
+                fieldcell = RDBRowGetCell(fieldrow, 1);
+                RDBCellInit(fieldcell, RDB_CELLTYPE_STRING, RDBZStringNew(vtnames[fldes->fieldtype], -1));
+
+                len = snprintf_chkd_V1(buf, sizeof(buf), "%d", fldes->length);
+                fieldcell = RDBRowGetCell(fieldrow, 2);
+                RDBCellInit(fieldcell, RDB_CELLTYPE_STRING, RDBZStringNew(buf, len));
+
+                len = snprintf_chkd_V1(buf, sizeof(buf), "%d", fldes->dscale);
+                fieldcell = RDBRowGetCell(fieldrow, 3);
+                RDBCellInit(fieldcell, RDB_CELLTYPE_STRING, RDBZStringNew(buf, len));
+
+                len = snprintf_chkd_V1(buf, sizeof(buf), "%d", fldes->rowkey);
+                fieldcell = RDBRowGetCell(fieldrow, 4);
+                RDBCellInit(fieldcell, RDB_CELLTYPE_STRING, RDBZStringNew(buf, len));
+
+                len = snprintf_chkd_V1(buf, sizeof(buf), "%c", fldes->nullable? 'y' : 'N');
+                fieldcell = RDBRowGetCell(fieldrow, 5);
+                RDBCellInit(fieldcell, RDB_CELLTYPE_STRING, RDBZStringNew(buf, len));
+
+                fieldcell = RDBRowGetCell(fieldrow, 6);
+                RDBCellInit(fieldcell, RDB_CELLTYPE_STRING, RDBZStringNew(fldes->comment, -1));
+
+                RDBRowsetInsertRow(fieldsmap, fieldrow);
+            }
+
+            RDBRowsetPrint(tablemap, stdout);
+
+            RDBRowsetDestroy(tablemap);
 
 
             /////////////////////////////

@@ -95,6 +95,29 @@ EXPORTS
 	RDBResultMapSetDelimiter
 	RDBResultMapPrintOut
 
+	RDBRowsetCreate
+	RDBRowsetDestroy
+	RDBRowsetInsertRow
+	RDBRowsetFindRow
+	RDBRowsetDeleteRow
+	RDBRowsetCleanRows
+	RDBRowsetColHeaders
+	RDBRowsetColHeaderName
+	RDBRowsetFirstRow
+	RDBRowsetNextRow
+	RDBRowIterGetRow
+	RDBRowsetPrint
+
+	RDBRowNew
+	RDBRowFree
+	RDBRowGetKey
+	RDBRowGetCells
+	RDBRowGetCell
+
+	RDBCellInit
+	RDBCellClean
+	RDBCellPrint
+
 	RDBTableScanFirst
 	RDBTableScanNext
 	RDBTableCreate
