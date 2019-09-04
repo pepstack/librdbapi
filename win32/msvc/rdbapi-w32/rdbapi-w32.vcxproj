@@ -26,6 +26,7 @@
     <ClCompile Include="..\..\..\rdbresultmap.c" />
     <ClCompile Include="..\..\..\rdbsqlstmt.c" />
     <ClCompile Include="..\..\..\rdbtable.c" />
+    <ClCompile Include="..\..\..\rdbtpl.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\common\cstrutil.h" />

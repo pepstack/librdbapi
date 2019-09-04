@@ -37,16 +37,16 @@
 
 /**************************************
  *
- * RDBRowset
+ * RDBResultMap
  *
  **************************************/
 
-RDBAPI_RESULT RDBRowsetCreate (int numcolheaders, const char *colheadernames[], RDBRowset *outresultmap)
+RDBAPI_RESULT RDBResultMapCreate (int numcolheaders, const char *colheadernames[], RDBResultMap *outresultmap)
 {
     if (numcolheaders < 1 || numcolheaders > RDBAPI_ARGV_MAXNUM) {
         return RDBAPI_ERR_BADARG;
     } else {
-        RDBRowset resultmap = (RDBRowset) RDBMemAlloc(sizeof(RDBRowset_t) + sizeof(RDBZString) * numcolheaders);
+        RDBResultMap resultmap = (RDBResultMap) RDBMemAlloc(sizeof(RDBResultMap_t) + sizeof(RDBZString) * numcolheaders);
         if (resultmap) {
             int col = 0;
             for (; col < numcolheaders; col++) {
@@ -64,14 +64,14 @@ RDBAPI_RESULT RDBRowsetCreate (int numcolheaders, const char *colheadernames[], 
 }
 
 
-void RDBRowsetDestroy (RDBRowset resultmap)
+void RDBResultMapDestroy (RDBResultMap resultmap)
 {
     if (resultmap) {
         while (resultmap->numcolheaders-- > 0) {
             RDBZStringFree(resultmap->colheadernames[resultmap->numcolheaders]);
         }
 
-        RDBRowsetCleanRows(resultmap);
+        RDBResultMapCleanRows(resultmap);
 
         RDBResultFilterFree(resultmap->resfilter);
 
@@ -80,9 +80,9 @@ void RDBRowsetDestroy (RDBRowset resultmap)
 }
 
 
-RDBAPI_RESULT RDBRowsetInsertRow (RDBRowset resultmap, RDBRow row)
+RDBAPI_RESULT RDBResultMapInsertRow (RDBResultMap resultmap, RDBRow row)
 {
-    if (RDBRowsetSize(resultmap) == (ub4)(UB4MAXVAL - 1)) {
+    if (RDBResultMapRows(resultmap) == (ub4)(UB4MAXVAL - 1)) {
         return RDBAPI_ERROR;
     } else {
         RDBRowNode rownode;
@@ -96,7 +96,7 @@ RDBAPI_RESULT RDBRowsetInsertRow (RDBRowset resultmap, RDBRow row)
 }
 
 
-RDBRow RDBRowsetFindRow (RDBRowset resultmap, const char *rowkey, int keylen)
+RDBRow RDBResultMapFindRow (RDBResultMap resultmap, const char *rowkey, int keylen)
 {
     RDBRowNode node;
 
@@ -110,14 +110,14 @@ RDBRow RDBRowsetFindRow (RDBRowset resultmap, const char *rowkey, int keylen)
 }
 
 
-void RDBRowsetDeleteRow (RDBRowset resultmap, RDBRow row)
+void RDBResultMapDeleteRow (RDBResultMap resultmap, RDBRow row)
 {
     HASH_DEL(resultmap->rowsmap, row);
     RDBRowFree(row);
 }
 
 
-void RDBRowsetCleanRows (RDBRowset resultmap)
+void RDBResultMapCleanRows (RDBResultMap resultmap)
 {
     RDBRowNode curnode, tmpnode;
     HASH_ITER(hh, resultmap->rowsmap, curnode, tmpnode) {
@@ -127,19 +127,19 @@ void RDBRowsetCleanRows (RDBRowset resultmap)
 }
 
 
-int RDBRowsetColHeaders (RDBRowset resultmap)
+int RDBResultMapColHeaders (RDBResultMap resultmap)
 {
     return resultmap->numcolheaders;
 }
 
 
-RDBZString RDBRowsetColHeaderName (RDBRowset resultmap, int colindex)
+RDBZString RDBResultMapColHeaderName (RDBResultMap resultmap, int colindex)
 {
     return resultmap->colheadernames[colindex];
 }
 
 
-RDBRowIter RDBRowsetFirstRow (RDBRowset resultmap)
+RDBRowIter RDBResultMapFirstRow (RDBResultMap resultmap)
 {
     RDBRowIter iter = &resultmap->rowiter;
 
@@ -156,7 +156,7 @@ RDBRowIter RDBRowsetFirstRow (RDBRowset resultmap)
 }
 
 
-RDBRowIter RDBRowsetNextRow (RDBRowIter iter)
+RDBRowIter RDBResultMapNextRow (RDBRowIter iter)
 {
     if (! iter) {
         return NULL;
@@ -180,7 +180,7 @@ RDBRow RDBRowIterGetRow (RDBRowIter iter)
 }
 
 
-ub4 RDBRowsetSize (RDBRowset resultmap)
+ub4 RDBResultMapRows (RDBResultMap resultmap)
 {
     if (resultmap && resultmap->rowsmap) {
         return (ub4) HASH_COUNT(resultmap->rowsmap);
@@ -190,13 +190,13 @@ ub4 RDBRowsetSize (RDBRowset resultmap)
 }
 
 
-void RDBRowsetPrint (RDBRowset resultmap, FILE *fout)
+void RDBResultMapPrint (RDBResultMap resultmap, FILE *fout)
 {
     // print cols header
     int col;
 
-    for (col = 0; col < RDBRowsetColHeaders(resultmap); col++) {
-        RDBZString zstr = RDBRowsetColHeaderName(resultmap, col);
+    for (col = 0; col < RDBResultMapColHeaders(resultmap); col++) {
+        RDBZString zstr = RDBResultMapColHeaderName(resultmap, col);
         if (col == 0) {
             fprintf(fout, " %-20.*s", (int) RDBZStringLen(zstr), RDBZStringAddr(zstr));
         } else {
@@ -217,18 +217,18 @@ void RDBRowsetPrint (RDBRowset resultmap, FILE *fout)
  *
  **************************************/
 
-RDBAPI_RESULT RDBRowNew (RDBRowset resultmap, const char *key, int keylen, RDBRow *outrow)
+RDBAPI_RESULT RDBRowNew (RDBResultMap resultmap, const char *key, int keylen, RDBRow *outrow)
 {
     if (! key) {
         char kbuf[22];
 
-        ub4 rowid = RDBRowsetSize(resultmap);
+        ub4 rowid = RDBResultMapRows(resultmap);
 
         int klen = snprintf_chkd_V1(kbuf, sizeof(kbuf), "%"PRIu64, (ub8)(rowid + 1));
 
-        RDBRow row = (RDBRow) RDBMemAlloc(sizeof(RDBRow_t) + sizeof(RDBCell_t) * RDBRowsetColHeaders(resultmap) + klen + 1);
+        RDBRow row = (RDBRow) RDBMemAlloc(sizeof(RDBRow_t) + sizeof(RDBCell_t) * RDBResultMapColHeaders(resultmap) + klen + 1);
         if (row) {
-            row->count = RDBRowsetColHeaders(resultmap);
+            row->count = RDBResultMapColHeaders(resultmap);
 
             row->key = (char *) &row->cells[row->count];
             row->keylen = klen;
@@ -246,9 +246,9 @@ RDBAPI_RESULT RDBRowNew (RDBRowset resultmap, const char *key, int keylen, RDBRo
         }
 
         if (keylen > 0 && keylen < RDB_KEY_VALUE_SIZE) {
-            RDBRow row = (RDBRow) RDBMemAlloc(sizeof(RDBRow_t) + sizeof(RDBCell_t) * RDBRowsetColHeaders(resultmap) + keylen + 1);
+            RDBRow row = (RDBRow) RDBMemAlloc(sizeof(RDBRow_t) + sizeof(RDBCell_t) * RDBResultMapColHeaders(resultmap) + keylen + 1);
             if (row) {
-                row->count = RDBRowsetColHeaders(resultmap);
+                row->count = RDBResultMapColHeaders(resultmap);
 
                 row->key = (char *) &row->cells[row->count];
                 row->keylen = keylen;
@@ -324,7 +324,7 @@ RDBCell RDBCellSetValue (RDBCell cell, RDBCellType type, void *value)
         break;
 
     case RDB_CELLTYPE_RESULTMAP:
-        cell->resultmap = (RDBRowset) value;
+        cell->resultmap = (RDBResultMap) value;
         break;
 
     default:
@@ -383,7 +383,7 @@ RDBCell RDBCellSetReply (RDBCell cell, redisReply *replyString)
 }
 
 
-RDBCell RDBCellSetResult (RDBCell cell, RDBRowset resultmap)
+RDBCell RDBCellSetResult (RDBCell cell, RDBResultMap resultmap)
 {
     return RDBCellSetValue(cell, RDB_CELLTYPE_RESULTMAP, (void*) resultmap);
 }
@@ -407,7 +407,7 @@ redisReply* RDBCellGetReply (RDBCell cell)
 }
 
 
-RDBRowset RDBCellGetResult (RDBCell cell)
+RDBResultMap RDBCellGetResult (RDBCell cell)
 {
     return cell->resultmap;
 }
@@ -429,7 +429,7 @@ void RDBCellClean (RDBCell cell)
         break;
 
     case RDB_CELLTYPE_RESULTMAP:
-        RDBRowsetDestroy(cell->resultmap);
+        RDBResultMapDestroy(cell->resultmap);
         break;
     }
 

@@ -372,10 +372,10 @@ static int RDBResultRowNodeCompare (void *newObject, void *nodeObject)
 
 void RDBResultRowFree (RDBResultRow rowdata)
 {
-    RedisFreeReplyObject(&rowdata->replykey);
-    RDBFieldsMapFree(rowdata->fieldmap);
+//DEL    RedisFreeReplyObject(&rowdata->replykey);
+//DEL    RDBFieldsMapFree(rowdata->fieldmap);
 
-    RDBMemFree(rowdata);
+//DEL    RDBMemFree(rowdata);
 }
 
 
@@ -506,7 +506,7 @@ int RDBFinishRowkeyPattern (const RDBFieldDes_t *fielddes, int nfielddes, const 
 }
 
 
-RDBResultFilter RDBResultFilterNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmtType sqlstmt, int numfields, const RDBFieldDes_t *fielddes, ub1 resultfields[])
+RDBResultFilter RDBResultFilterNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmtType stmt, int numfields, const RDBFieldDes_t *fielddes, ub1 resultfields[])
 {
     int i, j, k;
 
@@ -518,7 +518,7 @@ RDBResultFilter RDBResultFilterNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStm
 
     res->ctx = ctx;
     res->filter = filter;
-    res->sqlstmt = sqlstmt;
+    res->sqlstmt = stmt;
 
     res->kplen = RDBBuildRowkeyPattern(filter->tablespace, filter->tablename, fielddes, numfields, res->rowkeyid, &res->keypattern);
 
@@ -582,7 +582,7 @@ void RDBResultFilterFree (RDBResultFilter resfilter)
 
 void RDBResultMapNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmtType sqlstmt, const char *tablespace, const char *tablename, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap)
 {
-    RDBResultMap hMap = (RDBResultMap) RDBMemAlloc(sizeof(RDBResultMap_t) + sizeof(RDBFieldDes_t) * numfields);
+    RDBResultMap hMap = (RDBResultMap) RDBMemAlloc(sizeof(RDBResultMap_t));
     if (! hMap) {
         fprintf(stderr, "(%s:%d) out of memory.\n", __FILE__, __LINE__);
         exit(EXIT_FAILURE);
@@ -647,53 +647,6 @@ void RDBResultMapNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmtType sqlstmt,
     }
 
     *phResultMap = hMap;
-}
-
-
-void RDBResultMapListFree (RDBResultMap *resultMaps, int count)
-{
-    if (resultMaps) {
-        while (count-- > 0) {
-            RDBResultMapFree(resultMaps[count]);
-        }
-
-        RDBMemFree(resultMaps);
-    }
-}
-
-
-void RDBResultMapFree (RDBResultMap hResultMap)
-{
-    if (hResultMap) {
-        RDBMemFree(hResultMap->keypattern);
-
-        if (hResultMap->filter) {
-            RDBTableFilterFree(hResultMap->filter);
-        }
-
-        RDBResultMapClean(hResultMap);
-
-        RDBMemFree(hResultMap);
-    }
-}
-
-
-void RDBResultMapClean (RDBResultMap hResultMap)
-{
-    if (hResultMap) {
-        rbtree_traverse(&hResultMap->rbtree, RDBResultRowNodeDelete, (void *) hResultMap);
-        rbtree_clean(&hResultMap->rbtree);
-    }
-}
-
-
-ub8 RDBResultMapSize (RDBResultMap hResultMap)
-{
-    if (hResultMap) {
-        return (ub8) rbtree_size(&hResultMap->rbtree);
-    } else {
-        return 0;
-    }
 }
 
 
@@ -829,36 +782,6 @@ RDBAPI_RESULT RDBResultMapInsert (RDBResultMap resultMap, redisReply *reply)
 }
 
 
-void RDBResultMapDelete (RDBResultMap hResultMap, redisReply *reply)
-{
-    RDBResultRow_t rowdata = {reply, NULL};
-
-    RDBResultRow delRow = rbtree_remove(&hResultMap->rbtree, (void *)&rowdata);
-
-    if (delRow) {
-        freeReplyObject(reply);
-    }
-}
-
-
-RDBAPI_BOOL RDBResultMapExist (RDBResultMap hResultMap, redisReply *reply)
-{
-    red_black_node_t * node;
-
-    RDBResultRow_t rowdata = {reply, NULL};
-
-    node = rbtree_find(&hResultMap->rbtree, (void *)&rowdata);
-
-    return (node? RDBAPI_TRUE : RDBAPI_FALSE);
-}
-
-//DEL
-void RDBResultMapTraverse (RDBResultMap hResultMap, void (onRowNodeCallback)(void *, void *), void *arg)
-{
-    rbtree_traverse(&hResultMap->rbtree, onRowNodeCallback, arg);
-}
-
-
 ub8 RDBResultMapGetOffset (RDBResultMap hResultMap)
 {
     ub8 total = 0;
@@ -901,12 +824,14 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
     int nodeindex, j, k;
 
     RDBAPI_RESULT res;
+
+    RDBResultMap results = NULL;
     RDBResultMap resultMap = NULL;
     RDBTableFilter filter = NULL;
 
     RDBTableDes_t tabledes = {0};
 
-    // index of result fields refer to tabledes.fielddes
+    // 1-based index of result fields refer to tabledes.fielddes
     ub1 resultfields[RDBAPI_ARGV_MAXNUM + 1] = {0};
 
     if (numkeys > RDBAPI_SQL_KEYS_MAX) {
@@ -1023,17 +948,18 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
         return RDBAPI_ERROR;
     }
 
+    // create result map
+    /*
+    RDBResultFilter resfilter = RDBResultFilterNew(ctx, filter, stmt, tabledes.nfields, tabledes.fielddes, resultfields);
+    RDBResultMapCreate(resfilter->resultfields, resfilter->fetchfields, &results);
+    for (nodeindex = 0; nodeindex < RDBEnvNumNodes(ctx->env); nodeindex++) {
+        RDBResultNodeState(resfilter, nodeindex)->nodeindex = nodeindex;
+    }
+    results->resfilter = resfilter;
+    */
+
     //@@@ DEL???
     RDBResultMapNew(ctx, filter, stmt, filter->tablespace, filter->tablename, tabledes.nfields, tabledes.fielddes, resultfields, &resultMap);
-
-    //???RDBRowset resltmap;
-    //???const char *colnames[RDBAPI_ARGV_MAXNUM] = {0};
-
-    //???RDBRowsetCreate(resultfields[0], 0, &resltmap);
-    //???resltmap->resfilter = RDBResultFilterNew(ctx, filter, stmt, tabledes.nfields, tabledes.fielddes, resultfields);
-    //???for (nodeindex = 0; nodeindex < RDBEnvNumNodes(ctx->env); nodeindex++) {
-    //???    RDBResultNodeState(resltmap->resfilter, nodeindex)->nodeindex = nodeindex;
-    //???}
 
     for (nodeindex = 0; nodeindex < RDBEnvNumNodes(ctx->env); nodeindex++) {
         RDBResultNodeState(resultMap, nodeindex)->nodeindex = nodeindex;
@@ -1578,6 +1504,10 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
     int i;
     redisReply *tableReply = NULL;
 
+    tpl_bin tb = {0};
+
+    const char *fldnames[] = {"des", "ct", "dt", "comment", 0};
+
     bzero(tabledes, sizeof(*tabledes));
 
     if (! strcmp(tablespace, RDB_SYSTEM_TABLE_PREFIX)) {
@@ -1585,8 +1515,10 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
         return RDBAPI_ERROR;
     }
 
+    // hmget {redisdb::$tablespace:$tablename} des ct dt comment
     snprintf_chkd_V1(tabledes->table_rowkey, sizeof(tabledes->table_rowkey) - 1, "{%s::%s:%s}", RDB_SYSTEM_TABLE_PREFIX, tablespace, tablename);
-    if (RedisHMGet(ctx, tabledes->table_rowkey, NULL, &tableReply) != RDBAPI_SUCCESS) {
+
+    if (RedisHMGet(ctx, tabledes->table_rowkey, fldnames, &tableReply) != RDBAPI_SUCCESS) {
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) RDBAPI_ERROR: table key not found: %.*s", __FILE__, __LINE__,
             cstr_length(tabledes->table_rowkey, RDB_ERROR_MSG_LEN), tabledes->table_rowkey);
         return RDBAPI_ERROR;
@@ -1606,6 +1538,8 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
             snprintf_chkd_V1(tabledes->table_datetime, sizeof(tabledes->table_datetime), "%.*s", (int)fldValReply->len, fldValReply->str);
         } else if (! cstr_compare_len(fldNameReply->str, fldNameReply->len, "comment", 7)) {
             snprintf_chkd_V1(tabledes->table_comment, sizeof(tabledes->table_comment), "%.*s", (int)fldValReply->len, fldValReply->str);
+        } else if (! cstr_compare_len(fldNameReply->str, fldNameReply->len, "des", 3)) {
+            
         }
     }
 
@@ -1629,12 +1563,12 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
         ub8 fields = 0;
 
         while ((offset = RDBTableScanNext(resultMap, offset, RDBAPI_ARGV_MAXNUM + 1)) != RDB_ERROR_OFFSET) {
-            fields += RDBResultMapSize(resultMap);
+            fields += RDBResultMapRows(resultMap);
 
             if (fields > RDBAPI_ARGV_MAXNUM) {
                 snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: too many fields");
 
-                RDBResultMapFree(resultMap);
+                RDBResultMapDestroy(resultMap);
                 return RDBAPI_ERROR;
             }
         }
@@ -1643,14 +1577,16 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
             snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: table not found: {%s::%s:%s:*}",
                 RDB_SYSTEM_TABLE_PREFIX, tablespace, tablename);
 
-            RDBResultMapFree(resultMap);
+            RDBResultMapDestroy(resultMap);
             return RDBAPI_ERROR;
         }
 
         do {
             GetFieldDesCallbackArg fdcbarg = {ctx, 0, tabledes->fielddes};
-            RDBResultMapTraverse(resultMap, onGetFieldDesCallback, &fdcbarg);
-            RDBResultMapFree(resultMap);
+
+
+            //TODO: RDBResultMapTraverse(resultMap, onGetFieldDesCallback, &fdcbarg);
+            RDBResultMapDestroy(resultMap);
         } while(0);
 
         for (tabledes->nfields = 0; tabledes->nfields < (int) fields; tabledes->nfields++) {
@@ -1864,6 +1800,7 @@ char RDBResultMapSetDelimiter (RDBResultMap hResultMap, char delimiter)
 
 void RDBResultMapPrintOut (RDBResultMap resultMap, const char *header, ...)
 {
+/*
     int i;
 
     if (header) {
@@ -1885,7 +1822,7 @@ void RDBResultMapPrintOut (RDBResultMap resultMap, const char *header, ...)
             fprintf(stdout, "$(last offset): %"PRIu64"\n", RDBResultMapGetOffset(resultMap));
         }
         if (resultMap->rbtree.iSize) {
-            fprintf(stdout, "$(result rows): %"PRIu64"\n", RDBResultMapSize(resultMap));
+            fprintf(stdout, "$(result rows): %"PRIu64"\n", RDBResultMapRows(resultMap));
         }
 
         fprintf(stdout, "\n");
@@ -1947,7 +1884,6 @@ void RDBResultMapPrintOut (RDBResultMap resultMap, const char *header, ...)
                 fdes->comment);
         }
         fprintf(stdout, "---------------------+-----------+--------+---------+--------+----------+----------\n");
-
     } else if (resultMap->sqlstmt == RDBSQL_SHOW_DATABASES) {
         fprintf(stdout, "------------------------------\n");
         fprintf(stdout, "[          database          ]\n");
@@ -1964,14 +1900,14 @@ void RDBResultMapPrintOut (RDBResultMap resultMap, const char *header, ...)
     RDBResultMapTraverse(resultMap, RDBResultRowPrintCallback, resultMap);
 
     if (resultMap->sqlstmt == RDBSQL_SHOW_DATABASES || resultMap->sqlstmt == RDBSQL_SHOW_TABLES) {
-        if (RDBResultMapSize(resultMap) > 0) {
+        if (RDBResultMapRows(resultMap) > 0) {
             fprintf(stdout, "------------------------------\n");
         }
-        fprintf(stdout, "$(totalrows): %"PRIu64"\n", RDBResultMapSize(resultMap));
+        fprintf(stdout, "$(totalrows): %"PRIu64"\n", RDBResultMapRows(resultMap));
     } else if (resultMap->sqlstmt == RDBSQL_INFO_SECTION) {
         fprintf(stdout, "$(clusternodes): %d\n", RDBEnvNumNodes(resultMap->ctxh->env));
     }
-
+*/
     fflush(stdout);
 }
 

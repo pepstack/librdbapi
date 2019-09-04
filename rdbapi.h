@@ -214,7 +214,7 @@ typedef struct _RDBSQLStmt_t     * RDBSQLStmt;
 
 typedef struct _RDBZString_t     * RDBZString;
 
-typedef struct _RDBRowset_t      * RDBRowset;
+typedef struct _RDBResultMap_t      * RDBResultMap;
 typedef struct _RDBCell_t        * RDBCell;
 typedef struct _RDBRow_t         * RDBRow;
 typedef struct _RDBRowIter_t     * RDBRowIter;
@@ -686,36 +686,6 @@ extern void RDBFieldsMapFree (RDBFieldsMap fields);
 
 /**********************************************************************
  *
- * RDBResultMap API
- *
- *********************************************************************/
-extern void RDBResultMapFree (RDBResultMap hResultMap);
-
-extern void RDBResultMapClean (RDBResultMap hResultMap);
-
-extern ub8 RDBResultMapSize (RDBResultMap hResultMap);
-
-extern RDBAPI_RESULT RDBResultMapInsert (RDBResultMap hResultMap, redisReply *reply);
-
-extern void RDBResultMapDelete (RDBResultMap hResultMap, redisReply *reply);
-
-extern RDBAPI_BOOL RDBResultMapExist (RDBResultMap hResultMap, redisReply *reply);
-
-extern void RDBResultMapTraverse (RDBResultMap hResultMap, void (onRowNodeCallback)(void *, void *), void *arg);
-
-extern ub8 RDBResultMapGetOffset (RDBResultMap hResultMap);
-
-extern char RDBResultMapSetDelimiter (RDBResultMap hResultMap, char delimiter);
-
-extern void RDBResultMapPrintOut (RDBResultMap hResultMap, const char *header, ...);
-
-extern void RDBResultMapListFree (RDBResultMap *resultMaps, int count);
-
-extern RDBSQLStmtType RDBResultMapGetStmt (RDBResultMap resultMap);
-
-
-/**********************************************************************
- *
  * RDBSQLStmt API
  *
  *********************************************************************/
@@ -732,7 +702,7 @@ extern ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap);
 
 extern ub8 RDBCtxExecuteSQL (RDBCtx ctx, const RDBBlob_t *sqlblob, RDBResultMap *outResultMap);
 
-extern int RDBCtxExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResultMap **outResultMaps);
+extern RDBAPI_RESULT RDBCtxExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResultMap *outResultMap);
 
 
 /**********************************************************************
@@ -740,20 +710,26 @@ extern int RDBCtxExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResultMap **ou
  * RDBResultMap API
  *
  *********************************************************************/
-extern RDBAPI_RESULT RDBRowsetCreate (int numcols, const char *names[], RDBRowset *outresultmap);
-extern void RDBRowsetDestroy (RDBRowset resultmap);
-extern RDBAPI_RESULT RDBRowsetInsertRow (RDBRowset resultmap, RDBRow row);
-extern RDBRow RDBRowsetFindRow (RDBRowset resultmap, const char *rowkey, int keylen);
-extern void RDBRowsetDeleteRow (RDBRowset resultmap, RDBRow row);
-extern void RDBRowsetCleanRows (RDBRowset resultmap);
-extern int RDBRowsetColHeaders (RDBRowset resultmap);
-extern RDBZString RDBRowsetColHeaderName (RDBRowset resultmap, int colindex);
-extern RDBRowIter RDBRowsetFirstRow (RDBRowset resultmap);
-extern RDBRowIter RDBRowsetNextRow (RDBRowIter rowiter);
+extern RDBAPI_RESULT RDBResultMapCreate (int numcols, const char *names[], RDBResultMap *outresultmap);
+extern void RDBResultMapDestroy (RDBResultMap resultmap);
+extern RDBAPI_RESULT RDBResultMapInsertRow (RDBResultMap resultmap, RDBRow row);
+extern RDBRow RDBResultMapFindRow (RDBResultMap resultmap, const char *rowkey, int keylen);
+extern void RDBResultMapDeleteRow (RDBResultMap resultmap, RDBRow row);
+extern void RDBResultMapCleanRows (RDBResultMap resultmap);
+extern int RDBResultMapColHeaders (RDBResultMap resultmap);
+extern RDBZString RDBResultMapColHeaderName (RDBResultMap resultmap, int colindex);
+extern RDBRowIter RDBResultMapFirstRow (RDBResultMap resultmap);
+extern RDBRowIter RDBResultMapNextRow (RDBRowIter rowiter);
 extern RDBRow RDBRowIterGetRow (RDBRowIter iter);
-extern ub4 RDBRowsetSize (RDBRowset resultmap);
-extern void RDBRowsetPrint (RDBRowset resultmap, FILE *fout);
+extern ub4 RDBResultMapRows (RDBResultMap resultmap);
+extern void RDBResultMapPrint (RDBResultMap resultmap, FILE *fout);
 
+//DEL below:
+extern RDBAPI_RESULT RDBResultMapInsert (RDBResultMap hResultMap, redisReply *reply);
+extern ub8 RDBResultMapGetOffset (RDBResultMap hResultMap);
+extern char RDBResultMapSetDelimiter (RDBResultMap hResultMap, char delimiter);
+extern void RDBResultMapPrintOut (RDBResultMap hResultMap, const char *header, ...);
+extern RDBSQLStmtType RDBResultMapGetStmt (RDBResultMap resultMap);
 
 /**************************************
  *
@@ -761,7 +737,7 @@ extern void RDBRowsetPrint (RDBRowset resultmap, FILE *fout);
  *
  *************************************/
 
-extern RDBAPI_RESULT RDBRowNew (RDBRowset resultmap, const char *key, int keylen, RDBRow *outrow);
+extern RDBAPI_RESULT RDBRowNew (RDBResultMap resultmap, const char *key, int keylen, RDBRow *outrow);
 extern void RDBRowFree (RDBRow row);
 extern const char * RDBRowGetKey (RDBRow row, int *keylen);
 extern int RDBRowCells (RDBRow row);
@@ -780,12 +756,12 @@ extern RDBCellType RDBCellGetValue (RDBCell cell, void **outvalue);
 extern RDBCell RDBCellSetString (RDBCell cell, const char *str, int len);
 extern RDBCell RDBCellSetBinary (RDBCell cell, const void *addr, ub4 sz);
 extern RDBCell RDBCellSetReply (RDBCell cell, redisReply *replyString);
-extern RDBCell RDBCellSetResult (RDBCell cell, RDBRowset resultmap);
+extern RDBCell RDBCellSetResult (RDBCell cell, RDBResultMap resultmap);
 
 extern RDBZString RDBCellGetString (RDBCell cell);
 extern RDBBinary RDBCellGetBinary (RDBCell cell);
 extern redisReply* RDBCellGetReply (RDBCell cell);
-extern RDBRowset RDBCellGetResult (RDBCell cell);
+extern RDBResultMap RDBCellGetResult (RDBCell cell);
 
 extern void RDBCellClean (RDBCell cell);
 

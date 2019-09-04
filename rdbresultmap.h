@@ -60,7 +60,7 @@ typedef struct _RDBCell_t
         redisReply *reply;
 
         // RDB_COLTYPE_RESULTMAP
-        RDBRowset resultmap; /* nested result map */
+        RDBResultMap resultmap; /* nested result map */
     };
 } RDBCell_t;
 
@@ -90,8 +90,36 @@ typedef struct _RDBRowIter_t
 
 
 /* ResultMap */
-typedef struct _RDBRowset_t
+typedef struct _RDBResultMap_t
 {
+    RDBCtx ctxh;
+
+    char delimiter;
+
+    RDBSQLStmtType sqlstmt;
+    RDBTableFilter filter;
+
+    // store reply rows
+    red_black_tree_t  rbtree;
+
+    // constants: rowkeyid[0] is count for keys
+    int rowkeyid[RDBAPI_SQL_KEYS_MAX + 1];
+
+    int kplen;
+    char *keypattern;
+
+    // count for result fields
+    int resultfields;
+
+    // which fields to fetch
+    char *fetchfields[RDBAPI_ARGV_MAXNUM + 1];
+
+    // length of fieldname
+    int fieldnamelens[RDBAPI_ARGV_MAXNUM + 1];
+
+    int numfields;
+    RDBFieldDes_t fielddes[RDBAPI_ARGV_MAXNUM];
+
     /* only for query */
     RDBResultFilter resfilter;
 
@@ -104,7 +132,7 @@ typedef struct _RDBRowset_t
     /* number of columns and names for column headers */
     int numcolheaders;
     RDBZString colheadernames[0];
-} RDBRowset_t;
+} RDBResultMap_t;
 
 
 #if defined(__cplusplus)

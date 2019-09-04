@@ -66,6 +66,9 @@
     <ClCompile Include="..\..\..\common\tpl\win\nonempty.c">
       <Filter>tpl\win</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\rdbtpl.c">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\rdbapi.h">

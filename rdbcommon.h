@@ -226,7 +226,7 @@ typedef struct _RDBNameReply_t
     char namebuf[0];
 } RDBNameReply_t, *RDBNameReply, *RDBNameReplyMap;
 
-
+/*
 typedef struct _RDBResultMap_t
 {
     RDBCtx ctxh;
@@ -263,7 +263,7 @@ typedef struct _RDBResultMap_t
     int numfields;
     RDBFieldDes_t fielddes[0];
 } RDBResultMap_t;
-
+*/
 
 typedef struct _RDBResultFilter_t
 {
@@ -313,6 +313,31 @@ typedef struct _RDBTableCursor_t
 } RDBTableCursor_t, * RDBTableCursor;
 
 
+#define RDBFieldDesTplFmt  "S(siiiiiis)"
+
+typedef struct _RDBFieldDesTpl_t
+{
+    char *fieldname;
+    int namelen;
+
+    int fieldtype;
+
+    int length;
+    int dscale;
+
+    int rowkey;
+    int nullable;
+
+    char *comment;
+} RDBFieldDesTpl_t, *RDBFieldDesTpl;
+
+// 0-success
+int RDBFieldDesPack (RDBFieldDes_t * infieldes, int numfields, tpl_bin *outbin);
+
+// 1-success
+int RDBFieldDesUnpack (const void *addrin, ub4 sizein, RDBFieldDes_t * outfieldes, int numfields);
+
+
 static redisReply * RDBStringReplyCreate (const char *str, size_t len)
 {
     redisReply * reply = (redisReply *) RDBMemAlloc(sizeof(*reply));
@@ -354,6 +379,7 @@ static redisReply * RDBArrayReplyCreate (size_t elements)
 
     return replyArr;
 }
+
 
 //DEL??
 void RDBResultRowFree (RDBResultRow rowdata);

@@ -234,7 +234,7 @@ void redplusExecuteSqlfile (RDBEnv env, const char *sqlfile, const char *output)
     RDBCtx ctx = NULL;
 
     int nmaps = 0;
-    RDBResultMap *resultMaps = NULL;
+    RDBResultMap resultmap = NULL;
 
     err = RDBCtxCreate(env, &ctx);
     if (err) {
@@ -242,9 +242,9 @@ void redplusExecuteSqlfile (RDBEnv env, const char *sqlfile, const char *output)
         return;
     }
 
-    nmaps = RDBCtxExecuteFile(ctx, sqlfile, &resultMaps);
+    RDBCtxExecuteFile(ctx, sqlfile, &resultmap);
 
-    RDBResultMapListFree(resultMaps, nmaps);
+    RDBResultMapDestroy(resultmap);
 
     RDBCtxFree(ctx);
 }
@@ -282,14 +282,13 @@ void redplusExecuteRdbsql (RDBEnv env, const char *rdbsql, const char *output)
     // success
     RDBResultMapPrintOut(resultMap, "# success result:\n\n");
 
-    RDBResultMapClean(resultMap);
-    RDBResultMapFree(resultMap);
+    RDBResultMapDestroy(resultMap);
     RDBCtxFree(ctx);
     return;
 
 error_exit:
     if (resultMap) {
-        RDBResultMapFree(resultMap);
+        RDBResultMapDestroy(resultMap);
     }
     if (ctx) {
         RDBCtxFree(ctx);

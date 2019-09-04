@@ -331,14 +331,14 @@ int main(int argc, const char *argv[])
         while ((offset = RDBTableScanNext(resultMap, offset, 20)) != RDB_ERROR_OFFSET) {
             RDBResultMapPrintOut(resultMap, "# success:\n\n");
 
-            total += RDBResultMapSize(resultMap);
+            total += RDBResultMapRows(resultMap);
 
-            RDBResultMapClean(resultMap);
+            RDBResultMapCleanRows(resultMap);
         }
 
         printf("# total rows=%"PRIu64".\n", total);
 
-        RDBResultMapFree(resultMap);
+        RDBResultMapDestroy(resultMap);
     }
 
     RDBThreadCtxDestroy(thrctx);

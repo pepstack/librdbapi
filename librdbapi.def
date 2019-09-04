@@ -86,31 +86,26 @@ EXPORTS
 	RedisIncrFloatField
 	RedisClusterCheck
 
-	RDBResultMapListFree
-	RDBResultMapFree
-	RDBResultMapClean
-	RDBResultMapSize
 	RDBResultMapInsert
-	RDBResultMapExist
-	RDBResultMapTraverse
 	RDBResultMapGetOffset
 	RDBResultMapGetStmt
 	RDBResultMapSetDelimiter
 	RDBResultMapPrintOut
 
-	RDBRowsetCreate
-	RDBRowsetDestroy
-	RDBRowsetInsertRow
-	RDBRowsetFindRow
-	RDBRowsetDeleteRow
-	RDBRowsetCleanRows
-	RDBRowsetColHeaders
-	RDBRowsetColHeaderName
-	RDBRowsetFirstRow
-	RDBRowsetNextRow
+	RDBResultMapCreate
+	RDBResultMapDestroy
+	RDBResultMapInsertRow
+	RDBResultMapFindRow
+	RDBResultMapDeleteRow
+	RDBResultMapCleanRows
+	RDBResultMapColHeaders
+	RDBResultMapColHeaderName
+	RDBResultMapFirstRow
+	RDBResultMapNextRow
 	RDBRowIterGetRow
-	RDBRowsetPrint
-	RDBRowsetSize
+	RDBResultMapRows
+	RDBResultMapPrint
+	RDBResultMapRows
 
 	RDBRowNew
 	RDBRowFree
