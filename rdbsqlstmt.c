@@ -1340,6 +1340,8 @@ void SQLStmtParseCreate (RDBCtx ctx, RDBSQLStmt sqlstmt)
         sqlc = cstr_Ltrim_whitespace(sqlc + 6);
     }
 
+    *sqlnext++ = 0;
+
     len = cstr_Rtrim_whitespace(sqlc, cstr_length(sqlc, (int)(sqlnext - sqlc)));
     if (! parse_table(sqlc, sqlstmt->create.tablespace, sqlstmt->create.tablename)) {
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: parse table failed. errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
@@ -1347,7 +1349,6 @@ void SQLStmtParseCreate (RDBCtx ctx, RDBSQLStmt sqlstmt)
     }
 
     // parse all fields
-    sqlnext++;
     nextlen = cstr_length(sqlnext, -1);
     do {
         sqlnext = parse_create_field(sqlstmt->sqlblock,
@@ -1980,7 +1981,7 @@ ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         return RDBResultMapRows(resultMap);
 
     } else if (sqlstmt->stmt == RDBSQL_CREATE) {
-
+        // CREATE TABLE IF NOT EXISTS xsdb.test22(uid UB8 NOT NULL COMMENT 'user id', str STR(30) , ROWKEY(uid)) COMMENT 'test table';
         RDBTableDes_t tabledes = {0};
         res = RDBTableDescribe(ctx, sqlstmt->create.tablespace, sqlstmt->create.tablename, &tabledes);
 

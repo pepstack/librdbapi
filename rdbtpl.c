@@ -117,7 +117,7 @@ int RDBFieldDesUnpack (const void *addrin, ub4 sizein, RDBFieldDes_t * outfielde
                 int j;
 
                 for (j = 0; j < numfields; j++) {
-                    snprintf_chkd_V1(outfieldes[j].fieldname, sizeof(outfieldes[j].fieldname), "%.*s", fieldestpl[j].namelen, fieldestpl[j].fieldname);
+                    outfieldes[j].namelen = snprintf_chkd_V1(outfieldes[j].fieldname, sizeof(outfieldes[j].fieldname), "%.*s", fieldestpl[j].namelen, fieldestpl[j].fieldname);
                     snprintf_chkd_V1(outfieldes[j].comment, sizeof(outfieldes[j].comment), "%s", fieldestpl[j].comment);
 
                     outfieldes[j].rowkey = fieldestpl[j].rowkey;
@@ -138,4 +138,61 @@ int RDBFieldDesUnpack (const void *addrin, ub4 sizein, RDBFieldDes_t * outfielde
     RDBMemFree(fieldestpl);
 
     return rc;
+}
+
+
+// 1-success
+int RDBFieldDesCheckSet (const char valtypetable[256], const RDBFieldDes_t * fielddes, int nfields, int rowkeyid[RDBAPI_KEYS_MAXNUM + 1], char *errmsg, size_t msgsz)
+{
+    int j = 0;
+    for (; j < nfields; j++) {
+        const RDBFieldDes_t *fld = &fielddes[j];
+
+        if (fld->namelen < 1 || fld->namelen > RDB_KEY_NAME_MAXLEN) {
+            snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: invalid field name: %s", fld->fieldname);
+            return 0;
+        }
+
+        if (! valtypetable[(ub1) fld->fieldtype]) {
+            snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: invalid type of field: %s", fld->fieldname);
+            return 0;
+        }
+
+        if (fld->rowkey < 0 || fld->rowkey > RDBAPI_KEYS_MAXNUM) {
+            snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: invalid field name: %s", fld->fieldname);
+            return 0;
+        }
+
+        if (fld->rowkey) {
+            if (rowkeyid[fld->rowkey]) {
+                snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: duplicate key field: %s", fld->fieldname);
+                return 0;
+            }
+
+            if (fld->nullable) {
+                snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: nullable for key field: %s", fld->fieldname);
+                return 0;
+            }
+
+            rowkeyid[fld->rowkey] = j + 1;
+            rowkeyid[0] += 1;
+        }
+    }
+
+    if (j < 1) {
+        snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: none fields found");
+        return 0;
+    }
+
+    if (j > RDBAPI_ARGV_MAXNUM) {
+        snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: too many fields");
+        return 0;
+    }
+
+    if (! rowkeyid[0]) {
+        snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: rowkey field not found");
+        return 0;
+    }
+
+    return 1;
 }

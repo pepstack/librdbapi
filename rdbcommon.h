@@ -337,6 +337,9 @@ int RDBFieldDesPack (RDBFieldDes_t * infieldes, int numfields, tpl_bin *outbin);
 // 1-success
 int RDBFieldDesUnpack (const void *addrin, ub4 sizein, RDBFieldDes_t * outfieldes, int numfields);
 
+// 1-success
+int RDBFieldDesCheckSet (const char valtypetable[256], const RDBFieldDes_t * fielddes, int nfields, int rowkeyid[RDBAPI_KEYS_MAXNUM + 1], char *errmsg, size_t msgsz);
+
 
 static redisReply * RDBStringReplyCreate (const char *str, size_t len)
 {

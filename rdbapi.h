@@ -342,9 +342,15 @@ typedef struct _RDBTableDes_t
 {
     char table_rowkey[256];
 
-    ub8 table_timestamp;
+    ub8 table_timestamp; //DEL??
     char table_datetime[20];
     char table_comment[RDB_KEY_VALUE_SIZE];
+
+    /**
+     * 1-based field index for table
+     * rowid[0] is number of keys
+     */
+    int rowkeyid[RDBAPI_KEYS_MAXNUM + 1];
 
     int nfields;
     RDBFieldDes_t fielddes[RDBAPI_ARGV_MAXNUM];
@@ -671,7 +677,7 @@ extern RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
 
 extern ub8 RDBTableScanNext (RDBResultMap hResultMap, ub8 offset, ub4 limit);
 
-extern RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *tablename, const char *tablecomment, int numfields, RDBFieldDes_t fielddes[]);
+extern RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *tablename, const char *tablecomment, int numfields, RDBFieldDes_t *fielddes);
 
 extern RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *tablename, RDBTableDes_t *tabledes);
 
