@@ -2034,7 +2034,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         return RDBResultMapRows(resultMap);
 
     } else if (sqlstmt->stmt == RDBSQL_CREATE) {
-        // test??
+        // test ok
         // CREATE TABLE IF NOT EXISTS xsdb.test22(uid UB8 NOT NULL COMMENT 'user id', str STR(30) , ROWKEY(uid)) COMMENT 'test table';
         RDBTableDes_t tabledes = {0};
         res = RDBTableDescribe(ctx, sqlstmt->create.tablespace, sqlstmt->create.tablename, &tabledes);
@@ -2050,22 +2050,12 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
 
             res = RDBTableDescribe(ctx, sqlstmt->create.tablespace, sqlstmt->create.tablename, &tabledes);
             if (res == RDBAPI_SUCCESS && tabledes.nfields == sqlstmt->create.numfields) {
-               RDBResultMap tablemap = ResultMapBuildDescTable(sqlstmt->create.tablespace, sqlstmt->create.tablename, vtnames, &tabledes);
+                resultmap = ResultMapBuildDescTable(sqlstmt->create.tablespace, sqlstmt->create.tablename, vtnames, &tabledes);
 
-                // TODO:
-                RDBResultMapDestroy(tablemap);
-
-                //////////////////DEL??
-                RDBResultMap resultMap;
-
-                RDBResultMapNew(ctx, NULL, sqlstmt->stmt, sqlstmt->create.tablespace, sqlstmt->create.tablename, tabledes.nfields, tabledes.fielddes, NULL, &resultMap);
-
-
-                *outResultMap = resultMap;
+                *outResultMap = resultmap;
                 return RDBAPI_SUCCESS;
             }
         }
-
     } else if (sqlstmt->stmt == RDBSQL_DESC_TABLE) {
         // test ok
         RDBTableDes_t tabledes = {0};
