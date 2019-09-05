@@ -269,6 +269,7 @@ void redplusExecuteRdbsql (RDBEnv env, const char *rdbsql, const char *output)
         goto error_exit;
     }
 
+
     res = RDBCtxExecuteSql(ctx, &sqlblob, &resultMap);
     if (res != RDBAPI_SUCCESS) {
         printf("# RDBCtxExecuteSql failed: %s\n", RDBCtxErrMsg(ctx));

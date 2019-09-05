@@ -123,7 +123,7 @@ typedef struct _RDBResultMap_t
 /////////////////////////////////////////////////
 
     /* user-specified title for this result */
-    char title[RDB_KEY_NAME_MAXLEN + 1];
+    char title[RDB_KEY_VALUE_SIZE];
 
     /* rowsmap deletion-safe iteration */
     RDBRowIter_t rowiter;

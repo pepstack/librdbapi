@@ -57,7 +57,8 @@ static RDBResultMap ResultMapBuildDescTable (const char *tablespace, const char 
         "datetime",
         "timestamp",
         "comment",
-        "fields"
+        "fields",
+        0
     };
 
     const char *fldnames[] = {
@@ -67,14 +68,15 @@ static RDBResultMap ResultMapBuildDescTable (const char *tablespace, const char 
         "scale",
         "rowkey",
         "nullable",
-        "comment"
+        "comment",
+        0
     };
 
     snprintf_chkd_V1(buf, sizeof(buf), "{%s::%s}", tablespace, tablename);
-    res = RDBResultMapCreate(buf, 6, tblnames, &tablemap);
+    res = RDBResultMapCreate(buf, tblnames, -1, &tablemap);
     //TODO: check res
 
-    res = RDBResultMapCreate("=>fields", 7, fldnames, &fieldsmap);
+    res = RDBResultMapCreate("=>fields", fldnames, -1, &fieldsmap);
     //TODO: check res
 
     res = RDBRowNew(tablemap, tabledes->table_rowkey, -1, &tablerow);
@@ -1567,6 +1569,45 @@ void SQLStmtParseDrop (RDBCtx ctx, RDBSQLStmt sqlstmt)
     sqlstmt->stmt = RDBSQL_DROP_TABLE;
 }
 
+// COMMAND
+//
+void SQLStmtParseCommand (RDBCtx ctx, RDBSQLStmt sqlstmt, int envcmd)
+{
+    if (envcmd == RDBENV_COMMAND_VERBOSE_ON) {
+        ctx->env->verbose = 1;
+        sqlstmt->stmt = envcmd;
+        return;
+    }
+
+    if (envcmd == RDBENV_COMMAND_VERBOSE_OFF) {
+        ctx->env->verbose = 0;
+        sqlstmt->stmt = envcmd;
+        return;
+    }
+
+    if (envcmd == RDBENV_COMMAND_DELIMITER) {
+        char *p1 = strchr(sqlstmt->sqloffset, 39);
+        char *p2 = strrchr(sqlstmt->sqloffset, 39);
+        if (p1 && p2 && p2-p1 == 2) {
+            p1++;
+            ctx->env->delimiter = *p1;
+            sqlstmt->stmt = envcmd;
+            return;
+        }
+
+        if (!p1 && !p2) {
+            p1 = cstr_Ltrim_whitespace(sqlstmt->sqloffset + 10);
+            if (cstr_length(p1, sqlstmt->offsetlen) == 1) {
+                ctx->env->delimiter = *p1;
+                sqlstmt->stmt = envcmd;
+                return;
+            }
+        }
+    }
+
+    RDBSQLStmtError(RDBSQL_ERR_INVAL_SQL, sqlstmt->sqloffset);
+}
+
 
 /***********************************************************************
  * 
@@ -1654,6 +1695,21 @@ RDBAPI_RESULT RDBSQLStmtCreate (RDBCtx ctx, const char *sql_block, size_t sql_le
 
     if (re_match(RDBSQL_PATTERN_CREATE_TABLE, sqlstmt->sqloffset) == 0) {
         SQLStmtParseCreate(ctx, sqlstmt);
+        goto parse_finished;
+    }
+
+    if (re_match(RDBSQL_COMMAND_VERBOSE_ON, sqlstmt->sqloffset) == 0) {
+        SQLStmtParseCommand(ctx, sqlstmt, RDBENV_COMMAND_VERBOSE_ON);
+        goto parse_finished;
+    }
+
+    if (re_match(RDBSQL_COMMAND_VERBOSE_OFF, sqlstmt->sqloffset) == 0) {
+        SQLStmtParseCommand(ctx, sqlstmt, RDBENV_COMMAND_VERBOSE_OFF);
+        goto parse_finished;
+    }
+
+    if (re_match(RDBSQL_COMMAND_DELIMITER, sqlstmt->sqloffset) == 0) {
+        SQLStmtParseCommand(ctx, sqlstmt, RDBENV_COMMAND_DELIMITER);
         goto parse_finished;
     }
 
@@ -1813,21 +1869,14 @@ void RDBSQLStmtPrint (RDBSQLStmt sqlstmt, FILE *fout)
 }
 
 
-static void RDBResultRowDeleteCallback (void * _row, void * _map)
-{
-    RDBResultMap resultMap = (RDBResultMap)_map;
-    RDBResultRow resultRow = (RDBResultRow)_row;
-
-    RedisDeleteKey(resultMap->ctxh, resultRow->replykey->str, NULL, 0);
-}
-
-
 RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
 {
     RDBAPI_RESULT res;
 
     int keylen;
     char keybuf[RDB_KEY_VALUE_SIZE];
+
+    RDBResultMap resultmap = NULL;
 
     RDBCtx ctx = sqlstmt->ctx;
     const char **vtnames = (const char **) ctx->env->valtypenames;
@@ -1985,7 +2034,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         return RDBResultMapRows(resultMap);
 
     } else if (sqlstmt->stmt == RDBSQL_CREATE) {
-        //??
+        // test??
         // CREATE TABLE IF NOT EXISTS xsdb.test22(uid UB8 NOT NULL COMMENT 'user id', str STR(30) , ROWKEY(uid)) COMMENT 'test table';
         RDBTableDes_t tabledes = {0};
         res = RDBTableDescribe(ctx, sqlstmt->create.tablespace, sqlstmt->create.tablename, &tabledes);
@@ -2018,37 +2067,33 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         }
 
     } else if (sqlstmt->stmt == RDBSQL_DESC_TABLE) {
-        // ok
+        // test ok
         RDBTableDes_t tabledes = {0};
         if (RDBTableDescribe(ctx, sqlstmt->desctable.tablespace, sqlstmt->desctable.tablename, &tabledes) != RDBAPI_SUCCESS) {
             return (ub8) RDBAPI_ERROR;
         }
-        *outResultMap = ResultMapBuildDescTable(sqlstmt->desctable.tablespace, sqlstmt->desctable.tablename, vtnames, &tabledes);
+        resultmap = ResultMapBuildDescTable(sqlstmt->desctable.tablespace, sqlstmt->desctable.tablename, vtnames, &tabledes);
+
+        *outResultMap = resultmap;
         return RDBAPI_SUCCESS;
     } else if (sqlstmt->stmt == RDBSQL_DROP_TABLE) {
+        // test ok
+        snprintf_chkd_V1(keybuf, sizeof(keybuf), "{%s::%s:%s}", RDB_SYSTEM_TABLE_PREFIX, sqlstmt->droptable.tablespace, sqlstmt->droptable.tablename);
 
-        RDBTableDes_t tabledes = {0};
-        char keyname[256];
+        if (RedisDeleteKey(ctx, keybuf, NULL, 0) == RDBAPI_KEY_DELETED) {
+            snprintf_chkd_V1(keybuf, sizeof(keybuf), "SUCCESS: table '%s.%s' drop okay.", sqlstmt->droptable.tablespace, sqlstmt->droptable.tablename);
+        } else {
+            snprintf_chkd_V1(keybuf, sizeof(keybuf), "FAILED: table '%s.%s' not found !", sqlstmt->droptable.tablespace, sqlstmt->droptable.tablename);
+        }
 
-        if (RDBTableDescribe(ctx, sqlstmt->droptable.tablespace, sqlstmt->droptable.tablename, &tabledes) == RDBAPI_SUCCESS) {
-            int i, rklen = (int) strlen(tabledes.table_rowkey);
+        RDBResultMapCreate(keybuf, NULL, 0, &resultmap);
 
-            for (i = 0; i < tabledes.nfields; i++) {
-                snprintf_chkd_V1(keyname, sizeof(keyname), "%.*s:%s}", rklen - 1, tabledes.table_rowkey, tabledes.fielddes[i].fieldname);
-                RedisDeleteKey(ctx, keyname, NULL, 0);
-            }
-
-            return RedisDeleteKey(ctx, tabledes.table_rowkey, NULL, 0);
-        }        
-
+        *outResultMap = resultmap;
+        return RDBAPI_SUCCESS;
     } else if (sqlstmt->stmt == RDBSQL_INFO_SECTION) {
-
+        // test ok
         if (RDBCtxCheckInfo(ctx, sqlstmt->info.section, sqlstmt->info.whichnode) == RDBAPI_SUCCESS) {
-            /**
-             * infomap => [nodeid, hostp, section, name, value]
-             */
-            RDBResultMap resultmap = NULL;
-            const char *names[] = {"nodeid", "hostp", "section", "name", "value"};
+            const char *names[] = {"nodeid", "host:port", "section", "name", "value"};
 
             const char *sections[] = {
                 "Server",        // 0
@@ -2070,7 +2115,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                 nposInfoSecs = MAX_NODEINFO_SECTIONS;
             }
 
-            RDBResultMapCreate(NULL, 5, names, &resultmap);
+            RDBResultMapCreate("SUCCESS:", names, -1, &resultmap);
 
             threadlock_lock(&ctx->env->thrlock);
 
@@ -2118,11 +2163,10 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
             return RDBAPI_SUCCESS;
         }
 
+        return RDBAPI_ERROR;
     } else if (sqlstmt->stmt == RDBSQL_SHOW_DATABASES) {
-
-        RDBResultMap resultmap = NULL;
-        const char *names[] = {"database"};
-        RDBResultMapCreate(NULL, 1, names, &resultmap); 
+        // test ok
+        const char *names[] = {"database", 0};
 
         redisReply *replyRows;
         RDBBlob_t pattern = {0};
@@ -2136,6 +2180,8 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         pattern.maxsz = prefixlen + 8;
         pattern.str = RDBMemAlloc(pattern.maxsz);
         pattern.length = snprintf_chkd_V1(pattern.str, pattern.maxsz, "{%s::*:*}", RDB_SYSTEM_TABLE_PREFIX);
+
+        RDBResultMapCreate("DATABASES:", names, -1, &resultmap);
 
         while (nodeindex < RDBEnvNumNodes(ctx->env)) {
             RDBEnvNode envnode = RDBEnvGetNode(ctx->env, nodeindex);
@@ -2160,13 +2206,19 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                     for (; i != replyRows->elements; i++) {
                         redisReply * reply = replyRows->element[i];
 
-                        if (cstr_startwith(reply->str, reply->len, pattern.str, prefixlen)) {
-                            char *end = strchr(reply->str + prefixlen, ':');
-                            if (end) {
-                                RDBRow row = NULL;
-                                RDBRowNew(resultmap, NULL, 0, &row);
-                                RDBCellSetString(RDBRowCell(row, 0), reply->str + prefixlen, (int)(end - reply->str - prefixlen));
-                                RDBResultMapInsertRow(resultmap, row);
+                        char *end = cstr_Lfind_chr(reply->str + prefixlen, (int)(reply->len - prefixlen), ':');
+                        if (end == cstr_Rfind_chr(reply->str, (int)reply->len, ':')) {
+                            RDBRow row = NULL;
+                            const char *dbkey;
+
+                            RDBRowNew(resultmap, reply->str + prefixlen, (int)(end - reply->str - prefixlen), &row);
+
+                            dbkey = RDBRowGetKey(row, &keylen);
+
+                            RDBCellSetString(RDBRowCell(row, 0), dbkey, keylen);
+
+                            if (RDBResultMapInsertRow(resultmap, row) != RDBAPI_SUCCESS) {
+                                RDBRowFree(row);
                             }
                         }
                     }
@@ -2182,12 +2234,10 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         RDBMemFree(pattern.str);
 
         *outResultMap = resultmap;
-
-        return RDBResultMapRows(resultmap);
+        return RDBAPI_SUCCESS;
     } else if (sqlstmt->stmt == RDBSQL_SHOW_TABLES) {
-
-        RDBResultMap resultmap = NULL;
-        const char *names[] = {"database.tablename"};
+        // test ok
+        const char *names[] = {"database.tablename", 0};
 
         // {redisdb::database:$tablename}
         redisReply *replyRows;
@@ -2205,7 +2255,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         pattern.str = RDBMemAlloc(pattern.maxsz);
         pattern.length = snprintf_chkd_V1(pattern.str, pattern.maxsz, "{%s::%.*s:*}", RDB_SYSTEM_TABLE_PREFIX, dbnlen, sqlstmt->showtables.tablespace);
 
-        RDBResultMapCreate(NULL, 1, names, &resultmap);
+        RDBResultMapCreate("TABLES:", names, -1, &resultmap);
 
         while (nodeindex < RDBEnvNumNodes(ctx->env)) {
             RDBEnvNode envnode = RDBEnvGetNode(ctx->env, nodeindex);
@@ -2230,17 +2280,21 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                     for (; i != replyRows->elements; i++) {
                         redisReply * reply = replyRows->element[i];
 
-                        char *end = strchr(reply->str + prefixlen + dbnlen + 1, ':');
-                        if (end) {
+                        if (! strchr(reply->str + prefixlen + dbnlen + 1, ':')) {
                             RDBRow row = NULL;
+                            const char *tbkey;
 
-                            *end = 0;
-                            *(reply->str + prefixlen - 1) = 0;
-                            *(reply->str + prefixlen + dbnlen) = '.';
+                            reply->str[prefixlen + dbnlen] = '.';
 
-                            RDBRowNew(resultmap, NULL, 0, &row);
-                            RDBCellSetString(RDBRowCell(row, 0), reply->str + prefixlen, (int)(end - reply->str - prefixlen));
-                            RDBResultMapInsertRow(resultmap, row);
+                            RDBRowNew(resultmap, reply->str + prefixlen, (int)(reply->len - prefixlen - 1), &row);
+
+                            tbkey = RDBRowGetKey(row, &keylen);
+
+                            RDBCellSetString(RDBRowCell(row, 0), tbkey, keylen);
+
+                            if (RDBResultMapInsertRow(resultmap, row) != RDBAPI_SUCCESS) {
+                                RDBRowFree(row);
+                            }
                         }
                     }
 
@@ -2259,7 +2313,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         return RDBResultMapRows(resultmap);
     }
 
-    return (ub8) RDBAPI_ERROR;
+    return RDBAPI_ERROR;
 }
 
 
@@ -2267,8 +2321,7 @@ RDBAPI_RESULT RDBCtxExecuteSql (RDBCtx ctx, const RDBBlob_t *sqlblob, RDBResultM
 {
     RDBAPI_RESULT res;
 
-    RDBResultMap resultMap;
-
+    RDBResultMap resultmap = NULL;
     RDBSQLStmt sqlstmt = NULL;
 
     *outResultMap = NULL;
@@ -2282,14 +2335,16 @@ RDBAPI_RESULT RDBCtxExecuteSql (RDBCtx ctx, const RDBBlob_t *sqlblob, RDBResultM
         RDBSQLStmtPrint(sqlstmt, stdout);
     }
 
-    if (RDBSQLStmtExecute(sqlstmt, &resultMap) == RDBAPI_ERROR) {
-        goto ret_error;
+    if (sqlstmt->stmt < RDBENV_COMMAND_START) {
+        if (RDBSQLStmtExecute(sqlstmt, &resultmap) == RDBAPI_ERROR) {
+            goto ret_error;
+        }
     }
 
     // success
     RDBSQLStmtFree(sqlstmt);
 
-    *outResultMap = resultMap;
+    *outResultMap = resultmap;
     return RDBAPI_SUCCESS;
 
 ret_error:

@@ -303,6 +303,10 @@ typedef enum
     ,RDBSQL_INFO_SECTION = 7
     ,RDBSQL_SHOW_DATABASES = 8
     ,RDBSQL_SHOW_TABLES = 9
+    ,RDBENV_COMMAND_START = 10
+    ,RDBENV_COMMAND_VERBOSE_ON = RDBENV_COMMAND_START
+    ,RDBENV_COMMAND_VERBOSE_OFF = RDBENV_COMMAND_START + 1
+    ,RDBENV_COMMAND_DELIMITER = RDBENV_COMMAND_START + 2
 } RDBSQLStmtType;
 
 
@@ -716,7 +720,7 @@ extern RDBAPI_RESULT RDBCtxExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResu
  * RDBResultMap API
  *
  *********************************************************************/
-extern RDBAPI_RESULT RDBResultMapCreate (const char *title, int numcols, const char *names[], RDBResultMap *outresultmap);
+extern RDBAPI_RESULT RDBResultMapCreate (const char *title, const char *names[], size_t numcols, RDBResultMap *outresultmap);
 extern void RDBResultMapDestroy (RDBResultMap resultmap);
 extern RDBAPI_RESULT RDBResultMapInsertRow (RDBResultMap resultmap, RDBRow row);
 extern RDBRow RDBResultMapFindRow (RDBResultMap resultmap, const char *rowkey, int keylen);

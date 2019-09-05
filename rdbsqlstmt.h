@@ -54,6 +54,10 @@ extern "C"
 #define RDBSQL_PATTERN_SHOW_TABLES     "SHOW[\\s]+TABLES[\\s]+"
 #define RDBSQL_PATTERN_DROP_TABLE      "DROP[\\s]+TABLE[\\s]+"
 
+#define RDBSQL_COMMAND_VERBOSE_ON      "VERBOSE[\\s]+ON[\\s]*$"
+#define RDBSQL_COMMAND_VERBOSE_OFF     "VERBOSE[\\s]+OFF[\\s]*$"
+#define RDBSQL_COMMAND_DELIMITER       "DELIMITER[\\s]+"
+
 
 /**
  * RDBSQLErr-101: invalid table name. (:123) - 'DESC ;'
