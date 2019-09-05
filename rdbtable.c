@@ -800,11 +800,10 @@ RDBSQLStmtType RDBResultMapGetStmt (RDBResultMap resultMap)
 }
 
 
-static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
+RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
     RDBSQLStmtType stmt,
     const char *tablespace,   // must valid
     const char *tablename,    // must valid
-    const char *desctable,    // if DESC table, take it as key
     int numkeys,
     const char *keys[],
     RDBFilterExpr keyexprs[],
@@ -842,47 +841,44 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
         return RDBAPI_ERR_BADARG;
     }
 
+    if (RDBTableDescribe(ctx, tablespace, tablename, &tabledes) != RDBAPI_SUCCESS) {
+        return RDBAPI_ERROR;
+    }
+
     res = RDBTableFilterCreate(&filter, RDB_ROWKEY_MAX_SIZE);
     if (res != RDBAPI_SUCCESS) {
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR(%d): RDBTableFilterCreate failed", res);
         return RDBAPI_ERROR;
     }
 
-    if (! desctable) {
-        if (RDBTableDescribe(ctx, tablespace, tablename, &tabledes) != RDBAPI_SUCCESS) {
+    // get result fieldnames
+    if (filedcount == -1) {
+        // SELECT * FROM ...
+        for (j = 0; j < tabledes.nfields; j++) {
+            resultfields[j + 1] = (ub1) (j + 1);
+        }
+        resultfields[0] = tabledes.nfields;
+    } else {
+        for (j = 0; j < filedcount; j++) {
+            for (k = 0; k < tabledes.nfields; k++) {
+                if (! strcmp(tabledes.fielddes[k].fieldname, fieldnames[j])) {
+                    resultfields[j + 1] = (ub1)(k + 1);
+                    break;
+                }
+            }
+        }
+        resultfields[0] = filedcount;            
+    }
+
+    for (j = 1; j <= resultfields[0]; j++) {
+        if (! resultfields[j]) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "field not found: %s", fieldnames[j - 1]);
             RDBTableFilterFree(filter);
             return RDBAPI_ERROR;
         }
-
-        // get result fieldnames
-        if (filedcount == -1) {
-            // SELECT * FROM ...
-            for (j = 0; j < tabledes.nfields; j++) {
-                resultfields[j + 1] = (ub1) (j + 1);
-            }
-            resultfields[0] = tabledes.nfields;
-        } else {
-            for (j = 0; j < filedcount; j++) {
-                for (k = 0; k < tabledes.nfields; k++) {
-                    if (! strcmp(tabledes.fielddes[k].fieldname, fieldnames[j])) {
-                        resultfields[j + 1] = (ub1)(k + 1);
-                        break;
-                    }
-                }
-            }
-            resultfields[0] = filedcount;            
-        }
-
-        for (j = 1; j <= resultfields[0]; j++) {
-            if (! resultfields[j]) {
-                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "field not found: %s", fieldnames[j - 1]);
-                RDBTableFilterFree(filter);
-                return RDBAPI_ERROR;
-            }
-        }
     }
 
-    if (! desctable && tabledes.nfields) {
+    if (tabledes.nfields) {
         int           CK_numkeys = 0;
         const char   *CK_keys[RDBAPI_SQL_KEYS_MAX] = {0};
         RDBFilterExpr CK_keyexprs[RDBAPI_SQL_KEYS_MAX] = {0};
@@ -931,13 +927,6 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
                 numfields, fields, fieldexprs, fieldvals,
                 groupby, orderby,
                 tabledes.nfields, tabledes.fielddes);
-    } else {
-        // DESC desctable go to here!
-        res = RDBTableFilterInit(filter, tablespace, tablename, desctable,
-                numkeys, keys, keyexprs, keyvals,
-                numfields, fields, fieldexprs, fieldvals,
-                groupby, orderby,
-                tabledes.nfields, tabledes.fielddes);
     }
 
     if (res != RDBAPI_SUCCESS) {
@@ -965,45 +954,6 @@ static RDBAPI_RESULT RDBTableScanFirstInternal (RDBCtx ctx,
 
     *phResultMap = resultMap;
     return RDBAPI_SUCCESS;
-}
-
-
-RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
-    RDBSQLStmtType sqlstmt,
-    const char *tablespace,   // must valid
-    const char *tablename,    // must valid
-    int numkeys,
-    const char *keys[],
-    RDBFilterExpr keyexprs[],
-    const char *keyvals[],
-    int numfields,
-    const char *fields[],
-    RDBFilterExpr fieldexprs[],
-    const char *fieldvals[],
-    const char *groupby[],    // Not Supported Now!
-    const char *orderby[],    // Not Supported Now!
-    int filedcount,
-    const char *fieldnames[],
-    RDBResultMap *phResultMap)
-{
-   return RDBTableScanFirstInternal(ctx,
-            sqlstmt,
-            tablespace,
-            tablename,
-            NULL,
-            numkeys,
-            keys,
-            keyexprs,
-            keyvals,
-            numfields,
-            fields,
-            fieldexprs,
-            fieldvals,
-            groupby,
-            orderby,
-            filedcount,
-            fieldnames,
-            phResultMap);
 }
 
 

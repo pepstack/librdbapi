@@ -1884,9 +1884,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
     *outResultMap = NULL;
 
     if (sqlstmt->stmt == RDBSQL_SELECT || sqlstmt->stmt == RDBSQL_DELETE) {
-
-        RDBResultMap resultMap = NULL;
-
+        // test ??
         res = RDBTableScanFirst(ctx,
                 sqlstmt->stmt,
                 sqlstmt->select.tablespace, sqlstmt->select.tablename,
@@ -1902,26 +1900,25 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                 NULL,
                 sqlstmt->select.count,
                 (const char **) sqlstmt->select.resultfields,
-                &resultMap);
+                &resultmap);
 
         if (res == RDBAPI_SUCCESS) {
-            ub8 offset = RDBTableScanNext(resultMap, sqlstmt->select.offset, sqlstmt->select.limit);
+            ub8 offset = RDBTableScanNext(resultmap, sqlstmt->select.offset, sqlstmt->select.limit);
 
             if (offset != RDB_ERROR_OFFSET) {
                 if (sqlstmt->stmt == RDBSQL_DELETE) {
                     //TODO: RDBResultMapTraverse(resultMap, RDBResultRowDeleteCallback, resultMap);
                 }
 
-                *outResultMap = resultMap;
+                *outResultMap = resultmap;
                 return RDBAPI_SUCCESS;
             }
 
-            RDBResultMapDestroy(resultMap);
+            RDBResultMapDestroy(resultmap);
             return 0;
         }
-
     } else if (sqlstmt->stmt == RDBSQL_UPSERT) {
-
+        // TODO:
         RDBResultMap resultMap;
 
         ub8 existedkeys = 0;
