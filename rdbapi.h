@@ -55,7 +55,7 @@ extern "C"
 #endif
 
 #ifndef RDB_TABLE_DELIMITER_CHAR
-# define RDB_TABLE_DELIMITER_CHAR  '|'
+# define RDB_TABLE_DELIMITER_CHAR  ((char) '|')
 #endif
 
 #ifndef RDB_CLUSTER_NODES_MAX
@@ -704,9 +704,9 @@ extern void RDBSQLStmtPrint (RDBSQLStmt sqlstmt, FILE *fout);
 
 extern RDBSQLStmtType RDBSQLStmtGetType (RDBSQLStmt sqlstmt, char **parsedClause, int pretty);
 
-extern ub8 RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap);
+extern RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap);
 
-extern ub8 RDBCtxExecuteSQL (RDBCtx ctx, const RDBBlob_t *sqlblob, RDBResultMap *outResultMap);
+extern RDBAPI_RESULT RDBCtxExecuteSql (RDBCtx ctx, const RDBBlob_t *sqlblob, RDBResultMap *outResultMap);
 
 extern RDBAPI_RESULT RDBCtxExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResultMap *outResultMap);
 
@@ -716,26 +716,30 @@ extern RDBAPI_RESULT RDBCtxExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResu
  * RDBResultMap API
  *
  *********************************************************************/
-extern RDBAPI_RESULT RDBResultMapCreate (int numcols, const char *names[], RDBResultMap *outresultmap);
+extern RDBAPI_RESULT RDBResultMapCreate (const char *title, int numcols, const char *names[], RDBResultMap *outresultmap);
 extern void RDBResultMapDestroy (RDBResultMap resultmap);
 extern RDBAPI_RESULT RDBResultMapInsertRow (RDBResultMap resultmap, RDBRow row);
 extern RDBRow RDBResultMapFindRow (RDBResultMap resultmap, const char *rowkey, int keylen);
 extern void RDBResultMapDeleteRow (RDBResultMap resultmap, RDBRow row);
 extern void RDBResultMapCleanRows (RDBResultMap resultmap);
-extern int RDBResultMapColHeaders (RDBResultMap resultmap);
-extern RDBZString RDBResultMapColHeaderName (RDBResultMap resultmap, int colindex);
+
+extern RDBSQLStmtType RDBResultMapGetStmt (RDBResultMap resultmap);
+
+extern const char * RDBResultMapTitle (RDBResultMap resultmap);
+
+extern int RDBResultMapColHeads (RDBResultMap resultmap);
+extern RDBZString RDBResultMapColHeadName (RDBResultMap resultmap, int colindex);
 extern RDBRowIter RDBResultMapFirstRow (RDBResultMap resultmap);
 extern RDBRowIter RDBResultMapNextRow (RDBRowIter rowiter);
 extern RDBRow RDBRowIterGetRow (RDBRowIter iter);
 extern ub4 RDBResultMapRows (RDBResultMap resultmap);
-extern void RDBResultMapPrint (RDBResultMap resultmap, FILE *fout);
+extern void RDBResultMapPrint (RDBCtx ctx, RDBResultMap resultmap, FILE *fout);
 
 //DEL below:
 extern RDBAPI_RESULT RDBResultMapInsert (RDBResultMap hResultMap, redisReply *reply);
 extern ub8 RDBResultMapGetOffset (RDBResultMap hResultMap);
-extern char RDBResultMapSetDelimiter (RDBResultMap hResultMap, char delimiter);
-extern void RDBResultMapPrintOut (RDBResultMap hResultMap, const char *header, ...);
-extern RDBSQLStmtType RDBResultMapGetStmt (RDBResultMap resultMap);
+
+
 
 /**************************************
  *
@@ -770,6 +774,7 @@ extern redisReply* RDBCellGetReply (RDBCell cell);
 extern RDBResultMap RDBCellGetResult (RDBCell cell);
 
 extern void RDBCellClean (RDBCell cell);
+extern void RDBCellPrint (RDBCell cell, FILE *fout);
 
 #if defined(__cplusplus)
 }

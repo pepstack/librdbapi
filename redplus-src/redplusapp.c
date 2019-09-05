@@ -252,12 +252,10 @@ void redplusExecuteSqlfile (RDBEnv env, const char *sqlfile, const char *output)
 
 void redplusExecuteRdbsql (RDBEnv env, const char *rdbsql, const char *output)
 {
-    RDBAPI_RESULT err = RDBAPI_ERROR;
+    RDBAPI_RESULT res;
 
     RDBCtx ctx = NULL;
-
     RDBResultMap resultMap = NULL;
-    RDBSQLStmt sqlstmt = NULL;
 
     RDBBlob_t sqlblob;
 
@@ -265,32 +263,26 @@ void redplusExecuteRdbsql (RDBEnv env, const char *rdbsql, const char *output)
     sqlblob.length = cstr_length(rdbsql, -1);
     sqlblob.maxsz = sqlblob.length + 1;
 
-    ub8 offset = RDBAPI_ERROR;
-
-    err = RDBCtxCreate(env, &ctx);
-    if (err) {
-        printf("# failed on RDBCtxCreate error(%d).\n", err);
+    res = RDBCtxCreate(env, &ctx);
+    if (res != RDBAPI_SUCCESS) {
+        printf("# RDBCtxCreate error(%d).\n", res);
         goto error_exit;
     }
 
-    offset = RDBCtxExecuteSQL(ctx, &sqlblob, &resultMap);
-    if (offset == RDBAPI_ERROR) {
-        printf("# failed on %s\n", RDBCtxErrMsg(ctx));
+    res = RDBCtxExecuteSql(ctx, &sqlblob, &resultMap);
+    if (res != RDBAPI_SUCCESS) {
+        printf("# RDBCtxExecuteSql failed: %s\n", RDBCtxErrMsg(ctx));
         goto error_exit;
     }
 
-    // success
-    RDBResultMapPrintOut(resultMap, "# success result:\n\n");
-
+    RDBResultMapPrint(ctx, resultMap, stdout);
     RDBResultMapDestroy(resultMap);
     RDBCtxFree(ctx);
+
+    // success
     return;
 
 error_exit:
-    if (resultMap) {
-        RDBResultMapDestroy(resultMap);
-    }
-    if (ctx) {
-        RDBCtxFree(ctx);
-    }
+    RDBResultMapDestroy(resultMap);
+    RDBCtxFree(ctx);
 }

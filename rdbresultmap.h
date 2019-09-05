@@ -94,8 +94,6 @@ typedef struct _RDBResultMap_t
 {
     RDBCtx ctxh;
 
-    char delimiter;
-
     RDBSQLStmtType sqlstmt;
     RDBTableFilter filter;
 
@@ -122,6 +120,10 @@ typedef struct _RDBResultMap_t
 
     /* only for query */
     RDBResultFilter resfilter;
+/////////////////////////////////////////////////
+
+    /* user-specified title for this result */
+    char title[RDB_KEY_NAME_MAXLEN + 1];
 
     /* rowsmap deletion-safe iteration */
     RDBRowIter_t rowiter;
@@ -130,8 +132,8 @@ typedef struct _RDBResultMap_t
     RDBRowsHashMap rowsmap;
 
     /* number of columns and names for column headers */
-    int numcolheaders;
-    RDBZString colheadernames[0];
+    int colheads;
+    RDBZString colheadnames[0];
 } RDBResultMap_t;
 
 

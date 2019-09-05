@@ -143,6 +143,12 @@ typedef struct _RDBEnv_t
     char *valtypenames[256];
     char _valtypenamebuf[256];
 
+    // 0: OFF; 1: ON (default)
+    ub1 verbose;
+
+    // delimiter
+    char delimiter;
+
     thread_lock_t thrlock;
 
     RDBEnvNodeMap nodemap;

@@ -63,15 +63,17 @@ RDBAPI_RESULT RDBCtxCreate (RDBEnv env, RDBCtx *outctx)
 
 void RDBCtxFree (RDBCtx ctx)
 {
-    int i = 0;
-    int numnodes = RDBEnvNumNodes(RDBCtxGetEnv(ctx));
+    if (ctx) {
+        int i = 0;
+        int numnodes = RDBEnvNumNodes(RDBCtxGetEnv(ctx));
 
-    for (; i < numnodes; i++) {
-        RDBCtxNode node = RDBCtxGetNode(ctx, i);
-        RDBCtxNodeClose(node);
+        for (; i < numnodes; i++) {
+            RDBCtxNode node = RDBCtxGetNode(ctx, i);
+            RDBCtxNodeClose(node);
+        }
+
+        RDBMemFree(ctx);
     }
-
-    RDBMemFree(ctx);    
 }
 
 

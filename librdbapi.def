@@ -54,7 +54,7 @@ EXPORTS
 	RDBCtxNodeGetEnvNode
 	RDBCtxCheckInfo
 	RDBCtxPrintInfo
-	RDBCtxExecuteSQL
+	RDBCtxExecuteSql
 	RDBCtxExecuteFile
 
 	RedisCheckReplyStatus
@@ -88,9 +88,6 @@ EXPORTS
 
 	RDBResultMapInsert
 	RDBResultMapGetOffset
-	RDBResultMapGetStmt
-	RDBResultMapSetDelimiter
-	RDBResultMapPrintOut
 
 	RDBResultMapCreate
 	RDBResultMapDestroy
@@ -98,8 +95,10 @@ EXPORTS
 	RDBResultMapFindRow
 	RDBResultMapDeleteRow
 	RDBResultMapCleanRows
-	RDBResultMapColHeaders
-	RDBResultMapColHeaderName
+	RDBResultMapGetStmt
+	RDBResultMapTitle
+	RDBResultMapColHeads
+	RDBResultMapColHeadName
 	RDBResultMapFirstRow
 	RDBResultMapNextRow
 	RDBRowIterGetRow
@@ -124,6 +123,7 @@ EXPORTS
 	RDBCellGetReply
 	RDBCellGetResult
 	RDBCellClean
+	RDBCellPrint
 
 	RDBTableScanFirst
 	RDBTableScanNext

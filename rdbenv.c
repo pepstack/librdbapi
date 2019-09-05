@@ -485,6 +485,9 @@ RDBAPI_RESULT RDBEnvCreate (const char *cluster, int ctxtimeout, int sotimeo_ms,
 
         threadlock_init(&env->thrlock);
 
+        env->verbose = (ub1)1;
+        env->delimiter = RDB_TABLE_DELIMITER_CHAR;
+
         *outenv = env;
         return RDBAPI_SUCCESS;
     }
