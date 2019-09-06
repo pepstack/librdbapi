@@ -1888,10 +1888,6 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         res = RDBTableScanFirst(ctx,
                 sqlstmt->stmt,
                 sqlstmt->select.tablespace, sqlstmt->select.tablename,
-                sqlstmt->select.numkeys,
-                (const char **) sqlstmt->select.keys,
-                sqlstmt->select.keyexprs,
-                (const char **) sqlstmt->select.keyvals,
                 sqlstmt->select.numfields,
                 (const char **) sqlstmt->select.fields,
                 sqlstmt->select.fieldexprs,
@@ -1903,6 +1899,11 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                 &resultmap);
 
         if (res == RDBAPI_SUCCESS) {
+            // TODO:
+
+
+
+
             ub8 offset = RDBTableScanNext(resultmap, sqlstmt->select.offset, sqlstmt->select.limit);
 
             if (offset != RDB_ERROR_OFFSET) {

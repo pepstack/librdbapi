@@ -44,7 +44,7 @@ typedef struct _RDBKeyValue_t
     RDBValueType vtype;
 
     int klen;
-    char key[RDB_KEY_VALUE_SIZE];
+    char key[RDB_KEY_NAME_MAXLEN + 1];
 
     int vlen;
     char val[0];
@@ -57,8 +57,6 @@ typedef struct _RDBTableFilter_t
     char tablespace[RDB_KEY_NAME_MAXLEN + 1];
     char tablename[RDB_KEY_NAME_MAXLEN + 1];
 
-    // number of rowkey in keyfilters
-    int patternkeys;
     RDBKeyVal keyfilters[RDBAPI_SQL_KEYS_MAX + 1];
 
     RDBKeyVal fldfilters[RDBAPI_SQL_FIELDS_MAX + 1];
@@ -68,6 +66,7 @@ typedef struct _RDBTableFilter_t
 
     // rowkey pattern
     RDBBlob_t patternblob;
+
     char blob[0];
 } RDBTableFilter_t;
 
@@ -75,22 +74,18 @@ typedef struct _RDBTableFilter_t
 #define RDBResultNodeState(resMap, nodeid)  (&(resMap->filter->nodestates[nodeid]))
 
 
-static RDBAPI_RESULT RDBTableFilterCreate (RDBTableFilter *filter, ub4 blobsz)
+static RDBAPI_RESULT RDBTableFilterCreate (RDBTableFilter *outfilter, ub4 maxsz)
 {
-    RDBTableFilter hsql = (RDBTableFilter) RDBMemAlloc(sizeof(RDBTableFilter_t) + blobsz);
-
-    if (! hsql) {
+    RDBTableFilter filter = (RDBTableFilter) RDBMemAlloc(sizeof(RDBTableFilter_t) + maxsz);
+    if (! filter) {
         return RDBAPI_ERR_NOMEM;
     }
 
-    hsql->patternblob.str = hsql->blob;
-    hsql->patternblob.length = 0;
-    hsql->patternblob.maxsz = blobsz;
+    filter->patternblob.str = filter->blob;
+    filter->patternblob.length = 0;
+    filter->patternblob.maxsz = maxsz;
 
-    hsql->keyfilters[RDBAPI_SQL_KEYS_MAX] = NULL;
-    hsql->fldfilters[RDBAPI_SQL_FIELDS_MAX] = NULL;
-
-    *filter = hsql;
+    *outfilter = filter;
     return RDBAPI_SUCCESS;
 }
 
@@ -115,12 +110,6 @@ static void RDBTableFilterFree (RDBTableFilter filter)
     }
 
     RDBMemFree(filter);
-}
-
-
-static int RDBValidateRowkeyValue (const char *value, int vlen, int maxsize)
-{
-    return 1;
 }
 
 
@@ -170,102 +159,55 @@ static int RDBFieldIsRowkey (const char * fieldname, const RDBFieldDes_t *fieldd
 }
 
 
-static RDBAPI_RESULT RDBTableFilterInit (RDBTableFilter filter,
-    const char *tablespace, const char *tablename, const char *desctable,
-    int numkeys, const char *keys[], const RDBFilterExpr keyexprs[], const char *keyvals[],
-    int numfields, const char *fields[], const RDBFilterExpr fieldexprs[], const char *fieldvals[],
-    const char *groupby[], const char *orderby[],
-    int nfielddes, const RDBFieldDes_t *fielddes)
+static void RDBTableFilterInit (RDBTableFilter filter,
+    RDBTableDes_t *tabledes, const char *tablespace, const char *tablename,
+    int numkeys, const char *keynames[], int keynameslen[], const RDBFilterExpr keyexprs[], const char *keyvals[], int keyvalslen[], int rowkeyid_keyid[],
+    int numfields, const char *fields[], int fieldslen[], const RDBFilterExpr fieldexprs[], const char *fieldvals[], int fieldvalslen[],
+    const char *groupby[], const char *orderby[])
 {
-    int i, j, k, len, offlen = 0;
-    size_t sz, valsz;
+    int i, k, len, offsz;
+
+    char *pattern = filter->patternblob.str;
+    size_t maxsz = filter->patternblob.maxsz;
 
     snprintf_chkd_V1(filter->tablespace, sizeof(filter->tablespace), "%s", tablespace);
     snprintf_chkd_V1(filter->tablename, sizeof(filter->tablename), "%s", tablename);
 
     // validate and set keys
-    filter->patternkeys = 0;
+    i = 0;
     for (k = 0; k < numkeys && k < RDBAPI_SQL_KEYS_MAX; k++) {
-        RDBFilterExpr expr = keyexprs[k];
+        RDBKeyVal keynode = (RDBKeyVal) RDBMemAlloc(sizeof(RDBKeyVal_t) + keyvalslen[k] + 1);
 
-        if (expr) {
-            RDBKeyVal keynode;
+        keynode->expr = keyexprs[k];
 
-            sz = strnlen(keys[k], RDB_KEY_VALUE_SIZE);
-            if (sz == 0 || sz == RDB_KEY_VALUE_SIZE) {
-                return RDBAPI_ERR_BADARG;
-            }
+        keynode->klen = keynameslen[k];
+        keynode->vlen = keyvalslen[k];
 
-            valsz = strnlen(keyvals[k], RDB_KEY_VALUE_SIZE);
-            if (valsz == RDB_KEY_VALUE_SIZE) {
-                return RDBAPI_ERR_BADARG;
-            }
+        memcpy(keynode->key, keynames[k], keynode->klen);
+        memcpy(keynode->val, keyvals[k], keynode->vlen);
 
-            keynode = (RDBKeyVal) mem_alloc_zero(1, sizeof(RDBKeyVal_t) + (valsz? (valsz + 1) : 0));
+        keynode->vtype = tabledes->fielddes[ RDBTableFindField(tabledes->fielddes, tabledes->nfields, keynode->key, keynode->klen) ].fieldtype;
 
-            keynode->expr = expr;
-
-            memcpy(keynode->key, keys[k], sz);
-            keynode->klen = (int) sz;
-
-            if (valsz) {
-                memcpy(keynode->val, keyvals[k], valsz);
-                keynode->vlen = (int) valsz;
-            }
-
-            if (nfielddes) {
-                int fldindex = RDBTableFindField(fielddes, nfielddes, keynode->key, keynode->klen);
-                if (fldindex != -1) {
-                    keynode->vtype = fielddes[fldindex].fieldtype;
-                }
-            }
-
-            filter->keyfilters[filter->patternkeys++] = keynode;
-        }
+        filter->keyfilters[i++] = keynode;
     }
 
     // validate and set fields
-    i = 0, j = filter->patternkeys;
+    i = 0;
     for (k = 0; k < numfields && k < RDBAPI_SQL_FIELDS_MAX; k++) {
-        RDBFilterExpr expr = fieldexprs[k];
+        if (fieldexprs[k]) {
+            RDBKeyVal fldnode = (RDBKeyVal) RDBMemAlloc(sizeof(RDBKeyVal_t) + fieldvalslen[k] + 1);
 
-        if (expr) {
-            RDBKeyVal fldnode;
-           
-            sz = cstr_length(fields[k], RDB_KEY_VALUE_SIZE);
-            if (sz == 0 || sz == RDB_KEY_VALUE_SIZE) {
-                return RDBAPI_ERR_BADARG;
-            }
+            fldnode->expr = fieldexprs[k];
 
-            valsz = cstr_length(fieldvals[k], RDB_KEY_VALUE_SIZE);
-            if (valsz == RDB_KEY_VALUE_SIZE) {
-                return RDBAPI_ERR_BADARG;
-            }
+            fldnode->klen = fieldslen[k];
+            fldnode->vlen = fieldvalslen[k];
 
-            fldnode = (RDBKeyVal) RDBMemAlloc(sizeof(RDBKeyVal_t) + (valsz? (valsz + 1) : 0));
+            memcpy(fldnode->key, fields[k], fldnode->klen);
+            memcpy(fldnode->val, fieldvals[k], fldnode->vlen);
 
-            fldnode->expr = expr;
+            fldnode->vtype = tabledes->fielddes[RDBTableFindField(tabledes->fielddes, tabledes->nfields, fldnode->key, fldnode->klen)].fieldtype;
 
-            memcpy(fldnode->key, fields[k], sz);
-            fldnode->klen = (int) sz;
-
-            if (valsz) {
-                memcpy(fldnode->val, fieldvals[k], valsz);
-                fldnode->vlen = (int) valsz;
-            }
-
-            if (nfielddes) {
-                int fldindex = RDBTableFindField(fielddes, nfielddes, fldnode->key, fldnode->klen);
-                if (fldindex != -1) {
-                    fldnode->vtype = fielddes[fldindex].fieldtype;
-                }
-            }
-
-            if (RDBFieldIsRowkey(fields[k], fielddes, numfields)) {
-                filter->keyfilters[j++] = fldnode;
-            } else {
-                filter->fldfilters[i++] = fldnode;
-            }
+            filter->fldfilters[i++] = fldnode;
         }
     }
 
@@ -277,83 +219,48 @@ static RDBAPI_RESULT RDBTableFilterInit (RDBTableFilter filter,
         // TODO:
     }
 
-    if (nfielddes > 0) {
-        // make rowkey format
-        char *keypattern = NULL;
-        int rowkeyid[RDBAPI_KEYS_MAXNUM + 1] = {0};
+    offsz = snprintf_chkd_V1(pattern, maxsz, "{%s::%s", tablespace, tablename);
+    for (i = 1; i <= tabledes->rowkeyid[0]; i++) {
+        len = 0;
 
-        RDBKeyVal kvnode;
-        char pattern[RDB_KEY_NAME_MAXLEN + 2] = {0};
-        
-        len = RDBBuildRowkeyPattern(tablespace, tablename, fielddes, nfielddes, rowkeyid, &keypattern);
+        k = rowkeyid_keyid[i];
+        if (k > 0) {
+            RDBKeyVal kvnode = filter->keyfilters[k - 1];
 
-        i = 0;
-        while ((kvnode = filter->keyfilters[i++]) != NULL) {
-            if (kvnode->expr >= RDBFIL_EQUAL && kvnode->expr < RDBFIL_NOT_EQUAL) {
-                if (RDBValidateRowkeyValue(kvnode->val, kvnode->vlen, RDB_KEY_VALUE_SIZE)) {
-                    char repvalue[RDB_KEY_VALUE_SIZE + 4] = {0};
+            len = 0;
+            if (kvnode && kvnode->expr >= RDBFIL_EQUAL && kvnode->expr < RDBFIL_NOT_EQUAL) {
+                switch (kvnode->expr) {
+                case RDBFIL_EQUAL:
+                case RDBFIL_MATCH:
+                    len = snprintf_chkd_V1(pattern + offsz, maxsz - offsz, ":%.*s", kvnode->vlen, kvnode->val);
+                    break;
 
-                    switch (kvnode->expr) {
-                    case RDBFIL_EQUAL:
-                    case RDBFIL_MATCH:
-                        snprintf_chkd_V1(repvalue, RDB_KEY_VALUE_SIZE, "%.*s", kvnode->vlen, kvnode->val);
-                        break;
+                case RDBFIL_LEFT_LIKE:
+                    len = snprintf_chkd_V1(pattern + offsz, maxsz - offsz, ":%.*s*", kvnode->vlen, kvnode->val);
+                    break;
 
-                    case RDBFIL_LEFT_LIKE:
-                        snprintf_chkd_V1(repvalue, RDB_KEY_VALUE_SIZE + 1, "%.*s*", kvnode->vlen, kvnode->val);
-                        break;
+                case RDBFIL_RIGHT_LIKE:
+                    len = snprintf_chkd_V1(pattern + offsz, maxsz - offsz, ":*%.*s", kvnode->vlen, kvnode->val);
+                    break;
 
-                    case RDBFIL_RIGHT_LIKE:
-                        snprintf_chkd_V1(repvalue, RDB_KEY_VALUE_SIZE + 1, "*%.*s", kvnode->vlen, kvnode->val);
-                        break;
-
-                    case RDBFIL_LIKE:
-                        snprintf_chkd_V1(repvalue, RDB_KEY_VALUE_SIZE + 2, "*%.*s*", kvnode->vlen, kvnode->val);
-                        break;
-                    }
-
-                    if (snprintf_chkd_V1(pattern, sizeof(pattern), "$%.*s", kvnode->klen, kvnode->key) < sizeof(pattern)) {
-                        char * newstr;
-                        int newlen = cstr_replace_new(keypattern, pattern, repvalue, &newstr);
-                        if (newlen) {
-                            RDBMemFree(keypattern);
-                            keypattern = newstr;
-                        }
-                        kvnode->expr = RDBFIL_IGNORE;
-                    }
+                case RDBFIL_LIKE:
+                    len = snprintf_chkd_V1(pattern + offsz, maxsz - offsz, ":*%.*s*", kvnode->vlen, kvnode->val);
+                    break;
                 }
             }
         }
 
-        len = RDBFinishRowkeyPattern(fielddes, nfielddes, rowkeyid, &keypattern);
-        if (len >= (int)filter->patternblob.maxsz) {
-            RDBMemFree(keypattern);
-            return RDBAPI_ERR_NOBUF;
+        if (! len) {
+            len = snprintf_chkd_V1(pattern + offsz, maxsz - offsz, ":*");
         }
 
-        memcpy(filter->patternblob.str, keypattern, len + 1);
-        filter->patternblob.length = len;
-
-        RDBMemFree(keypattern);
-    } else {
-        if (desctable) {
-            // {redisdb::xsdb:logentry:*}
-            len = snprintf_chkd_V1(filter->patternblob.str, filter->patternblob.maxsz, "{%s::%s:%s:*}", filter->tablespace, filter->tablename, desctable);
-        } else {
-            len = snprintf_chkd_V1(filter->patternblob.str, filter->patternblob.maxsz, "{%s::%s:*}", filter->tablespace, filter->tablename);
-        }
-
-        if (len >= (int)filter->patternblob.maxsz) {
-            return RDBAPI_ERR_NOBUF;
-        }
-        filter->patternblob.length = len;
+        offsz += len;
     }
+    offsz += snprintf_chkd_V1(pattern + offsz, maxsz - offsz, "}");
 
-    // patternblob is ok
+    filter->patternblob.length = offsz;
 
     bzero(filter->nodestates, sizeof(filter->nodestates[0]) * RDB_CLUSTER_NODES_MAX);
-
-    return RDBAPI_SUCCESS;
 }
 
 
@@ -687,7 +594,7 @@ RDBAPI_RESULT RDBResultMapInsert (RDBResultMap resultMap, redisReply *reply)
             HASH_ADD_STR_LEN(fieldmap, name, rknode->namelen, rknode);
         }
 
-        i = resultMap->filter->patternkeys;
+        i = 0; //resultMap->filter->patternkeys;
         while ((kvfilter = resultMap->filter->keyfilters[i++]) != NULL) {
             if (kvfilter->expr) {
                 RDBNameReply kvnode = NULL;
@@ -800,48 +707,97 @@ RDBSQLStmtType RDBResultMapGetStmt (RDBResultMap resultMap)
 }
 
 
-RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
-    RDBSQLStmtType stmt,
-    const char *tablespace,   // must valid
-    const char *tablename,    // must valid
-    int numkeys,
-    const char *keys[],
-    RDBFilterExpr keyexprs[],
-    const char *keyvals[],
-    int numfields,
-    const char *fields[],
-    RDBFilterExpr fieldexprs[],
-    const char *fieldvals[],
-    const char *groupby[],    // Not Supported Now!
-    const char *orderby[],    // Not Supported Now!
-    int filedcount,
-    const char *fieldnames[],
-    RDBResultMap *phResultMap)
+RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx, RDBSQLStmtType stmttype,
+    const char *tablespace, const char *tablename,    // must valid
+    int numfields, const char *fields[], RDBFilterExpr fieldexprs[], const char *fieldvals[],
+    const char *groupby[], const char *orderby[],     // Not Supported Now!
+    int selfiledcount, const char *selfieldnames[],
+    RDBResultMap *outresultmap)
 {
-    int nodeindex, j, k;
+    int nodeindex, i, j, k, n, klen, vlen;
 
     RDBAPI_RESULT res;
 
-    RDBResultMap results = NULL;
-    RDBResultMap resultMap = NULL;
+    RDBResultMap resultmap = NULL;
     RDBTableFilter filter = NULL;
 
     RDBTableDes_t tabledes = {0};
 
+    // filter by keys
+    int keys_rowkeyid[RDBAPI_SQL_KEYS_MAX] = {0};
+
+    int rowkeyid_keyid[RDBAPI_SQL_KEYS_MAX + 1] = {0};
+
+    size_t total_keyvalslen = 0;
+
+    int           numkeys = 0;
+    const char   *keynames[RDBAPI_SQL_KEYS_MAX] = {0};
+    int           keynameslen[RDBAPI_SQL_KEYS_MAX] = {0};
+    RDBFilterExpr keyexprs[RDBAPI_SQL_KEYS_MAX] = {0};
+    const char   *keyvals[RDBAPI_SQL_KEYS_MAX] = {0};
+    int           keyvalslen[RDBAPI_SQL_KEYS_MAX] = {0};
+
+    int           fieldslen[RDBAPI_ARGV_MAXNUM] = {0};
+    int           fieldvalslen[RDBAPI_ARGV_MAXNUM] = {0};
+
     // 1-based index of result fields refer to tabledes.fielddes
-    ub1 resultfields[RDBAPI_ARGV_MAXNUM + 1] = {0};
+    ub1 selectfields[RDBAPI_ARGV_MAXNUM + 1] = {0};
 
-    if (numkeys > RDBAPI_SQL_KEYS_MAX) {
-        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too many keys");
-        return RDBAPI_ERR_BADARG;
-    }
+    *outresultmap = NULL;
 
-    if (numfields > RDBAPI_SQL_FIELDS_MAX) {
+    if (numfields > RDBAPI_SQL_FIELDS_MAX || selfiledcount > RDBAPI_SQL_FIELDS_MAX) {
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too many fields");
         return RDBAPI_ERR_BADARG;
     }
 
     if (RDBTableDescribe(ctx, tablespace, tablename, &tabledes) != RDBAPI_SUCCESS) {
+        return RDBAPI_ERROR;
+    }
+
+    // always fetch rowkey fields
+    n = 0;
+    for (j = 1; j <= tabledes.rowkeyid[0]; j++) {
+        selectfields[++n] = tabledes.rowkeyid[j];
+    }
+
+    // get all fieldnames in SELECT
+    if (selfiledcount == -1) {
+        // SELECT * FROM ...
+        for (j = 0; j < tabledes.nfields; j++) {
+            if (! tabledes.fielddes[j].rowkey) {
+                selectfields[++n] = (ub1) (j + 1);
+            }
+        }
+    } else {
+        for (j = 0; j < selfiledcount; j++) {
+            klen = cstr_length(selfieldnames[j], RDB_KEY_NAME_MAXLEN + 1);
+
+            if (klen < 1 || klen > RDB_KEY_NAME_MAXLEN) {
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid field name: '%s'", selfieldnames[j]);
+                return RDBAPI_ERR_BADARG;
+            }
+
+            for (k = 0; k < tabledes.nfields; k++) {
+                if (!cstr_compare_len(tabledes.fielddes[k].fieldname, tabledes.fielddes[k].namelen, selfieldnames[j], klen)) {
+                    break;
+                }
+            }
+
+            if (k == tabledes.nfields) {
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: field name not found: '%s'", selfieldnames[j]);
+                return RDBAPI_ERR_BADARG;
+            }
+
+            if (! tabledes.fielddes[k].rowkey) {
+                selectfields[++n] = (ub1) (k + 1);
+            }
+        }
+    }
+
+    selectfields[0] = n;
+
+    if (! selectfields[0]) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "none select fields found");
         return RDBAPI_ERROR;
     }
 
@@ -851,108 +807,99 @@ RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
         return RDBAPI_ERROR;
     }
 
-    // get result fieldnames
-    if (filedcount == -1) {
-        // SELECT * FROM ...
-        for (j = 0; j < tabledes.nfields; j++) {
-            resultfields[j + 1] = (ub1) (j + 1);
+    // check if fields in WHERE are rowkeys
+    for (j = 0; j < numfields; j++) {
+        klen = cstr_length(fields[j], RDB_KEY_NAME_MAXLEN + 1);
+        if (klen < 1 || klen > RDB_KEY_NAME_MAXLEN) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid WHERE field: '%s'", fields[j]);
+            return RDBAPI_ERR_BADARG;
         }
-        resultfields[0] = tabledes.nfields;
-    } else {
-        for (j = 0; j < filedcount; j++) {
-            for (k = 0; k < tabledes.nfields; k++) {
-                if (! strcmp(tabledes.fielddes[k].fieldname, fieldnames[j])) {
-                    resultfields[j + 1] = (ub1)(k + 1);
+
+        for (k = 0; k < tabledes.nfields; k++) {
+            if (!cstr_compare_len(fields[j], klen, tabledes.fielddes[k].fieldname, tabledes.fielddes[k].namelen)) {
+                break;
+            }
+        }
+
+        if (k == tabledes.nfields) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: WHERE field not found: '%s'", fields[j]);
+            return RDBAPI_ERR_BADARG;
+        }
+
+        vlen = cstr_length(fieldvals[j], RDB_KEY_VALUE_SIZE);
+        if (vlen == RDB_KEY_VALUE_SIZE) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid WHERE value of field: '%s'", fields[j]);
+            return RDBAPI_ERR_BADARG;
+        }
+
+        fieldslen[j] = klen;
+        fieldvalslen[j] = vlen;
+
+        if (tabledes.fielddes[k].rowkey) {
+            // move from fields[j] to keys:
+            keynames[numkeys] = fields[j];
+            keynameslen[numkeys] = klen;
+
+            keyvals[numkeys] = fieldvals[j];
+            keyvalslen[numkeys] = vlen;
+
+            keyexprs[numkeys] = fieldexprs[j];
+
+            for (i = 1; i <= tabledes.rowkeyid[0]; i++) {
+                if (j+1 == tabledes.rowkeyid[i]) {
+                    keys_rowkeyid[numkeys] = i;
                     break;
                 }
             }
+
+            // ignore this field at all
+            fieldexprs[j] = RDBFIL_IGNORE;
+
+            total_keyvalslen += (vlen + 4);
+
+            // next key
+            numkeys++;
         }
-        resultfields[0] = filedcount;            
     }
 
-    for (j = 1; j <= resultfields[0]; j++) {
-        if (! resultfields[j]) {
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "field not found: %s", fieldnames[j - 1]);
-            RDBTableFilterFree(filter);
-            return RDBAPI_ERROR;
-        }
+    if (total_keyvalslen >= filter->patternblob.maxsz) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: too long key values");
+        return RDBAPI_ERR_BADARG;
     }
 
-    if (tabledes.nfields) {
-        int           CK_numkeys = 0;
-        const char   *CK_keys[RDBAPI_SQL_KEYS_MAX] = {0};
-        RDBFilterExpr CK_keyexprs[RDBAPI_SQL_KEYS_MAX] = {0};
-        const char   *CK_keyvals[RDBAPI_SQL_KEYS_MAX] = {0};
-
-        // check if fields[j] is rowkey, if it is, move it into keys
-        for (j = 0; j < numfields; j++) {
-            int rkid = 0;
-
-            if (fieldexprs[j] >= RDBFIL_EQUAL && fieldexprs[j] < RDBFIL_NOT_EQUAL) {
-                // check if fields[j] is a rowkey
-                for (k = 0; k < tabledes.nfields; k++) {
-                    if (! strcmp(fields[j], tabledes.fielddes[k].fieldname) && tabledes.fielddes[k].rowkey) {
-                        rkid = k + 1;
-                        break;
-                    }
-                }
-            }
-
-            if (rkid) {
-                // move from fields[j] to keys:
-                CK_keys[CK_numkeys] = fields[j];
-                CK_keyexprs[CK_numkeys] = fieldexprs[j];
-                CK_keyvals[CK_numkeys] = fieldvals[j];
-
-                // ignore this field at all
-                fieldexprs[j] = RDBFIL_IGNORE;
-
-                CK_numkeys++;
-            }
-        }
-
-        // merge keys with CK_keys
-        for (k = 0; k < numkeys; k++) {
-            if (CK_numkeys < RDBAPI_SQL_KEYS_MAX) {
-                CK_keys[CK_numkeys] = keys[k];
-                CK_keyexprs[CK_numkeys] = keyexprs[k];
-                CK_keyvals[CK_numkeys] = keyvals[k];
-
-                CK_numkeys++;
-            }
-        }
-
-        res = RDBTableFilterInit(filter, tablespace, tablename, NULL,
-                CK_numkeys, CK_keys, CK_keyexprs, CK_keyvals,
-                numfields, fields, fieldexprs, fieldvals,
-                groupby, orderby,
-                tabledes.nfields, tabledes.fielddes);
+    // make order rowkey
+    for (k = 0; k < numkeys; k++) {
+        i = keys_rowkeyid[k];
+        rowkeyid_keyid[i] = k + 1;
     }
 
-    if (res != RDBAPI_SUCCESS) {
-        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR(%d): RDBTableFilterInit failed", res);
-        RDBTableFilterFree(filter);
-        return RDBAPI_ERROR;
+    RDBTableFilterInit(filter, &tabledes, tablespace, tablename,
+        numkeys, keynames, keynameslen, keyexprs, keyvals, keyvalslen, rowkeyid_keyid,
+        numfields, fields, fieldslen, fieldexprs, fieldvals, fieldvalslen,
+        groupby, orderby);
+
+    if (ctx->env->verbose) {
+        fprintf(stdout, "key pattern: '%.*s'", (int) filter->patternblob.length, filter->patternblob.str);
     }
 
     // create result map
-    /*
-    RDBResultFilter resfilter = RDBResultFilterNew(ctx, filter, stmt, tabledes.nfields, tabledes.fielddes, resultfields);
-    RDBResultMapCreate(resfilter->resultfields, resfilter->fetchfields, &results);
-    for (nodeindex = 0; nodeindex < RDBEnvNumNodes(ctx->env); nodeindex++) {
-        RDBResultNodeState(resfilter, nodeindex)->nodeindex = nodeindex;
-    }
-    results->resfilter = resfilter;
-    */
 
-    //@@@ DEL???
-    RDBResultMapNew(ctx, filter, stmt, filter->tablespace, filter->tablename, tabledes.nfields, tabledes.fielddes, resultfields, &resultMap);
+     /*
+        RDBResultFilter resfilter = RDBResultFilterNew(ctx, filter, stmt, tabledes.nfields, tabledes.fielddes, resultfields);
+        RDBResultMapCreate(resfilter->resultfields, resfilter->fetchfields, &results);
+        for (nodeindex = 0; nodeindex < RDBEnvNumNodes(ctx->env); nodeindex++) {
+            RDBResultNodeState(resfilter, nodeindex)->nodeindex = nodeindex;
+        }
+        results->resfilter = resfilter;
+        */
 
-    for (nodeindex = 0; nodeindex < RDBEnvNumNodes(ctx->env); nodeindex++) {
-        RDBResultNodeState(resultMap, nodeindex)->nodeindex = nodeindex;
-    }
+        //@@@ DEL???
+      //  RDBResultMapNew(ctx, filter, stmt, filter->tablespace, filter->tablename, tabledes.nfields, tabledes.fielddes, resultfields, &resultMap);
 
-    *phResultMap = resultMap;
+        //for (nodeindex = 0; nodeindex < RDBEnvNumNodes(ctx->env); nodeindex++) {
+        //    RDBResultNodeState(resultMap, nodeindex)->nodeindex = nodeindex;
+        //}
+    *outresultmap = resultmap;
     return RDBAPI_SUCCESS;
 }
 

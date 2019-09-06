@@ -661,22 +661,18 @@ extern RDBAPI_RESULT RedisIncrFloatField (RDBCtx ctx, const char *key, const cha
  *
  *********************************************************************/
 extern RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
-    RDBSQLStmtType sqlstmt,
-    const char *tablespace,
-    const char *tablename,
-    int filter_numkeys,
-    const char *filter_keys[],
-    RDBFilterExpr filter_keyexprs[],
-    const char *filter_keyvals[],
-    int filter_numfields,
-    const char *filter_fields[],
-    RDBFilterExpr filter_fieldexprs[],
-    const char *filter_fieldvals[],
-    const char *groupby[],    // Not Supported Now!
-    const char *orderby[],    // Not Supported Now!
-    int result_filedcount,
-    const char *result_fieldnames[],
-    RDBResultMap *phResultMap);
+    RDBSQLStmtType stmttype,
+    const char    *tablespace,
+    const char    *tablename,
+    int            filter_numfields,
+    const char    *filter_fields[],
+    RDBFilterExpr  filter_fieldexprs[],
+    const char    *filter_fieldvals[],
+    const char    *groupby[],    // Not Supported Now!
+    const char    *orderby[],    // Not Supported Now!
+    int            selectfiledcount,
+    const char    *selectfieldnames[],
+    RDBResultMap  *outresultmap);
 
 
 extern ub8 RDBTableScanNext (RDBResultMap hResultMap, ub8 offset, ub4 limit);
