@@ -1899,11 +1899,6 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                 &resultmap);
 
         if (res == RDBAPI_SUCCESS) {
-            // TODO:
-
-
-
-
             ub8 offset = RDBTableScanNext(resultmap, sqlstmt->select.offset, sqlstmt->select.limit);
 
             if (offset != RDB_ERROR_OFFSET) {
@@ -1949,7 +1944,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                     continue;
                 }
 
-                res = RDBTableScanOnNode(ctxnode, nodestate, &sqlstmt->upsert.rkpattern, 200, &replyRows);
+                res = RDBTableScanOnNode(ctxnode, nodestate, sqlstmt->upsert.rkpattern.str, sqlstmt->upsert.rkpattern.length, 200, &replyRows);
 
                 if (res == RDBAPI_SUCCESS) {
                     // here we should add new rows
@@ -2185,7 +2180,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                     continue;
                 }
 
-                res = RDBTableScanOnNode(ctxnode, nodestate, &pattern, 200, &replyRows);
+                res = RDBTableScanOnNode(ctxnode, nodestate, pattern.str, pattern.length, 200, &replyRows);
 
                 if (res == RDBAPI_SUCCESS) {
                     // here we should add new rows
@@ -2259,7 +2254,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                     continue;
                 }
 
-                res = RDBTableScanOnNode(ctxnode, nodestate, &pattern, 200, &replyRows);
+                res = RDBTableScanOnNode(ctxnode, nodestate, pattern.str, pattern.length, 200, &replyRows);
 
                 if (res == RDBAPI_SUCCESS) {
                     // here we should add new rows
@@ -2307,8 +2302,6 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
 
 RDBAPI_RESULT RDBCtxExecuteSql (RDBCtx ctx, const RDBBlob_t *sqlblob, RDBResultMap *outResultMap)
 {
-    RDBAPI_RESULT res;
-
     RDBResultMap resultmap = NULL;
     RDBSQLStmt sqlstmt = NULL;
 

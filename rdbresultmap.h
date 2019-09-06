@@ -94,9 +94,6 @@ typedef struct _RDBResultMap_t
 {
     RDBCtx ctxh;
 
-    RDBSQLStmtType sqlstmt;
-    RDBTableFilter filter;
-
     // store reply rows
     red_black_tree_t  rbtree;
 
@@ -120,7 +117,15 @@ typedef struct _RDBResultMap_t
 
     /* only for query */
     RDBResultFilter resfilter;
+
+
+
 /////////////////////////////////////////////////
+    RDBCtx ctx;
+
+    RDBSQLStmtType sqlstmt;
+
+    RDBTableFilter filter;
 
     /* user-specified title for this result */
     char title[RDB_KEY_VALUE_SIZE];

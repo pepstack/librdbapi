@@ -86,7 +86,7 @@ void RDBResultMapDestroy (RDBResultMap resultmap)
 
         RDBResultMapCleanRows(resultmap);
 
-        RDBResultFilterFree(resultmap->resfilter);
+        RDBMemFree(resultmap->filter);
 
         RDBMemFree(resultmap);
     }

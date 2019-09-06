@@ -396,10 +396,6 @@ void RDBResultRowFree (RDBResultRow rowdata);
 //DEL??
 void RDBResultMapNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmtType sqlstmt, const char *tablespace, const char *tablename, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap);
 
-RDBResultFilter RDBResultFilterNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmtType stmt, int numfields, const RDBFieldDes_t *fielddes, ub1 resultfields[]);
-
-void RDBResultFilterFree (RDBResultFilter filter);
-
 int RDBBuildRowkeyPattern (const char * tablespace, const char * tablename,
     const RDBFieldDes_t *fielddes, int numfields,
     int rowkeyid[RDBAPI_KEYS_MAXNUM + 1],
@@ -410,7 +406,7 @@ int RDBFinishRowkeyPattern (const RDBFieldDes_t *tabledes, int nfielddes, const 
 
 int RDBNodeInfoQuery (RDBCtxNode ctxnode, RDBNodeInfoSection section, const char *propname, char propvalue[RDBAPI_PROP_MAXSIZE]);
 
-RDBAPI_RESULT RDBTableScanOnNode (RDBCtxNode ctxnode, RDBTableCursor nodestate, const RDBBlob_t *patternblob, ub4 maxlimit, redisReply **outReply);
+RDBAPI_RESULT RDBTableScanOnNode (RDBCtxNode ctxnode, RDBTableCursor nodestate, const char *pattern, size_t patternlen, ub4 maxlimit, redisReply **outReply);
 
 #if defined(__cplusplus)
 }
