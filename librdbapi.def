@@ -72,6 +72,7 @@ EXPORTS
 	RedisHMSet
 	RedisHMSetLen
 	RedisHMGet
+    RedisHMGetLen
 	RedisDeleteKey
 	RedisExistsKey
 	RedisClusterKeyslot
@@ -86,16 +87,14 @@ EXPORTS
 	RedisIncrFloatField
 	RedisClusterCheck
 
-	RDBResultMapInsert
-	RDBResultMapGetOffset
-
 	RDBResultMapCreate
 	RDBResultMapDestroy
 	RDBResultMapInsertRow
 	RDBResultMapFindRow
-	RDBResultMapDeleteRow
-	RDBResultMapCleanRows
-	RDBResultMapGetStmt
+	RDBResultMapDeleteOne
+	RDBResultMapDeleteAll
+    RDBResultMapDeleteAllOnCluster
+	RDBResultMapGetOffset
 	RDBResultMapTitle
 	RDBResultMapColHeads
 	RDBResultMapColHeadName
@@ -104,7 +103,6 @@ EXPORTS
 	RDBRowIterGetRow
 	RDBResultMapRows
 	RDBResultMapPrint
-	RDBResultMapRows
 
 	RDBRowNew
 	RDBRowFree
@@ -129,10 +127,6 @@ EXPORTS
 	RDBTableScanNext
 	RDBTableCreate
 	RDBTableDescribe
-	RDBTableFindField
-	RDBTableFetchFields
-	RDBFieldsMapGetField
-	RDBFieldsMapFree
 
 	RDBSQLStmtCreate
 	RDBSQLStmtFree

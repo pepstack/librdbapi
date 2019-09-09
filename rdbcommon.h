@@ -49,7 +49,7 @@ extern "C"
 #endif
 
 #include "common/memapi.h"
-#include "common/cstrutil.h"
+#include "common/cstrut.h"
 #include "common/threadlock.h"
 
 #include "common/red_black_tree.h"
@@ -58,6 +58,7 @@ extern "C"
 #include "common/uthash/utarray.h"
 
 #include "common/tpl/tpl.h"
+#include "common/tiny-regex-c/re.h"
 
 
 typedef struct _RDBEnvNode_t * RDBEnvNodeMap;
@@ -215,100 +216,6 @@ typedef struct _RDBAsynCtx_t
 } RDBAsynCtx_t, RDBACtx_t;
 
 
-typedef struct _RDBNameReply_t
-{
-    // makes this structure hashable
-    UT_hash_handle hh;
-
-    char *name;
-
-    // reply object
-    redisReply *value;
-
-    char *subval;
-    int sublen;
-
-    int namelen;
-    char namebuf[0];
-} RDBNameReply_t, *RDBNameReply, *RDBNameReplyMap;
-
-/*
-typedef struct _RDBResultMap_t
-{
-    RDBCtx ctxh;
-
-    RDBTableFilter filter;
-
-    RDBSQLStmtType sqlstmt;
-
-    char delimiter;
-
-    // store reply rows
-    red_black_tree_t  rbtree;
-
-    // constants: rowkeyid[0] is count for keys
-    int rowkeyid[RDBAPI_SQL_KEYS_MAX + 1];
-
-    int kplen;
-    char *keypattern;
-
-    // count for result fields
-    int resultfields;
-
-    // which fields to fetch
-    char *fetchfields[RDBAPI_ARGV_MAXNUM + 1];
-
-    // length of fieldname
-    int fieldnamelens[RDBAPI_ARGV_MAXNUM + 1];
-
-    // for: DESC $table
-    ub8 table_timestamp;
-    char table_datetime[24];
-    char table_comment[RDB_KEY_VALUE_SIZE];
-
-    int numfields;
-    RDBFieldDes_t fielddes[0];
-} RDBResultMap_t;
-*/
-
-typedef struct _RDBResultFilter_t
-{
-    RDBCtx ctx;
-
-    RDBTableFilter filter;
-
-    RDBSQLStmtType sqlstmt;
-
-    // constants: rowkeyid[0] is count for keys
-    int rowkeyid[RDBAPI_SQL_KEYS_MAX + 1];
-
-    int kplen;
-    char *keypattern;
-
-    // count for result fields
-    int resultfields;
-
-    // which fields to fetch
-    char *fetchfields[RDBAPI_ARGV_MAXNUM + 1];
-
-    // length of fieldname
-    int fieldnamelens[RDBAPI_ARGV_MAXNUM + 1];
-
-    int numfields;
-    RDBFieldDes_t fielddes[0];
-} RDBResultFilter_t, *RDBResultFilter;
-
-
-typedef struct _RDBResultRow_t
-{
-    // rowkeys value
-    redisReply *replykey;
-
-    // field values including rowkeys
-    RDBFieldsMap fieldmap;
-} RDBResultRow_t;
-
-
 typedef struct _RDBTableCursor_t
 {
     ub8 cursor;
@@ -345,64 +252,6 @@ int RDBFieldDesUnpack (const void *addrin, ub4 sizein, RDBFieldDes_t * outfielde
 
 // 1-success
 int RDBFieldDesCheckSet (const char valtypetable[256], const RDBFieldDes_t * fielddes, int nfields, int rowkeyid[RDBAPI_KEYS_MAXNUM + 1], char *errmsg, size_t msgsz);
-
-
-static redisReply * RDBStringReplyCreate (const char *str, size_t len)
-{
-    redisReply * reply = (redisReply *) RDBMemAlloc(sizeof(*reply));
-    reply->type = REDIS_REPLY_STRING;
-
-    if (len == (size_t)(-1)) {
-        len = str? strlen(str) : 0;
-    }
-
-    reply->str = RDBMemAlloc(len + 1);
-    reply->len = (int) len;
-
-    if (str && len) {
-        memcpy(reply->str, str, len);
-    }
-
-    return reply;
-}
-
-
-static redisReply * RDBIntegerReplyCreate (sb8 val)
-{
-    redisReply * reply = (redisReply *) RDBMemAlloc(sizeof(*reply));
-
-    reply->type = REDIS_REPLY_INTEGER;
-    reply->integer = val;
-
-    return reply;
-}
-
-
-static redisReply * RDBArrayReplyCreate (size_t elements)
-{
-    redisReply * replyArr = (redisReply *) RDBMemAlloc(sizeof(*replyArr));
-    replyArr->type = REDIS_REPLY_ARRAY;
-
-    replyArr->element = (redisReply **) RDBMemAlloc(sizeof(redisReply *) * elements);
-    replyArr->elements = elements;
-
-    return replyArr;
-}
-
-
-//DEL??
-void RDBResultRowFree (RDBResultRow rowdata);
-
-//DEL??
-void RDBResultMapNew (RDBCtx ctx, RDBTableFilter filter, RDBSQLStmtType sqlstmt, const char *tablespace, const char *tablename, int numfields, const RDBFieldDes_t *fielddes, ub1 *resultfields, RDBResultMap *phResultMap);
-
-int RDBBuildRowkeyPattern (const char * tablespace, const char * tablename,
-    const RDBFieldDes_t *fielddes, int numfields,
-    int rowkeyid[RDBAPI_KEYS_MAXNUM + 1],
-    char **outRowkeyPattern);
-
-
-int RDBFinishRowkeyPattern (const RDBFieldDes_t *tabledes, int nfielddes, const int rowkeyid[RDBAPI_KEYS_MAXNUM + 1], char **pattern);
 
 int RDBNodeInfoQuery (RDBCtxNode ctxnode, RDBNodeInfoSection section, const char *propname, char propvalue[RDBAPI_PROP_MAXSIZE]);
 

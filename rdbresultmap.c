@@ -41,7 +41,7 @@
  *
  **************************************/
 
-RDBAPI_RESULT RDBResultMapCreate (const char *title, const char *colheadnames[], size_t numcolheads, RDBResultMap *outresultmap)
+RDBAPI_RESULT RDBResultMapCreate (const char *title, const char *colheadnames[], const int *nameslen, size_t numcolheads, RDBResultMap *outresultmap)
 {
     if (numcolheads == -1) {
         int num = 0;
@@ -60,12 +60,26 @@ RDBAPI_RESULT RDBResultMapCreate (const char *title, const char *colheadnames[],
     } else {
         RDBResultMap resultmap = (RDBResultMap) RDBMemAlloc(sizeof(RDBResultMap_t) + sizeof(RDBZString) * numcolheads);
         if (resultmap) {
+            int len = 0;
             size_t col = 0;
-            for (; col < numcolheads; col++) {
-                resultmap->colheadnames[col] = RDBZStringNew(colheadnames[col], cstr_length(colheadnames[col], RDB_KEY_NAME_MAXLEN));
+
+            len = cstr_length(title, RDB_KEY_VALUE_SIZE);
+            if (len) {
+                resultmap->title = RDBZStringNew(title, len);
+            } else {
+                char str[20] = {0};
+                len = snprintf_chkd_V1(str, sizeof(str), "%p", resultmap);
+                resultmap->title = RDBZStringNew(str, len);
             }
 
-            snprintf_chkd_V1(resultmap->title, sizeof(resultmap->title), "%.*s", cstr_length(title, RDB_KEY_VALUE_SIZE), title);
+            for (; col < numcolheads; col++) {
+                if (nameslen) {
+                    resultmap->colheadnames[col] = RDBZStringNew(colheadnames[col], nameslen[col]);
+                } else {
+                    resultmap->colheadnames[col] = RDBZStringNew(colheadnames[col], cstr_length(colheadnames[col], RDB_KEY_NAME_MAXLEN));
+                }
+            }
+
             resultmap->colheads = (int) col;
 
             *outresultmap = resultmap;
@@ -84,7 +98,9 @@ void RDBResultMapDestroy (RDBResultMap resultmap)
             RDBZStringFree(resultmap->colheadnames[resultmap->colheads]);
         }
 
-        RDBResultMapCleanRows(resultmap);
+        RDBZStringFree(resultmap->title);
+
+        RDBResultMapDeleteAll(resultmap);
 
         RDBMemFree(resultmap->filter);
 
@@ -123,14 +139,14 @@ RDBRow RDBResultMapFindRow (RDBResultMap resultmap, const char *rowkey, int keyl
 }
 
 
-void RDBResultMapDeleteRow (RDBResultMap resultmap, RDBRow row)
+void RDBResultMapDeleteOne (RDBResultMap resultmap, RDBRow row)
 {
     HASH_DEL(resultmap->rowsmap, row);
     RDBRowFree(row);
 }
 
 
-void RDBResultMapCleanRows (RDBResultMap resultmap)
+void RDBResultMapDeleteAll (RDBResultMap resultmap)
 {
     RDBRowNode curnode, tmpnode;
     HASH_ITER(hh, resultmap->rowsmap, curnode, tmpnode) {
@@ -140,9 +156,22 @@ void RDBResultMapCleanRows (RDBResultMap resultmap)
 }
 
 
-const char * RDBResultMapTitle (RDBResultMap resultmap)
+void RDBResultMapDeleteAllOnCluster (RDBResultMap resultmap)
 {
-    return (resultmap->title[0] == '\0')? NULL : resultmap->title;
+    int rc;
+    RDBRowNode curnode, tmpnode;
+    HASH_ITER(hh, resultmap->rowsmap, curnode, tmpnode) {
+        if (RedisDeleteKey(resultmap->ctx, curnode->key, curnode->keylen, NULL, 0) != RDBAPI_KEY_DELETED) {
+            HASH_DEL(resultmap->rowsmap, curnode);
+            RDBRowFree(curnode);
+        }
+    }
+}
+
+
+RDBZString RDBResultMapTitle (RDBResultMap resultmap)
+{
+    return resultmap->title;
 }
 
 
@@ -186,7 +215,7 @@ RDBRowIter RDBResultMapNextRow (RDBRowIter iter)
 #ifdef NO_DECLTYPE
     (*(char**)(&iter->tmp)) = (char*)(iter->tmp != NULL? iter->tmp->hh.next : NULL);
 #else
-    iter->tmp = DECLTYPE(el)(iter->tmp != NULL? iter->tmp->hh.next : NULL);
+    iter->tmp = DECLTYPE(iter->el)(iter->tmp != NULL? iter->tmp->hh.next : NULL);
 #endif
 
     return (iter->el != NULL ? iter : NULL);
@@ -229,7 +258,7 @@ void RDBResultMapPrint (RDBCtx ctx, RDBResultMap resultmap, FILE *fout)
     int verbose = ctx->env->verbose;
     char delimt = ctx->env->delimiter;
 
-    fprintf(fout, "%s\n", resultmap->title);
+    fprintf(fout, "%.*s\n", (int) resultmap->title->len, resultmap->title->str);
 
     // print table head
     int numcols = RDBResultMapColHeads(resultmap);
@@ -312,201 +341,6 @@ void RDBResultMapPrint (RDBCtx ctx, RDBResultMap resultmap, FILE *fout)
     fflush(fout);
 }
 
-
-/*
-void RDBResultMapPrint (RDBResultMap resultMap, const char *header, ...)
-{
-
-    int i;
-
-    if (header) {
-        va_list args;
-        va_start(args, header);
-        vprintf(header, args);
-        va_end(args);
-    }
-
-    if (resultMap->sqlstmt == RDBSQL_SELECT || resultMap->sqlstmt == RDBSQL_DELETE) {
-        size_t len = 0;
-
-        const char **vtnames = (const char **) resultMap->ctxh->env->valtypenames;
-
-        fprintf(stdout, "$(tablename): %.*s}\n", (int) (strchr(resultMap->keypattern, '$') - resultMap->keypattern - 1), resultMap->keypattern);
-        fprintf(stdout, "$(rkpattern): %.*s\n", resultMap->kplen, resultMap->keypattern);
-
-        if (resultMap->filter) {
-            fprintf(stdout, "$(last offset): %"PRIu64"\n", RDBResultMapGetOffset(resultMap));
-        }
-        if (resultMap->rbtree.iSize) {
-            fprintf(stdout, "$(result rows): %"PRIu64"\n", RDBResultMapRows(resultMap));
-        }
-
-        fprintf(stdout, "\n");
-
-        for (i = 1; i <= resultMap->rowkeyid[0]; i++) {
-            int j = resultMap->rowkeyid[i];
-
-            if (! len) {
-                fprintf(stdout, "[ $%s", resultMap->fielddes[j].fieldname);
-            } else {
-                fprintf(stdout, " %c $%s", resultMap->delimiter, resultMap->fielddes[j].fieldname);
-            }
-
-            len += strlen(resultMap->fielddes[j].fieldname) + 4;
-        }
-
-        // print names for fields
-        for (i = 0; i < resultMap->resultfields; i++) {
-            if (! len) {
-                // fieldname
-                fprintf(stdout, "[ %.*s", resultMap->fieldnamelens[i], resultMap->fetchfields[i]);
-            } else {
-                // | fieldname
-                fprintf(stdout, " %c %.*s", resultMap->delimiter, resultMap->fieldnamelens[i], resultMap->fetchfields[i]);
-            }
-
-            len += resultMap->fieldnamelens[i] + 3;
-        }
-        fprintf(stdout, " ]\n--");
-
-        i = 1;
-        while (i++ < len) {
-            fprintf(stdout, "-");
-        }
-        fprintf(stdout, "\n");
-
-    } else if (resultMap->sqlstmt == RDBSQL_DESC_TABLE) {
-        const char **vtnames = (const char **) resultMap->ctxh->env->valtypenames;
-
-        fprintf(stdout, "$(tablename): %.*s}\n", (int) (strchr(resultMap->keypattern, '$') - resultMap->keypattern - 1), resultMap->keypattern);
-        fprintf(stdout, "$(rkpattern): %.*s\n", resultMap->kplen, resultMap->keypattern);
-        fprintf(stdout, "$(timestamp): %"PRIu64"\n", resultMap->table_timestamp);
-        fprintf(stdout, "$(creatdate): %s\n", resultMap->table_datetime);
-        fprintf(stdout, "$(tbcomment): %s\n", resultMap->table_comment);
-        fprintf(stdout, "---------------------+-----------+--------+---------+--------+----------+----------\n");
-        fprintf(stdout, "[      fieldname     | fieldtype | length |  scale  | rowkey | nullable | comment ]\n");
-        fprintf(stdout, "---------------------+-----------+--------+---------+--------+----------+----------\n");
-
-        for (i = 0; i < resultMap->numfields; i++) {
-            RDBFieldDes_t *fdes = &resultMap->fielddes[i];
-
-            fprintf(stdout, " %-20s| %8s  | %-6d |%8d |  %4d  |   %4d   | %s\n",
-                fdes->fieldname,
-                vtnames[fdes->fieldtype],
-                fdes->length,
-                fdes->dscale,
-                fdes->rowkey,
-                fdes->nullable,
-                fdes->comment);
-        }
-        fprintf(stdout, "---------------------+-----------+--------+---------+--------+----------+----------\n");
-    } else if (resultMap->sqlstmt == RDBSQL_SHOW_DATABASES) {
-        fprintf(stdout, "------------------------------\n");
-        fprintf(stdout, "[          database          ]\n");
-        printf("------------------------------\n");
-    } else if (resultMap->sqlstmt == RDBSQL_SHOW_TABLES) {
-        fprintf(stdout, "------------------------------\n");
-        fprintf(stdout, "[       database.table       ]\n");
-        fprintf(stdout, "------------------------------\n");
-    } else if (resultMap->sqlstmt == RDBSQL_INFO_SECTION) {
-
-    }
-
-    // print rowset
-    RDBResultMapTraverse(resultMap, RDBResultRowPrintCallback, resultMap);
-
-    if (resultMap->sqlstmt == RDBSQL_SHOW_DATABASES || resultMap->sqlstmt == RDBSQL_SHOW_TABLES) {
-        if (RDBResultMapRows(resultMap) > 0) {
-            fprintf(stdout, "------------------------------\n");
-        }
-        fprintf(stdout, "$(totalrows): %"PRIu64"\n", RDBResultMapRows(resultMap));
-    } else if (resultMap->sqlstmt == RDBSQL_INFO_SECTION) {
-        fprintf(stdout, "$(clusternodes): %d\n", RDBEnvNumNodes(resultMap->ctxh->env));
-    }
-
-    fflush(stdout);
-}
-*/
-
-
-/*
-static void RDBResultRowPrintCallback (void * _row, void * _map)
-{
-    int i, cols = 0;
-
-    RDBResultMap resultMap = (RDBResultMap)_map;
-    RDBResultRow resultRow = (RDBResultRow)_row;
-    RDBFieldsMap propsmap = resultRow->fieldmap;
-
-    if (resultMap->sqlstmt == RDBSQL_SELECT ||
-        resultMap->sqlstmt == RDBSQL_DELETE
-    ) {
-        // print rowkey values
-        for (i = 1; i <= resultMap->rowkeyid[0]; i++) {
-            int j = resultMap->rowkeyid[i];
-
-            RDBNameReply kvnode = NULL;
-
-            HASH_FIND_STR_LEN(propsmap, resultMap->fielddes[j].fieldname, resultMap->fielddes[j].namelen, kvnode);
-
-            if (cols) {
-                fprintf(stdout, "%c%.*s", resultMap->delimiter, kvnode->sublen, kvnode->subval);
-            } else {
-                fprintf(stdout, "%.*s", kvnode->sublen, kvnode->subval);
-            }
-
-            cols++;
-        }
-
-        // print field values
-        for (i = 0; i < resultMap->resultfields; i++) {
-            RDBNameReply kvnode = NULL;
-
-            HASH_FIND_STR_LEN(propsmap, resultMap->fetchfields[i], resultMap->fieldnamelens[i], kvnode);
-
-            if (cols) {
-                if (kvnode->value) {
-                    fprintf(stdout, "%c%.*s", resultMap->delimiter, (int)kvnode->value->len, kvnode->value->str);
-                } else {
-                    fprintf(stdout, "%c(null)", resultMap->delimiter);
-                }
-            } else {
-                if (kvnode->value) {
-                    fprintf(stdout, "%.*s", (int)kvnode->value->len, kvnode->value->str);
-                } else {
-                    fprintf(stdout, "(null)");
-                }
-            }
-
-            cols++;
-        }
-        fprintf(stdout, "\n");
-    } else if (resultMap->sqlstmt == RDBSQL_INFO_SECTION) {
-        RDBNameReply propnode;
-
-        // $(redisdb): {clusternode(9)::127.0.0.1:7009}
-        fprintf(stdout, "$(%s): %.*s\n", RDB_SYSTEM_TABLE_PREFIX, (int) resultRow->replykey->len, resultRow->replykey->str);
-        fprintf(stdout, "-------------+------------------------------------+--------------------------------\n");
-        fprintf(stdout, "[   section  |             name                   |              value            ]\n");
-        fprintf(stdout, "-------------+------------------------------------+--------------------------------\n");
-
-        for (propnode = propsmap; propnode != NULL; propnode = propnode->hh.next) {
-            char * pname = strstr(propnode->name, "::");
-            int seclen = (int) (pname - propnode->name);
-
-            fprintf(stdout, " %-12.*s| %-34.*s | %.*s\n",
-                seclen, propnode->name,
-                propnode->namelen - seclen - 2, pname + 2,
-                propnode->sublen, propnode->subval);
-        }
-
-        fprintf(stdout, "-------------+------------------------------------+--------------------------------\n");
-        fprintf(stdout, "\n");
-    } else if (resultMap->sqlstmt == RDBSQL_SHOW_DATABASES || resultMap->sqlstmt == RDBSQL_SHOW_TABLES) {
-        fprintf(stdout, " %-30.*s\n", resultRow->replykey->len, resultRow->replykey->str);
-    }
-}
-*/
 
 /**************************************
  *
@@ -671,13 +505,13 @@ RDBCell RDBCellSetString (RDBCell cell, const char *str, int len)
 
 RDBCell RDBCellSetBinary (RDBCell cell, const void *addr, ub4 sz)
 {
-    return RDBCellSetValue(cell, RDB_CELLTYPE_RESULTMAP, (void*) RDBBinaryNew(addr, sz));
+    return RDBCellSetValue(cell, RDB_CELLTYPE_BINARY, (void*) RDBBinaryNew(addr, sz));
 }
 
 
 RDBCell RDBCellSetReply (RDBCell cell, redisReply *replyString)
 {
-    return RDBCellSetValue(cell, RDB_CELLTYPE_RESULTMAP, (void*) replyString);
+    return RDBCellSetValue(cell, RDB_CELLTYPE_REPLY, (void*) replyString);
 }
 
 
@@ -748,14 +582,11 @@ extern void RDBCellPrint (RDBCell cell, FILE *fout)
         fprintf(fout, " (@BINARY:%"PRIu32") ", cell->bin->sz);
         break;
     case RDB_CELLTYPE_RESULTMAP:
-        if (RDBResultMapTitle(cell->resultmap)) {
-            fprintf(fout, " (@RESULTMAP:%s) ", RDBResultMapTitle(cell->resultmap));
-        } else {
-            fprintf(fout, " (@RESULTMAP:%p) ", cell->resultmap);
-        }
+        fprintf(fout, " (@RESULTMAP:%.*s) ",
+            (int) RDBZStringLen(RDBResultMapTitle(cell->resultmap)), RDBZStringAddr(RDBResultMapTitle(cell->resultmap)));
         break;
     default:
-        fprintf(fout, " (@INVALID@) ");
+        fprintf(fout, " (@INVALID) ");
         break;
     }
 }

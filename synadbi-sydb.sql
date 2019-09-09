@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS sydb.session (
     uid                  UB8          NOT NULL COMMENT '客户端ID',
     randnum              UB4                   COMMENT '随机数',
     credt                UB8                   COMMENT '会话创建时间',
-    ROWKEY (uid | sessionid)
+    ROWKEY (uid , sessionid)
 ) COMMENT '客户端会话状态表';
 
 # redisdb table: {sydb::entryid:$entryid}
@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS sydb.logentry (
     sid                  UB4          NOT NULL COMMENT '服务端ID',
     cretime              UB8                   COMMENT '条目创建的时间戳',
     position             UB8                   COMMENT '服务端文件最后更新的字节位置<大小>',
-    ROWKEY (sid | uid | entrykey)
+    ROWKEY (sid , uid , entrykey)
 ) COMMENT '日志文件注册表. 永久保留此表';
 
 # redisdb table: {sydb::cortexid:$cortexid}
@@ -112,7 +112,7 @@ DROP TABLE sydb.cortexid;
 CREATE TABLE IF NOT EXISTS sydb.cortexid (
     cortexid             STR(40)      NOT NULL COMMENT '指定的服务名<字符串>',
     magic                UB8                   COMMENT '服务加密字',
-    timeout              UB4                  ,
+    timeout              UB4                   COMMENT '用户登录会话超时秒',
     sid                  UB4                   COMMENT '服务唯一数字编号',
     maxneurons           UB4                   COMMENT '允许登录的最多客户端数',
     stashprefix          STR(127)              COMMENT '服务端文件存储的路径前缀',
@@ -130,6 +130,6 @@ CREATE TABLE IF NOT EXISTS sydb.connect (
     credt                STR(30)               COMMENT '创建时间<字符串>',
     connfd               UB4          NOT NULL COMMENT 'socket 连接描述符',
     port                 UB4                   COMMENT '客户端端口',
-    ROWKEY (sid | connfd)
+    ROWKEY (sid , connfd)
 ) COMMENT '客户端临时连接表. 键值在会话过期后自动删除';
 

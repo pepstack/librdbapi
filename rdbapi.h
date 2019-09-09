@@ -191,6 +191,7 @@ typedef int RDBAPI_BOOL;
  * RDB Objects
  *
  *********************************************************************/
+typedef struct _RDBZString_t     * RDBZString;
 
 typedef struct _RDBEnv_t         * RDBEnv;
 typedef struct _RDBEnvNode_t     * RDBEnvNode;
@@ -201,20 +202,13 @@ typedef struct _RDBCtxNode_t     * RDBCtxNode;
 typedef struct _RDBACtx_t        * RDBACtx;
 typedef struct _RDBACtxNode_t    * RDBACtxNode;
 
-typedef struct _RDBTableFilter_t * RDBTableFilter;
-typedef struct _RDBResultMap_t   * RDBResultMap;
-typedef struct _RDBResultRow_t   * RDBResultRow;
-
-typedef struct _RDBFieldDef_t    * RDBFieldDef;
-typedef struct _RDBNameReply_t   * RDBFieldsMap;
-
 typedef struct _RDBThreadCtx_t   * RDBThreadCtx;
 
 typedef struct _RDBSQLStmt_t     * RDBSQLStmt;
 
-typedef struct _RDBZString_t     * RDBZString;
+typedef struct _RDBTableFilter_t * RDBTableFilter;
 
-typedef struct _RDBResultMap_t      * RDBResultMap;
+typedef struct _RDBResultMap_t   * RDBResultMap;
 typedef struct _RDBCell_t        * RDBCell;
 typedef struct _RDBRow_t         * RDBRow;
 typedef struct _RDBRowIter_t     * RDBRowIter;
@@ -557,25 +551,25 @@ extern void RedisReplyObjectPrint (redisReply *reply, RDBCtxNode ctxnode);
 //   expire_ms = 0  : ignored
 //   expire_ms = -1 : never expired
 //   expire_ms > 0  : timeout by ms
-extern RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, sb8 expire_ms);
+extern RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, size_t keylen, sb8 expire_ms);
 
-extern RDBAPI_RESULT RedisSetKey (RDBCtx ctx, const char *key, const char *value, size_t valuelen, sb8 expire_ms);
+extern RDBAPI_RESULT RedisSetKey (RDBCtx ctx, const char *key, size_t keylen, const char *value, size_t valuelen, sb8 expire_ms);
 
 extern RDBAPI_RESULT RedisHMSet (RDBCtx ctx, const char *key, const char * fields[], const char *values[], const size_t *valueslen, sb8 expire_ms);
-
 extern RDBAPI_RESULT RedisHMSetLen (RDBCtx ctx, const char *key, size_t keylen, const char * fields[], const size_t *fieldslen, const char *values[], const size_t *valueslen, sb8 expire_ms);
 
 extern RDBAPI_RESULT RedisHMGet (RDBCtx ctx, const char * key, const char * fields[], redisReply **outReply);
+extern RDBAPI_RESULT RedisHMGetLen (RDBCtx ctx, const char * key, size_t keylen, const char * fields[], const size_t *fieldslen, redisReply **outReply);
 
 // success:
 //   RDBAPI_KEY_DELETED
 //   RDBAPI_KEY_NOTFOUND
-extern int RedisDeleteKey (RDBCtx ctx, const char * key, const char * fields[], int numfields);
+extern int RedisDeleteKey (RDBCtx ctx, const char * key, size_t keylen, const char * fields[], int numfields);
 
 // 0: not existed
 // 1: existed
 // < 0: error
-extern int RedisExistsKey (RDBCtx ctx, const char * key);
+extern int RedisExistsKey (RDBCtx ctx, const char * key, size_t keylen);
 
 extern RDBAPI_RESULT RedisClusterKeyslot (RDBCtx ctx, const char *key, sb8 *slot);
 
@@ -652,42 +646,12 @@ extern RDBAPI_RESULT RedisIncrFloatField (RDBCtx ctx, const char *key, const cha
  * specification:
  *   {tablespace::tablename:rowid1:rowid2,...}
  *
- * example:
- *
- *   {xsdb::logentry:$sid:$uid}
- *
- *   RDBTableScanFirst(ctx, "xsdb", "logentry", 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, &replyMap);
- *   RDBTableScanNext(ctx, replyMap);
  *
  *********************************************************************/
-extern RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx,
-    RDBSQLStmtType stmttype,
-    const char    *tablespace,
-    const char    *tablename,
-    int            filter_numfields,
-    const char    *filter_fields[],
-    RDBFilterExpr  filter_fieldexprs[],
-    const char    *filter_fieldvals[],
-    const char    *groupby[],    // Not Supported Now!
-    const char    *orderby[],    // Not Supported Now!
-    int            selectfiledcount,
-    const char    *selectfieldnames[],
-    RDBResultMap  *outresultmap);
-
-
+extern RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx, RDBSQLStmt sqlstmt, RDBResultMap  *outresultmap);
 extern ub8 RDBTableScanNext (RDBResultMap hResultMap, ub8 offset, ub4 limit);
-
 extern RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *tablename, const char *tablecomment, int numfields, RDBFieldDes_t *fielddes);
-
 extern RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *tablename, RDBTableDes_t *tabledes);
-
-extern int RDBTableFindField (const RDBFieldDes_t fields[RDBAPI_ARGV_MAXNUM], int numfields, const char *fieldname, int fieldnamelen);
-
-extern RDBFieldsMap RDBTableFetchFields (RDBCtx ctx, RDBFieldsMap fields, const char *fieldnames[], int fieldnamelens[], const char *rowkey);
-
-extern redisReply * RDBFieldsMapGetField (RDBFieldsMap fields, const char *fieldname, int fieldnamelen);
-
-extern void RDBFieldsMapFree (RDBFieldsMap fields);
 
 
 /**********************************************************************
@@ -697,17 +661,11 @@ extern void RDBFieldsMapFree (RDBFieldsMap fields);
  *********************************************************************/
 
 extern RDBAPI_RESULT RDBSQLStmtCreate (RDBCtx ctx, const char *sql_block, size_t sql_len, RDBSQLStmt *outsqlstmt);
-
 extern void RDBSQLStmtFree (RDBSQLStmt sqlstmt);
-
 extern void RDBSQLStmtPrint (RDBSQLStmt sqlstmt, FILE *fout);
-
 extern RDBSQLStmtType RDBSQLStmtGetType (RDBSQLStmt sqlstmt, char **parsedClause, int pretty);
-
 extern RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap);
-
 extern RDBAPI_RESULT RDBCtxExecuteSql (RDBCtx ctx, const RDBBlob_t *sqlblob, RDBResultMap *outResultMap);
-
 extern RDBAPI_RESULT RDBCtxExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResultMap *outResultMap);
 
 
@@ -716,16 +674,15 @@ extern RDBAPI_RESULT RDBCtxExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResu
  * RDBResultMap API
  *
  *********************************************************************/
-extern RDBAPI_RESULT RDBResultMapCreate (const char *title, const char *names[], size_t numcols, RDBResultMap *outresultmap);
+extern RDBAPI_RESULT RDBResultMapCreate (const char *title, const char *names[], const int *namelen, size_t numcols, RDBResultMap *outresultmap);
 extern void RDBResultMapDestroy (RDBResultMap resultmap);
 extern RDBAPI_RESULT RDBResultMapInsertRow (RDBResultMap resultmap, RDBRow row);
 extern RDBRow RDBResultMapFindRow (RDBResultMap resultmap, const char *rowkey, int keylen);
-extern void RDBResultMapDeleteRow (RDBResultMap resultmap, RDBRow row);
-extern void RDBResultMapCleanRows (RDBResultMap resultmap);
+extern void RDBResultMapDeleteOne (RDBResultMap resultmap, RDBRow row);
+extern void RDBResultMapDeleteAll (RDBResultMap resultmap);
+extern void RDBResultMapDeleteAllOnCluster (RDBResultMap resultmap);
 
-extern RDBSQLStmtType RDBResultMapGetStmt (RDBResultMap resultmap);
-
-extern const char * RDBResultMapTitle (RDBResultMap resultmap);
+extern RDBZString RDBResultMapTitle (RDBResultMap resultmap);
 
 extern int RDBResultMapColHeads (RDBResultMap resultmap);
 extern RDBZString RDBResultMapColHeadName (RDBResultMap resultmap, int colindex);
@@ -735,8 +692,7 @@ extern RDBRow RDBRowIterGetRow (RDBRowIter iter);
 extern ub4 RDBResultMapRows (RDBResultMap resultmap);
 extern void RDBResultMapPrint (RDBCtx ctx, RDBResultMap resultmap, FILE *fout);
 
-//DEL below:
-extern RDBAPI_RESULT RDBResultMapInsert (RDBResultMap hResultMap, redisReply *reply);
+
 extern ub8 RDBResultMapGetOffset (RDBResultMap hResultMap);
 
 

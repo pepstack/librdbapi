@@ -92,43 +92,12 @@ typedef struct _RDBRowIter_t
 /* ResultMap */
 typedef struct _RDBResultMap_t
 {
-    RDBCtx ctxh;
-
-    // store reply rows
-    red_black_tree_t  rbtree;
-
-    // constants: rowkeyid[0] is count for keys
-    int rowkeyid[RDBAPI_SQL_KEYS_MAX + 1];
-
-    int kplen;
-    char *keypattern;
-
-    // count for result fields
-    int resultfields;
-
-    // which fields to fetch
-    char *fetchfields[RDBAPI_ARGV_MAXNUM + 1];
-
-    // length of fieldname
-    int fieldnamelens[RDBAPI_ARGV_MAXNUM + 1];
-
-    int numfields;
-    RDBFieldDes_t fielddes[RDBAPI_ARGV_MAXNUM];
-
-    /* only for query */
-    RDBResultFilter resfilter;
-
-
-
-/////////////////////////////////////////////////
     RDBCtx ctx;
-
-    RDBSQLStmtType sqlstmt;
 
     RDBTableFilter filter;
 
     /* user-specified title for this result */
-    char title[RDB_KEY_VALUE_SIZE];
+    RDBZString title;
 
     /* rowsmap deletion-safe iteration */
     RDBRowIter_t rowiter;

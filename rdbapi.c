@@ -393,13 +393,13 @@ void RDBZStringFree (RDBZString zs)
 
 ub4 RDBZStringLen (RDBZString zs)
 {
-    return zs->len;
+    return (zs? zs->len : 0);
 }
 
 
 char * RDBZStringAddr (RDBZString zs)
 {
-    return zs->str;
+    return (zs? zs->str : NULL);
 }
 
 
@@ -818,7 +818,7 @@ char * RedisReplyDetachString (redisReply *reply, int *len)
 //   expire_ms = 0  : ignored
 //   expire_ms = -1 : never expired
 //   expire_ms > 0  : timeout by ms
-RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, sb8 expire_ms)
+RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, size_t keylen, sb8 expire_ms)
 {
     const char *argv[3];
     size_t argl[3];
@@ -830,7 +830,7 @@ RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, sb8 expire_ms)
 
     if (expire_ms == 0) {
         // ignored
-        RDBAPI_BOOL ok = RedisExistsKey(ctx, key);
+        RDBAPI_BOOL ok = RedisExistsKey(ctx, key, keylen);
 
         if (ok == RDBAPI_TRUE) {
             // key is ok
@@ -847,7 +847,7 @@ RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, sb8 expire_ms)
         argv[1] = key;
 
         argl[0] = 7;
-        argl[1] = strlen(key);
+        argl[1] = (keylen == -1? strlen(key) : keylen);
 
         reply = RedisExecCommand(ctx, 2, argv, argl);
         if (! reply) {
@@ -884,7 +884,7 @@ RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, sb8 expire_ms)
         argv[2] = val;
 
         argl[0] = 6;
-        argl[1] = strlen(key);
+        argl[1] = (keylen == -1? strlen(key) : keylen);
 
         argl[2] = snprintf_chkd_V1(val, sizeof(val), "%"PRId64"", expire_ms / 1000);
     } else {
@@ -894,7 +894,7 @@ RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, sb8 expire_ms)
         argv[2] = val;
 
         argl[0] = 7;
-        argl[1] = strlen(key);
+        argl[1] = (keylen == -1? strlen(key) : keylen);
 
         argl[2] = snprintf_chkd_V1(val, sizeof(val), "%"PRId64"", expire_ms);
     }
@@ -931,7 +931,7 @@ RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, sb8 expire_ms)
 }
 
 
-RDBAPI_RESULT RedisSetKey (RDBCtx ctx, const char *key, const char *value, size_t valuelen, sb8 expire_ms)
+RDBAPI_RESULT RedisSetKey (RDBCtx ctx, const char *key, size_t keylen, const char *value, size_t valuelen, sb8 expire_ms)
 {
     redisReply *reply;
 
@@ -946,7 +946,7 @@ RDBAPI_RESULT RedisSetKey (RDBCtx ctx, const char *key, const char *value, size_
     argl[0] = 3;
 
     argv[1] = key;
-    argl[1] = strlen(key);
+    argl[1] = (keylen == -1 ? strlen(key) : keylen);
 
     argv[2] = value;
     argl[2] = valuelen;
@@ -1037,7 +1037,7 @@ RDBAPI_RESULT RedisHMSet (RDBCtx ctx, const char *key, const char * fields[], co
         RedisFreeReplyObject(&reply);
 
         // set time out for key
-        return RedisExpireKey(ctx, key, expire_ms);
+        return RedisExpireKey(ctx, key, -1, expire_ms);
     } else {
         // bad reply type
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
@@ -1102,7 +1102,7 @@ RDBAPI_RESULT RedisHMSetLen (RDBCtx ctx, const char *key, size_t keylen, const c
         RedisFreeReplyObject(&reply);
 
         // set time out for key
-        return RedisExpireKey(ctx, key, expire_ms);
+        return RedisExpireKey(ctx, key, keylen, expire_ms);
     } else {
         // bad reply type
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_TYPE: reply type(%d)", reply->type);
@@ -1142,6 +1142,12 @@ RDBAPI_RESULT RedisHMSetLen (RDBCtx ctx, const char *key, size_t keylen, const c
  */
 RDBAPI_RESULT RedisHMGet (RDBCtx ctx, const char * key, const char * fields[], redisReply **outReply)
 {
+    return RedisHMGetLen(ctx, key, -1, fields, NULL, outReply);
+}
+
+
+RDBAPI_RESULT RedisHMGetLen (RDBCtx ctx, const char * key, size_t keylen, const char * fields[], const size_t *fieldslen, redisReply **outReply)
+{
     redisReply *reply = NULL;
 
     if (fields && fields[0]) {
@@ -1156,13 +1162,13 @@ RDBAPI_RESULT RedisHMGet (RDBCtx ctx, const char * key, const char * fields[], r
         argvlen[0] = 5;
 
         argv[1] = key;
-        argvlen[1] = strlen(key);
+        argvlen[1] = (keylen == -1)? strlen(key) : keylen;
 
         i = 0;
         argc = 2;
         while ((fld = fields[i]) != 0) {
             argv[2 + i] = fld;
-            argvlen[2 + i] = strlen(fld);
+            argvlen[2 + i] = (fieldslen? fieldslen[i] : strlen(fld));
             argc++;
 
             if (i++ == RDBAPI_ARGV_MAXNUM) {
@@ -1202,7 +1208,7 @@ RDBAPI_RESULT RedisHMGet (RDBCtx ctx, const char * key, const char * fields[], r
         argv[1] = key;
 
         argl[0] = 7;
-        argl[1] = strlen(key);
+        argl[1] = (keylen == -1)? strlen(key) : keylen;
 
         reply = RedisExecCommand(ctx, 2, argv, argl);
         if (! reply) {
@@ -1226,7 +1232,7 @@ RDBAPI_RESULT RedisHMGet (RDBCtx ctx, const char * key, const char * fields[], r
 
 // 1: del key ok
 // 0: key not found
-int RedisDeleteKey (RDBCtx ctx, const char * key, const char * fields[], int numfields)
+int RedisDeleteKey (RDBCtx ctx, const char * key, size_t keylen, const char * fields[], int numfields)
 {
     redisReply *reply = NULL;
 
@@ -1242,7 +1248,7 @@ int RedisDeleteKey (RDBCtx ctx, const char * key, const char * fields[], int num
 
     if (! fields || ! numfields) {
         const char *argv[] = { "del", key };
-        size_t argvlen[] = { 3, strlen(key) };
+        size_t argvlen[] = { 3, (keylen == -1? strlen(key) : keylen) };
 
         numfields = 1;
 
@@ -1259,7 +1265,7 @@ int RedisDeleteKey (RDBCtx ctx, const char * key, const char * fields[], int num
         argvlen[0] = 4;
 
         argv[1] = key;
-        argvlen[1] = strlen(key);
+        argvlen[1] = (keylen == -1? strlen(key) : keylen);
 
         for (i = 0; i < numfields; i++) {
             fld = fields[i];
@@ -1298,13 +1304,13 @@ int RedisDeleteKey (RDBCtx ctx, const char * key, const char * fields[], int num
 }
 
 
-int RedisExistsKey (RDBCtx ctx, const char * key)
+int RedisExistsKey (RDBCtx ctx, const char * key, size_t keylen)
 {
     int ret;
     redisReply *reply = NULL;
 
     const char *argv[] = { "exists", key };
-    size_t argvlen[] = { 6, strlen(key) };
+    size_t argvlen[] = { 6, (keylen == -1? strlen(key) : keylen) };
 
     *ctx->errmsg = 0;
 

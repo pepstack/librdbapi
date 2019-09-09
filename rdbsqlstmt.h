@@ -83,72 +83,73 @@ typedef struct _RDBSQLStmt_t
 
     RDBSQLStmtType stmt;
 
+    struct UPSERT_INTO {
+        char tablespace[RDB_KEY_NAME_MAXLEN + 1];
+        char tablename[RDB_KEY_NAME_MAXLEN + 1];
+
+        // check_upsert_fields
+        int rowkeys[RDBAPI_KEYS_MAXNUM + 1];
+        int rowkeyid[RDBAPI_KEYS_MAXNUM + 1];
+        char *rowkeypattern;
+
+        RDBBlob_t rkpattern;
+
+        int numfields;
+        char *fieldnames[RDBAPI_ARGV_MAXNUM + 1];
+        char *fieldvalues[RDBAPI_ARGV_MAXNUM + 1];
+        char fieldindex[RDBAPI_ARGV_MAXNUM + 1];
+
+        // 0 for IGNORE, > 0 for UPDATE
+        int numupdates;
+        char *updatenames[RDBAPI_ARGV_MAXNUM + 1];
+        char *updatevalues[RDBAPI_ARGV_MAXNUM + 1];
+        char updateindex[RDBAPI_ARGV_MAXNUM + 1];
+
+        // RedisExecCommand
+        // <ON DUPLICATE KEY IGNORE| UPDATE>
+        int upsert_mode;
+        char hmset_cmd[6];
+
+        // INSERT new ...
+        int argcNew;
+        const char *argvNew[RDBAPI_ARGV_MAXNUM + 4];
+        size_t argvlenNew[RDBAPI_ARGV_MAXNUM + 4];
+
+        // UPDATE exist...
+        int argcUpd;
+        const char *argvUpd[RDBAPI_ARGV_MAXNUM + 4];
+        size_t argvlenUpd[RDBAPI_ARGV_MAXNUM + 4];
+
+        // DESC table
+        RDBTableDes_t tabledes;
+    } upsert;
+
     union {
         // DELETE also use select
         struct SELECT {
             char tablespace[RDB_KEY_NAME_MAXLEN + 1];
             char tablename[RDB_KEY_NAME_MAXLEN + 1];
 
-            // fields filter
-            int numfields;
+            // WHERE fields
+            int numwhere;
             char *fields[RDBAPI_ARGV_MAXNUM + 1];
+            int fieldslen[RDBAPI_ARGV_MAXNUM + 1];
             RDBFilterExpr fieldexprs[RDBAPI_ARGV_MAXNUM + 1];
             char *fieldvals[RDBAPI_ARGV_MAXNUM + 1];
+            int fieldvalslen[RDBAPI_ARGV_MAXNUM + 1];
 
-            // keys filter
-            int numkeys;
-            char *keys[RDBAPI_ARGV_MAXNUM + 1];
-            RDBFilterExpr keyexprs[RDBAPI_ARGV_MAXNUM + 1];
-            char *keyvals[RDBAPI_ARGV_MAXNUM + 1];
+            // SELECT fields
+            int numselect;
+            char *selectfields[RDBAPI_ARGV_MAXNUM + 1];
+            int selectfieldslen[RDBAPI_ARGV_MAXNUM + 1];
 
-            // result fields
-            int count;
-            char *resultfields[RDBAPI_ARGV_MAXNUM + 1];
-
+            // OFFSET m
             ub8 offset;
+
+            // LIMIT n
             ub4 limit;
         } select;
 
-        struct UPSERT_INTO {
-            char tablespace[RDB_KEY_NAME_MAXLEN + 1];
-            char tablename[RDB_KEY_NAME_MAXLEN + 1];
-
-            // check_upsert_fields
-            int rowkeys[RDBAPI_KEYS_MAXNUM + 1];
-            int rowkeyid[RDBAPI_KEYS_MAXNUM + 1];
-            char *rowkeypattern;
-
-            RDBBlob_t rkpattern;
-
-            int numfields;
-            char *fieldnames[RDBAPI_ARGV_MAXNUM + 1];
-            char *fieldvalues[RDBAPI_ARGV_MAXNUM + 1];
-            char fieldindex[RDBAPI_ARGV_MAXNUM + 1];
-
-            // 0 for IGNORE, > 0 for UPDATE
-            int numupdates;
-            char *updatenames[RDBAPI_ARGV_MAXNUM + 1];
-            char *updatevalues[RDBAPI_ARGV_MAXNUM + 1];
-            char updateindex[RDBAPI_ARGV_MAXNUM + 1];
-
-            // RedisExecCommand
-            // <ON DUPLICATE KEY IGNORE| UPDATE>
-            int upsert_mode;
-            char hmset_cmd[6];
-
-            // INSERT new ...
-            int argcNew;
-            const char *argvNew[RDBAPI_ARGV_MAXNUM + 4];
-            size_t argvlenNew[RDBAPI_ARGV_MAXNUM + 4];
-
-            // UPDATE exist...
-            int argcUpd;
-            const char *argvUpd[RDBAPI_ARGV_MAXNUM + 4];
-            size_t argvlenUpd[RDBAPI_ARGV_MAXNUM + 4];
-
-            // DESC table
-            RDBTableDes_t tabledes;
-        } upsert;
 
         struct CREATE_TABLE {
             char tablespace[RDB_KEY_NAME_MAXLEN + 1];

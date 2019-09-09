@@ -24,14 +24,17 @@
 ***********************************************************************/
 
 /**
-* cstrutil.h
+* cstrut.h
 *
-*   C String Utility
+*   C String Utility Functions
 *
-* 2019-08-28
+* author: 350137278@qq.com
+*
+* create: 2017-08-28
+* update: 2019-09-09
 */
-#ifndef _CSTRUTIL_H
-#define _CSTRUTIL_H
+#ifndef _CSTR_UT_H
+#define _CSTR_UT_H
 
 #if defined(__cplusplus)
 extern "C"
@@ -144,10 +147,7 @@ static char * cstr_Rtrim_chr (char * str, char ch)
 }
 
 
-static char * cstr_LRtrim_chr (char * str, char c)
-{
-    return cstr_Rtrim_chr(cstr_Ltrim_chr(str, c), c);
-}
+#define cstr_LRtrim_chr(str, c)  cstr_Rtrim_chr(cstr_Ltrim_chr((str), (c)), (c))
 
 
 static char * cstr_Lfind_chr (char * str, int len, char c)
@@ -450,7 +450,6 @@ static int cstr_to_sb8 (int base, const char *str, int slen, sb8 *outval)
 }
 
 
-
 static int cstr_to_ub8 (int base, const char *str, int slen, ub8 *outval)
 {
     if (slen == 0) {
@@ -723,4 +722,4 @@ static int cstr_readline (FILE *fp, char line[], size_t maxlen)
 }
 #endif
 
-#endif /* _CSTRUTIL_H */
+#endif /* _CSTR_UT_H */

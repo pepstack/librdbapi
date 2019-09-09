@@ -3,6 +3,7 @@ noinst_LIBRARIES = librdbapi.a
 
 librdbapi_a_SOURCES = common/red_black_tree.c \
 	common/tiny-regex-c/re.c \
+	common/tpl/tpl.c \
     rdbactx.c \
     rdbctx.c \
     rdbenv.c \
@@ -12,6 +13,7 @@ librdbapi_a_SOURCES = common/red_black_tree.c \
     rdbresultmap.c \
     rdbtable.c \
     rdbexpr.c \
+    rdbtpl.c \
     rdbapi.c
 
 # static link to hiredis

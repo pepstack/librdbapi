@@ -34,10 +34,6 @@
  */
 #include "rdbsqlstmt.h"
 
-#include "common/cstrutil.h"
-#include "common/uthash/uthash.h"
-#include "common/re.h"
-
 
 static RDBResultMap ResultMapBuildDescTable (const char *tablespace, const char *tablename, const char **vtnames, RDBTableDes_t *tabledes)
 {
@@ -61,6 +57,8 @@ static RDBResultMap ResultMapBuildDescTable (const char *tablespace, const char 
         0
     };
 
+    int tblnameslen[] = {10, 9, 8, 9, 7, 6, 0};
+
     const char *fldnames[] = {
         "fieldname",
         "fieldtype",
@@ -72,11 +70,13 @@ static RDBResultMap ResultMapBuildDescTable (const char *tablespace, const char 
         0
     };
 
+    int fldnameslen[] = {9, 9, 6, 5, 6, 8, 7, 0};
+
     snprintf_chkd_V1(buf, sizeof(buf), "{%s::%s}", tablespace, tablename);
-    res = RDBResultMapCreate(buf, tblnames, -1, &tablemap);
+    res = RDBResultMapCreate(buf, tblnames, tblnameslen, 6, &tablemap);
     //TODO: check res
 
-    res = RDBResultMapCreate("=>fields", fldnames, -1, &fieldsmap);
+    res = RDBResultMapCreate("=>fields", fldnames, fldnameslen, 7, &fieldsmap);
     //TODO: check res
 
     res = RDBRowNew(tablemap, tabledes->table_rowkey, -1, &tablerow);
@@ -133,7 +133,7 @@ static int RDBSQLNameValidate (const char *name, int len, int maxlen)
         maxlen = RDB_KEY_NAME_MAXLEN;
     }
 
-    if (!name || len < 1) {
+    if (! name || len < 1) {
         printf("(%s:%d) empty name.\n", __FILE__, __LINE__);
         return 0;
     }
@@ -164,16 +164,16 @@ static int RDBSQLNameValidate (const char *name, int len, int maxlen)
     }
 
     // success
-    return 1;
+    return len;
 }
 
 
 static int RDBSQLNameValidateMaxLen (const char *name, int maxlen)
 {
-    if (!name) {
+    if (! name) {
         return 0;
     } else {
-        return RDBSQLNameValidate(name, (int)strnlen(name, maxlen+1), maxlen);
+        return RDBSQLNameValidate(name, cstr_length(name, maxlen+1), maxlen);
     }
 }
 
@@ -210,11 +210,12 @@ static int parse_table (char *table, char tablespace[RDB_KEY_NAME_MAXLEN + 1], c
 }
 
 
-static int parse_fields (char *fields, char *fieldnames[RDBAPI_ARGV_MAXNUM])
+static int parse_fields (char *fields, char *fieldnames[], int fieldnameslen[])
 {
     char namebuf[RDB_KEY_NAME_MAXLEN * 2 + 1];
 
     char *p;
+    int namelen;
     int i = 0;
 
     if (fields[0] == '*') {
@@ -223,18 +224,23 @@ static int parse_fields (char *fields, char *fieldnames[RDBAPI_ARGV_MAXNUM])
     }
 
     p = strtok(fields, ",");
-    while (p) {
+    while (p && i <= RDBAPI_ARGV_MAXNUM) {
         char *name;
 
         snprintf_chkd_V1(namebuf, RDB_KEY_NAME_MAXLEN * 2, "%s", p);
 
         name = cstr_LRtrim_chr(namebuf, 32);
 
-        if (! RDBSQLNameValidateMaxLen(name, RDB_KEY_NAME_MAXLEN)) {
+        namelen = RDBSQLNameValidateMaxLen(name, RDB_KEY_NAME_MAXLEN);
+
+        if (! name) {
             return 0;
         }
 
-        fieldnames[i++] = strdup(name);
+        fieldnames[i] = strdup(name);
+        fieldnameslen[i] = namelen;
+
+        i++;
 
         p = strtok(0, ",");
     }
@@ -272,42 +278,43 @@ static int parse_field_values (char *fields, char *fieldvalues[RDBAPI_ARGV_MAXNU
 }
 
 
-static char * CheckNewFieldName (const char *name)
+static char * ParseWhereFieldName (const char *name, int *namelen)
 {
-    char *namebuf;
-    char tmpbuf[RDB_KEY_NAME_MAXLEN + 32];
-
+    char *namestr;
+    char tmpbuf[RDB_KEY_NAME_MAXLEN * 2];
     snprintf_chkd_V1(tmpbuf, sizeof(tmpbuf), "%s", name);
-
-    namebuf = cstr_LRtrim_chr(tmpbuf, 32);
-
-    if (RDBSQLNameValidateMaxLen(namebuf, RDB_KEY_NAME_MAXLEN)) {
-        return strdup(namebuf);
-    }
-
-    return NULL;
+    namestr = cstr_LRtrim_chr(tmpbuf, 32);
+    *namelen = RDBSQLNameValidateMaxLen(namestr, RDB_KEY_NAME_MAXLEN);
+    return (*namelen)? strdup(namestr) : NULL;
 }
 
 
-static char * CheckNewFieldValue (const char *value)
+static char * ParseWhereFieldValue (const char *value, int *valuelen)
 {
-    char *valbuf;
-    char tmpbuf[RDB_KEY_VALUE_SIZE + 32];
+    char *valstr;
+    char tmpbuf[RDB_KEY_VALUE_SIZE * 2] = {0};
 
+    // make a copy of value
     snprintf_chkd_V1(tmpbuf, sizeof(tmpbuf), "%s", value);
 
-    valbuf = cstr_LRtrim_chr(cstr_LRtrim_chr(tmpbuf, 32), 39);
+    // trim extra chars
+    valstr = cstr_LRtrim_chr(cstr_LRtrim_chr(tmpbuf, 32), 39);
 
-    return strlen(valbuf) < RDB_KEY_VALUE_SIZE? strdup(valbuf) : NULL;
+    *valuelen = cstr_length(valstr, RDB_KEY_VALUE_SIZE);
+    return (*valuelen < RDB_KEY_VALUE_SIZE)? strdup(valstr) : NULL;
 }
 
 
 // WHERE cretime > 123456 AND cretime < 999999
-static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
+static int parse_where (char *wheres,
+    char *fieldnames[RDBAPI_ARGV_MAXNUM],
+    int fieldnameslen[RDBAPI_ARGV_MAXNUM],
     RDBFilterExpr fieldexprs[RDBAPI_ARGV_MAXNUM],
-    char *fieldvalues[RDBAPI_ARGV_MAXNUM])
+    char *fieldvalues[RDBAPI_ARGV_MAXNUM],
+    int fieldvalueslen[RDBAPI_ARGV_MAXNUM])
 {
     int i, num, k = 0;
+    char *pstr;
     char *substrs[RDBAPI_ARGV_MAXNUM] = {0};
 
     if (!wheres || !*wheres) {
@@ -321,99 +328,242 @@ static int parse_where (char *wheres, char *fieldnames[RDBAPI_ARGV_MAXNUM],
 
         // a <> b
         if (cstr_split_substr(substrs[i], "<>", 2, pair, 2) == 2) {
-            fieldnames[k] = CheckNewFieldName(pair[0]);
             fieldexprs[k] = RDBFIL_NOT_EQUAL;
-            fieldvalues[k] = CheckNewFieldValue(pair[1]);
+
+            pstr = ParseWhereFieldName(pair[0], &fieldnameslen[k]);
+            if (!pstr) {
+                fprintf(stderr, "invalid WHERE field");
+                return (-1);
+            }
+            fieldnames[k] = pstr;
+
+            pstr = ParseWhereFieldValue(pair[1], &fieldvalueslen[k]);
+            if (! pstr) {
+                fprintf(stderr, "bad WHERE clause: %s <> ...\n", fieldnames[k]);
+                return (-1);
+            }
+            fieldvalues[k] = pstr;
+
             k++;
             continue;
         }
 
         // a != b
         if (cstr_split_substr(substrs[i], "!=", 2, pair, 2) == 2) {
-            fieldnames[k] = CheckNewFieldName(pair[0]);
             fieldexprs[k] = RDBFIL_NOT_EQUAL;
-            fieldvalues[k] = strdup(pair[1]);
+
+            pstr = ParseWhereFieldName(pair[0], &fieldnameslen[k]);
+            if (!pstr) {
+                fprintf(stderr, "invalid WHERE field");
+                return (-1);
+            }
+            fieldnames[k] = pstr;
+
+            pstr = ParseWhereFieldValue(pair[1], &fieldvalueslen[k]);
+            if (! pstr) {
+                fprintf(stderr, "bad WHERE clause: %s != ...\n", fieldnames[k]);
+                return (-1);
+            }
+            fieldvalues[k] = pstr;
+
             k++;
             continue;
         }
 
         // a >= b
         if (cstr_split_substr(substrs[i], ">=", 2, pair, 2) == 2) {
-            fieldnames[k] = CheckNewFieldName(pair[0]);
             fieldexprs[k] = RDBFIL_GREAT_EQUAL;
-            fieldvalues[k] = CheckNewFieldValue(pair[1]);
+
+            pstr = ParseWhereFieldName(pair[0], &fieldnameslen[k]);
+            if (!pstr) {
+                fprintf(stderr, "invalid WHERE field");
+                return (-1);
+            }
+            fieldnames[k] = pstr;
+
+            pstr = ParseWhereFieldValue(pair[1], &fieldvalueslen[k]);
+            if (! pstr) {
+                fprintf(stderr, "bad WHERE clause: %s >= ...\n", fieldnames[k]);
+                return (-1);
+            }
+            fieldvalues[k] = pstr;
+
             k++;
             continue;
         }
 
         // a <= b
         if (cstr_split_substr(substrs[i], "<=", 2, pair, 2) == 2) {
-            fieldnames[k] = CheckNewFieldName(pair[0]);
             fieldexprs[k] = RDBFIL_LESS_EQUAL;
-            fieldvalues[k] = CheckNewFieldValue(pair[1]);
+
+            pstr = ParseWhereFieldName(pair[0], &fieldnameslen[k]);
+            if (!pstr) {
+                fprintf(stderr, "invalid WHERE field");
+                return (-1);
+            }
+            fieldnames[k] = pstr;
+
+            pstr = ParseWhereFieldValue(pair[1], &fieldvalueslen[k]);
+            if (! pstr) {
+                fprintf(stderr, "bad WHERE clause: %s <= ...\n", fieldnames[k]);
+                return (-1);
+            }
+            fieldvalues[k] = pstr;
+
             k++;
             continue;
         }
 
         // a = b
         if (cstr_split_substr(substrs[i], "=", 1, pair, 2) == 2) {
-            fieldnames[k] = CheckNewFieldName(pair[0]);
             fieldexprs[k] = RDBFIL_EQUAL;
-            fieldvalues[k] = CheckNewFieldValue(pair[1]);
+
+            pstr = ParseWhereFieldName(pair[0], &fieldnameslen[k]);
+            if (!pstr) {
+                fprintf(stderr, "invalid WHERE field");
+                return (-1);
+            }
+            fieldnames[k] = pstr;
+
+            pstr = ParseWhereFieldValue(pair[1], &fieldvalueslen[k]);
+            if (! pstr) {
+                fprintf(stderr, "bad WHERE clause: %s = ...\n", fieldnames[k]);
+                return (-1);
+            }
+            fieldvalues[k] = pstr;
+
             k++;
             continue;
         }
 
         // a > b
         if (cstr_split_substr(substrs[i], ">", 1, pair, 2) == 2) {
-            fieldnames[k] = CheckNewFieldName(pair[0]);
             fieldexprs[k] = RDBFIL_GREAT_THAN;
-            fieldvalues[k] = CheckNewFieldValue(pair[1]);
+
+            pstr = ParseWhereFieldName(pair[0], &fieldnameslen[k]);
+            if (!pstr) {
+                fprintf(stderr, "invalid WHERE field");
+                return (-1);
+            }
+            fieldnames[k] = pstr;
+
+            pstr = ParseWhereFieldValue(pair[1], &fieldvalueslen[k]);
+            if (! pstr) {
+                fprintf(stderr, "bad WHERE clause: %s > ...\n", fieldnames[k]);
+                return (-1);
+            }
+            fieldvalues[k] = pstr;
+
             k++;
             continue;
         }
 
         // a < b
         if (cstr_split_substr(substrs[i], "<", 1, pair, 2) == 2) {
-            fieldnames[k] = CheckNewFieldName(pair[0]);
             fieldexprs[k] = RDBFIL_LESS_THAN;
-            fieldvalues[k] = CheckNewFieldValue(pair[1]);
+
+            pstr = ParseWhereFieldName(pair[0], &fieldnameslen[k]);
+            if (!pstr) {
+                fprintf(stderr, "invalid WHERE field");
+                return (-1);
+            }
+            fieldnames[k] = pstr;
+
+            pstr = ParseWhereFieldValue(pair[1], &fieldvalueslen[k]);
+            if (! pstr) {
+                fprintf(stderr, "bad WHERE clause: %s < ...\n", fieldnames[k]);
+                return (-1);
+            }
+            fieldvalues[k] = pstr;
+
             k++;
             continue;
         }
 
         // a LLIKE b
         if (cstr_split_substr(substrs[i], " LLIKE ", 7, pair, 2) == 2) {
-            fieldnames[k] = CheckNewFieldName(pair[0]);
             fieldexprs[k] = RDBFIL_LEFT_LIKE;
-            fieldvalues[k] = CheckNewFieldValue(pair[1]);
+
+            pstr = ParseWhereFieldName(pair[0], &fieldnameslen[k]);
+            if (!pstr) {
+                fprintf(stderr, "invalid WHERE field");
+                return (-1);
+            }
+            fieldnames[k] = pstr;
+
+            pstr = ParseWhereFieldValue(pair[1], &fieldvalueslen[k]);
+            if (! pstr) {
+                fprintf(stderr, "bad WHERE clause: %s LLIKE ...\n", fieldnames[k]);
+                return (-1);
+            }
+            fieldvalues[k] = pstr;
+
             k++;
             continue;
         }
 
         // a RLIKE b
         if (cstr_split_substr(substrs[i], " RLIKE ", 7, pair, 2) == 2) {
-            fieldnames[k] = CheckNewFieldName(pair[0]);
             fieldexprs[k] = RDBFIL_RIGHT_LIKE;
-            fieldvalues[k] = CheckNewFieldValue(pair[1]);
+
+            pstr = ParseWhereFieldName(pair[0], &fieldnameslen[k]);
+            if (!pstr) {
+                fprintf(stderr, "invalid WHERE field");
+                return (-1);
+            }
+            fieldnames[k] = pstr;
+
+            pstr = ParseWhereFieldValue(pair[1], &fieldvalueslen[k]);
+            if (! pstr) {
+                fprintf(stderr, "bad WHERE clause: %s RLIKE ...\n", fieldnames[k]);
+                return (-1);
+            }
+            fieldvalues[k] = pstr;
+
             k++;
             continue;
         }
 
         // a LIKE b
         if (cstr_split_substr(substrs[i], " LIKE ", 6, pair, 2) == 2) {
-            fieldnames[k] = CheckNewFieldName(pair[0]);
             fieldexprs[k] = RDBFIL_LIKE;
-            fieldvalues[k] = CheckNewFieldValue(pair[1]);
+
+            pstr = ParseWhereFieldName(pair[0], &fieldnameslen[k]);
+            if (!pstr) {
+                fprintf(stderr, "invalid WHERE field");
+                return (-1);
+            }
+            fieldnames[k] = pstr;
+
+            pstr = ParseWhereFieldValue(pair[1], &fieldvalueslen[k]);
+            if (! pstr) {
+                fprintf(stderr, "bad WHERE clause: %s LIKE ...\n", fieldnames[k]);
+                return (-1);
+            }
+            fieldvalues[k] = pstr;
+
             k++;
             continue;
         }
 
         // a MATCH b
         if (cstr_split_substr(substrs[i], " MATCH ", 7, pair, 2) == 2) {
-            fieldnames[k] = CheckNewFieldName(pair[0]);
             fieldexprs[k] = RDBFIL_MATCH;
-            fieldvalues[k] = CheckNewFieldValue(pair[1]);
+
+            pstr = ParseWhereFieldName(pair[0], &fieldnameslen[k]);
+            if (!pstr) {
+                fprintf(stderr, "invalid WHERE field");
+                return (-1);
+            }
+            fieldnames[k] = pstr;
+
+            pstr = ParseWhereFieldValue(pair[1], &fieldvalueslen[k]);
+            if (! pstr) {
+                fprintf(stderr, "bad WHERE clause: %s MATCH ...\n", fieldnames[k]);
+                return (-1);
+            }
+            fieldvalues[k] = pstr;
+
             k++;
             continue;
         }
@@ -786,8 +936,8 @@ void SQLStmtParseSelect (RDBCtx ctx, RDBSQLStmt sqlstmt)
     *psz++ = '\0';
 
     len = cstr_Rtrim_whitespace(sqlc, cstr_length(sqlc, -1));
-    sqlstmt->select.count = parse_fields(sqlc, sqlstmt->select.resultfields);
-    if (! sqlstmt->select.count) {
+    sqlstmt->select.numselect = parse_fields(sqlc, sqlstmt->select.selectfields, sqlstmt->select.selectfieldslen);
+    if (! sqlstmt->select.numselect || sqlstmt->select.numselect > RDBAPI_ARGV_MAXNUM) {
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: none fields. errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
         return;
     }
@@ -832,8 +982,8 @@ void SQLStmtParseSelect (RDBCtx ctx, RDBSQLStmt sqlstmt)
     if (pwhere) {
         nwhere = cstr_Rtrim_whitespace(pwhere, cstr_length(pwhere, -1));
 
-        sqlstmt->select.numfields = parse_where(pwhere, sqlstmt->select.fields, sqlstmt->select.fieldexprs, sqlstmt->select.fieldvals);
-        if (sqlstmt->select.numfields < 0) {
+        sqlstmt->select.numwhere = parse_where(pwhere, sqlstmt->select.fields, sqlstmt->select.fieldslen, sqlstmt->select.fieldexprs, sqlstmt->select.fieldvals, sqlstmt->select.fieldvalslen);
+        if (sqlstmt->select.numwhere < 0 || sqlstmt->select.numwhere > RDBAPI_ARGV_MAXNUM) {
             snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: invalid WHERE clause. errat(%d): '%s'", (int)(pwhere - sqlstmt->sqlblock), pwhere);
             return;
         }
@@ -913,8 +1063,8 @@ void SQLStmtParseDelete (RDBCtx ctx, RDBSQLStmt sqlstmt)
 
     if (pwhere) {
         nwhere = cstr_Rtrim_whitespace(pwhere, cstr_length(pwhere, -1));
-        sqlstmt->select.numfields = parse_where(pwhere, sqlstmt->select.fields, sqlstmt->select.fieldexprs, sqlstmt->select.fieldvals);
-        if (sqlstmt->select.numfields < 0) {
+        sqlstmt->select.numwhere = parse_where(pwhere, sqlstmt->select.fields, sqlstmt->select.fieldslen, sqlstmt->select.fieldexprs, sqlstmt->select.fieldvals, sqlstmt->select.fieldvalslen);
+        if (sqlstmt->select.numwhere < 0 || sqlstmt->select.numwhere > RDBAPI_ARGV_MAXNUM) {
             snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: invalid WHERE clause. errat(%d): '%s'", (int)(pwhere - sqlstmt->sqlblock), pwhere);
             return;
         }
@@ -1185,9 +1335,9 @@ void SQLStmtParseUpsert (RDBCtx ctx, RDBSQLStmt sqlstmt)
         return;
     }
 
-    RDBBuildRowkeyPattern(sqlstmt->upsert.tablespace, sqlstmt->upsert.tablename,
-        sqlstmt->upsert.tabledes.fielddes, sqlstmt->upsert.tabledes.nfields,
-        sqlstmt->upsert.rowkeyid, &sqlstmt->upsert.rowkeypattern);
+    //??RDBBuildRowkeyPattern(sqlstmt->upsert.tablespace, sqlstmt->upsert.tablename,
+    //??    sqlstmt->upsert.tabledes.fielddes, sqlstmt->upsert.tabledes.nfields,
+    //??    sqlstmt->upsert.rowkeyid, &sqlstmt->upsert.rowkeypattern);
 
     // fieldnames
     sqlc = cstr_Ltrim_whitespace(startp);
@@ -1736,9 +1886,7 @@ void RDBSQLStmtFree (RDBSQLStmt sqlstmt)
 
     if (sqlstmt->stmt == RDBSQL_SELECT || sqlstmt->stmt == RDBSQL_DELETE) {
 
-        cstr_varray_free(sqlstmt->select.resultfields, RDBAPI_ARGV_MAXNUM);
-        cstr_varray_free(sqlstmt->select.keys, RDBAPI_ARGV_MAXNUM);
-        cstr_varray_free(sqlstmt->select.keyvals, RDBAPI_ARGV_MAXNUM);
+        cstr_varray_free(sqlstmt->select.selectfields, RDBAPI_ARGV_MAXNUM);
         cstr_varray_free(sqlstmt->select.fields, RDBAPI_ARGV_MAXNUM);
         cstr_varray_free(sqlstmt->select.fieldvals, RDBAPI_ARGV_MAXNUM);
 
@@ -1884,26 +2032,13 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
     *outResultMap = NULL;
 
     if (sqlstmt->stmt == RDBSQL_SELECT || sqlstmt->stmt == RDBSQL_DELETE) {
-        // test ??
-        res = RDBTableScanFirst(ctx,
-                sqlstmt->stmt,
-                sqlstmt->select.tablespace, sqlstmt->select.tablename,
-                sqlstmt->select.numfields,
-                (const char **) sqlstmt->select.fields,
-                sqlstmt->select.fieldexprs,
-                (const char **) sqlstmt->select.fieldvals,
-                NULL,
-                NULL,
-                sqlstmt->select.count,
-                (const char **) sqlstmt->select.resultfields,
-                &resultmap);
-
+        res = RDBTableScanFirst(ctx, sqlstmt, &resultmap);
         if (res == RDBAPI_SUCCESS) {
             ub8 offset = RDBTableScanNext(resultmap, sqlstmt->select.offset, sqlstmt->select.limit);
 
             if (offset != RDB_ERROR_OFFSET) {
                 if (sqlstmt->stmt == RDBSQL_DELETE) {
-                    //TODO: RDBResultMapTraverse(resultMap, RDBResultRowDeleteCallback, resultMap);
+                    RDBResultMapDeleteAllOnCluster(resultmap);
                 }
 
                 *outResultMap = resultmap;
@@ -1911,7 +2046,6 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
             }
 
             RDBResultMapDestroy(resultmap);
-            return 0;
         }
     } else if (sqlstmt->stmt == RDBSQL_UPSERT) {
         // TODO:
@@ -1926,7 +2060,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         RDBTableCursor_t *nodestates = RDBMemAlloc(sizeof(RDBTableCursor_t) * RDBEnvNumNodes(ctx->env));
 
         // @@@
-        RDBResultMapNew(ctx, NULL, sqlstmt->stmt, NULL, NULL, 0, NULL, NULL, &resultMap);
+        //??RDBResultMapNew(ctx, NULL, sqlstmt->stmt, NULL, NULL, 0, NULL, NULL, &resultMap);
 
         while (nodeindex < RDBEnvNumNodes(ctx->env)) {
             RDBEnvNode envnode = RDBEnvGetNode(ctx->env, nodeindex);
@@ -2024,17 +2158,16 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         }
 
         *outResultMap = resultMap;
-        return RDBResultMapRows(resultMap);
+        return RDBAPI_SUCCESS;
 
     } else if (sqlstmt->stmt == RDBSQL_CREATE) {
-        // test ok
         // CREATE TABLE IF NOT EXISTS xsdb.test22(uid UB8 NOT NULL COMMENT 'user id', str STR(30) , ROWKEY(uid)) COMMENT 'test table';
         RDBTableDes_t tabledes = {0};
         res = RDBTableDescribe(ctx, sqlstmt->create.tablespace, sqlstmt->create.tablename, &tabledes);
 
         if (res == RDBAPI_SUCCESS && sqlstmt->create.fail_on_exists) {
             snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: table already existed");
-            return (ub8) RDBAPI_ERROR;
+            return RDBAPI_ERROR;
         }
 
         res = RDBTableCreate(ctx, sqlstmt->create.tablespace, sqlstmt->create.tablename, sqlstmt->create.tablecomment, sqlstmt->create.numfields, sqlstmt->create.fielddefs);
@@ -2050,33 +2183,31 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
             }
         }
     } else if (sqlstmt->stmt == RDBSQL_DESC_TABLE) {
-        // test ok
         RDBTableDes_t tabledes = {0};
         if (RDBTableDescribe(ctx, sqlstmt->desctable.tablespace, sqlstmt->desctable.tablename, &tabledes) != RDBAPI_SUCCESS) {
-            return (ub8) RDBAPI_ERROR;
+            return RDBAPI_ERROR;
         }
-        resultmap = ResultMapBuildDescTable(sqlstmt->desctable.tablespace, sqlstmt->desctable.tablename, vtnames, &tabledes);
 
+        resultmap = ResultMapBuildDescTable(sqlstmt->desctable.tablespace, sqlstmt->desctable.tablename, vtnames, &tabledes);
         *outResultMap = resultmap;
         return RDBAPI_SUCCESS;
     } else if (sqlstmt->stmt == RDBSQL_DROP_TABLE) {
-        // test ok
-        snprintf_chkd_V1(keybuf, sizeof(keybuf), "{%s::%s:%s}", RDB_SYSTEM_TABLE_PREFIX, sqlstmt->droptable.tablespace, sqlstmt->droptable.tablename);
+        keylen = snprintf_chkd_V1(keybuf, sizeof(keybuf), "{%s::%s:%s}", RDB_SYSTEM_TABLE_PREFIX, sqlstmt->droptable.tablespace, sqlstmt->droptable.tablename);
 
-        if (RedisDeleteKey(ctx, keybuf, NULL, 0) == RDBAPI_KEY_DELETED) {
+        if (RedisDeleteKey(ctx, keybuf, keylen, NULL, 0) == RDBAPI_KEY_DELETED) {
             snprintf_chkd_V1(keybuf, sizeof(keybuf), "SUCCESS: table '%s.%s' drop okay.", sqlstmt->droptable.tablespace, sqlstmt->droptable.tablename);
         } else {
             snprintf_chkd_V1(keybuf, sizeof(keybuf), "FAILED: table '%s.%s' not found !", sqlstmt->droptable.tablespace, sqlstmt->droptable.tablename);
         }
 
-        RDBResultMapCreate(keybuf, NULL, 0, &resultmap);
+        RDBResultMapCreate(keybuf, NULL, NULL, 0, &resultmap);
 
         *outResultMap = resultmap;
         return RDBAPI_SUCCESS;
     } else if (sqlstmt->stmt == RDBSQL_INFO_SECTION) {
-        // test ok
         if (RDBCtxCheckInfo(ctx, sqlstmt->info.section, sqlstmt->info.whichnode) == RDBAPI_SUCCESS) {
-            const char *names[] = {"nodeid", "host:port", "section", "name", "value"};
+            const char *names[] = {"nodeid", "host:port", "section", "name", "value", 0};
+            int nameslen[] = {6, 9, 7, 4, 5, 0};
 
             const char *sections[] = {
                 "Server",        // 0
@@ -2098,7 +2229,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                 nposInfoSecs = MAX_NODEINFO_SECTIONS;
             }
 
-            RDBResultMapCreate("SUCCESS:", names, -1, &resultmap);
+            RDBResultMapCreate("SUCCESS:", names, nameslen, 5, &resultmap);
 
             threadlock_lock(&ctx->env->thrlock);
 
@@ -2145,10 +2276,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
             *outResultMap = resultmap;
             return RDBAPI_SUCCESS;
         }
-
-        return RDBAPI_ERROR;
     } else if (sqlstmt->stmt == RDBSQL_SHOW_DATABASES) {
-        // test ok
         const char *names[] = {"database", 0};
 
         redisReply *replyRows;
@@ -2164,7 +2292,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         pattern.str = RDBMemAlloc(pattern.maxsz);
         pattern.length = snprintf_chkd_V1(pattern.str, pattern.maxsz, "{%s::*:*}", RDB_SYSTEM_TABLE_PREFIX);
 
-        RDBResultMapCreate("DATABASES:", names, -1, &resultmap);
+        RDBResultMapCreate("DATABASES:", names, NULL, 1, &resultmap);
 
         while (nodeindex < RDBEnvNumNodes(ctx->env)) {
             RDBEnvNode envnode = RDBEnvGetNode(ctx->env, nodeindex);
@@ -2219,7 +2347,6 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         *outResultMap = resultmap;
         return RDBAPI_SUCCESS;
     } else if (sqlstmt->stmt == RDBSQL_SHOW_TABLES) {
-        // test ok
         const char *names[] = {"database.tablename", 0};
 
         // {redisdb::database:$tablename}
@@ -2238,7 +2365,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         pattern.str = RDBMemAlloc(pattern.maxsz);
         pattern.length = snprintf_chkd_V1(pattern.str, pattern.maxsz, "{%s::%.*s:*}", RDB_SYSTEM_TABLE_PREFIX, dbnlen, sqlstmt->showtables.tablespace);
 
-        RDBResultMapCreate("TABLES:", names, -1, &resultmap);
+        RDBResultMapCreate("TABLES:", names, NULL, 1, &resultmap);
 
         while (nodeindex < RDBEnvNumNodes(ctx->env)) {
             RDBEnvNode envnode = RDBEnvGetNode(ctx->env, nodeindex);
@@ -2293,7 +2420,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
 
         *outResultMap = resultmap;
 
-        return RDBResultMapRows(resultmap);
+        return RDBAPI_SUCCESS;
     }
 
     return RDBAPI_ERROR;
