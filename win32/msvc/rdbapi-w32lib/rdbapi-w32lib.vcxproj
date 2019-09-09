@@ -29,7 +29,7 @@
     <ClCompile Include="..\..\..\rdbtpl.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\common\cstrutil.h" />
+    <ClInclude Include="..\..\..\common\cstrut.h" />
     <ClInclude Include="..\..\..\common\red_black_tree.h" />
     <ClInclude Include="..\..\..\common\threadlock.h" />
     <ClInclude Include="..\..\..\common\tiny-regex-c\re.h" />

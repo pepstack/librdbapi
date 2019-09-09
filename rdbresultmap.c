@@ -158,7 +158,6 @@ void RDBResultMapDeleteAll (RDBResultMap resultmap)
 
 void RDBResultMapDeleteAllOnCluster (RDBResultMap resultmap)
 {
-    int rc;
     RDBRowNode curnode, tmpnode;
     HASH_ITER(hh, resultmap->rowsmap, curnode, tmpnode) {
         if (RedisDeleteKey(resultmap->ctx, curnode->key, curnode->keylen, NULL, 0) != RDBAPI_KEY_DELETED) {

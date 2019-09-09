@@ -2049,8 +2049,6 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         }
     } else if (sqlstmt->stmt == RDBSQL_UPSERT) {
         // TODO:
-        RDBResultMap resultMap;
-
         ub8 existedkeys = 0;
         ub8 updatedkeys = 0;
 
@@ -2157,7 +2155,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
             printf("upsert %"PRIu64" existed keys OK.\n", updatedkeys);
         }
 
-        *outResultMap = resultMap;
+        *outResultMap = resultmap;
         return RDBAPI_SUCCESS;
 
     } else if (sqlstmt->stmt == RDBSQL_CREATE) {

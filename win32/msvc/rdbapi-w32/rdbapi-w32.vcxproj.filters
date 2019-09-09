@@ -39,9 +39,6 @@
     <ClCompile Include="..\..\..\rdbparam.c">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\common\red_black_tree.c">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\rdbtable.c">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -77,13 +74,7 @@
     <ClInclude Include="..\..\..\unitypes.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\common\red_black_tree.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\common\tiny-regex-c\re.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\common\cstrutil.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\rdbresultmap.h">
@@ -100,6 +91,9 @@
     </ClInclude>
     <ClInclude Include="..\..\..\common\tpl\win\mman.h">
       <Filter>tpl\win</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\cstrut.h">
+      <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -88,23 +88,23 @@ int RDBExprValues (RDBValueType vt, const char *src, int slen, RDBFilterExpr exp
             // a like 'left%'
             //   src="aaaaB"
             //   dst="aaaaBBBB"    
-            result = cstr_startwith(dst, dlen, src, slen);
+            result = cstr_startwith(src, slen, dst, dlen);
             break;
 
         case RDBFIL_RIGHT_LIKE:
             // a like '%right'
             //   src="aBBBB"            
             //   dst="aaaaBBBB" 
-            result = cstr_endwith(dst, dlen, src, slen);
+            result = cstr_endwith(src, slen, dst, dlen);
             break;
 
         case RDBFIL_LIKE:
             // a like 'left%' or '%mid%' or '%right'
-            result = cstr_containwith(dst, dlen, src, slen);
+            result = cstr_containwith(src, slen, dst, dlen);
             break;
 
         case RDBFIL_MATCH:
-            if (re_match(dst, src) == -1) {
+            if (re_match(src, dst) == -1) {
                 result = 0;
             } else {
                 result = 1;

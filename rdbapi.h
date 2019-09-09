@@ -138,6 +138,8 @@ typedef int RDBAPI_BOOL;
  * RDBAPI Constants
  *
  *********************************************************************/
+#define RDBZSTRING_LEN_MAX         536870911
+
 #define RDBAPI_ARGV_MAXNUM         252
 #define RDBAPI_KEYS_MAXNUM         10
 

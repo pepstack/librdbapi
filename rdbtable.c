@@ -311,13 +311,11 @@ ub8 RDBResultMapGetOffset (RDBResultMap resultmap)
 
 RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx, RDBSQLStmt sqlstmt, RDBResultMap *outresultmap)
 {
-    int i, j, k, n, fieldid, rowkeyid;
+    int i, j, n, fieldid, rowkeyid;
 
     RDBValueType valtype;
 
     size_t offsz;
-
-    RDBAPI_RESULT res;
 
     RDBResultMap resultmap = NULL;
     RDBTableFilter filter = NULL;

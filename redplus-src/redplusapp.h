@@ -77,6 +77,11 @@ extern "C"
 
 #include <common/cshell.h>
 
+#define RDBCTX_TIMEOUT          0
+#define RDBCTX_SOTIMEOMS    10000
+
+#define CSHELL_BUFSIZE      16384
+
 
 #if defined(__WINDOWS__) && defined(_DEBUG)
     #define WINDOWS_CRTDBG_ON  \
@@ -86,11 +91,11 @@ extern "C"
 #endif
 
 
-extern void redplusExecuteCommand (RDBEnv env, const char *command, const char *outfile);
+extern void redplusExecuteCommand (RDBCtx ctx, const char *command, const char *outfile);
 
-extern void redplusExecuteSqlfile (RDBEnv env, const char *sqlfile, const char *outfile);
+extern void redplusExecuteSqlfile (RDBCtx ctx, const char *sqlfile, const char *outfile);
 
-extern void redplusExecuteRdbsql (RDBEnv env, const char *rdbsql, const char *outfile);
+extern void redplusExecuteRdbsql (RDBCtx ctx, const char *rdbsql, const char *outfile);
 
 
 #ifndef __WINDOWS__
@@ -187,9 +192,11 @@ static int get_app_path (const char *argv0, char apppath[], size_t sz)
 
 static void print_guide ()
 {
-    fprintf(stdout, "# Press ; to execute commands!\n");
-    fprintf(stdout, "# Press quit or Ctrl-C to exit.\n");
-    fprintf(stdout, "# Press \? to show help.\n");
+    fprintf(stdout, "\n# press ; to execute inputs;"
+                    "\n# press ! to cancel inputs;"
+                    "\n# press \? to show help;"
+                    "\n# press quit or Ctrl-C to exit;"
+                    "\n\n");
     fflush(stdout);
 }
 
@@ -204,17 +211,24 @@ void print_usage()
     fprintf(stdout, "%s is a Redis SQL tool.\n", APPNAME);
 
     fprintf(stdout, "Options:\n");
-    fprintf(stdout, "  -h, --help               Display help info\n");
-    fprintf(stdout, "  -V, --version            Show version info\n\n");
-    fprintf(stdout, "  -R, --rediscluster=HOSTS Redis cluster host nodes. (example: 'authpass@127.0.0.1:7001-7009')\n");
-    fprintf(stdout, "  -C, --command=REDISCMD   Redis command to call.\n");
-    fprintf(stdout, "  -S, --rdbsql=RDBSQL      SQL to execute on redisdb. (example: SELECT * FROM a.t WHERE ...)\n");
-    fprintf(stdout, "  -F, --sqlfile=PATHFILE   execute a SQL file.\n");
-    fprintf(stdout, "  -O, --output=PATHFILE    Pathfile to store output result map\n\n");
+    fprintf(stdout, "  -h, --help                  display help information.\n");
+    fprintf(stdout, "  -V, --version               show version.\n\n");
+
+    fprintf(stdout, "  -R, --rediscluster=NODES    all nodes of redis cluster. (example: 'authpass@127.0.0.1:7001-7009')\n");
+    fprintf(stdout, "      --ctxtimout=SEC         redis connection timeout in seconds. (default: %s)\n", RDBCTX_TIMEOUT);
+    fprintf(stdout, "      --sotimeoms=MS          redis socket timeout in milliseconds. (default: %d)\n\n", RDBCTX_SOTIMEOMS);
+
+    fprintf(stdout, "  -C, --command=REDISCMD      execute a redis command.\n");
+    fprintf(stdout, "  -S, --rdbsql=RDBSQL         execute a SQL dialect on redisdb. (example: SELECT * FROM db.table WHERE ...)\n");
+    fprintf(stdout, "  -F, --sqlfile=PATHFILE      execute SQL dialect file on redisdb.\n");
+    fprintf(stdout, "  -O, --output=PATHFILE       TODO: output execution results into file.\n\n");
+
+    fprintf(stdout, "  -I, --interactive           run as interactive mode.\n\n");
 
     fflush(stdout);
 }
-
+#define RDBCTX_TIMEOUT          0
+#define RDBCTX_SOTIMEOMS    10000
 #if defined(__cplusplus)
 }
 #endif

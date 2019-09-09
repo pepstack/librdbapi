@@ -1,7 +1,7 @@
-# This is a comment line!
+# This is a comment line;
 
-#DELETE FROM xsdb.xxxx LIMIT 10000;
-#SELECT * FROM xsdb.logentry;
+# DELETE FROM xsdb.xxxx LIMIT 10000;
+# SELECT * FROM xsdb.logentry;
 
 DROP TABLE xsdb.connect;
 CREATE TABLE IF NOT EXISTS xsdb.connect (

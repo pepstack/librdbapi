@@ -113,7 +113,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\common\cshell.h" />
-    <ClInclude Include="..\..\..\common\cstrutil.h" />
+    <ClInclude Include="..\..\..\common\cstrut.h" />
     <ClInclude Include="..\..\..\redplus-src\redplusapp.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

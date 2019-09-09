@@ -41,7 +41,7 @@ extern "C"
 {
 #endif
 
-#include "cstrutil.h"
+#include "cstrut.h"
 
 #include <malloc.h>
 

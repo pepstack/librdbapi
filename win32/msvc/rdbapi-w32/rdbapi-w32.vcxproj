@@ -11,7 +11,6 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\common\red_black_tree.c" />
     <ClCompile Include="..\..\..\common\tiny-regex-c\re.c" />
     <ClCompile Include="..\..\..\common\tpl\tpl.c" />
     <ClCompile Include="..\..\..\common\tpl\win\mmap.c" />
@@ -29,8 +28,7 @@
     <ClCompile Include="..\..\..\rdbtpl.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\common\cstrutil.h" />
-    <ClInclude Include="..\..\..\common\red_black_tree.h" />
+    <ClInclude Include="..\..\..\common\cstrut.h" />
     <ClInclude Include="..\..\..\common\tiny-regex-c\re.h" />
     <ClInclude Include="..\..\..\common\tpl\tpl.h" />
     <ClInclude Include="..\..\..\common\tpl\win\mman.h" />

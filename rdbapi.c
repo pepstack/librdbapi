@@ -364,24 +364,24 @@ void RDBBinaryFree (RDBBinary bin)
 
 RDBZString RDBZStringNew (const char *str, ub4 len)
 {
-    if (! str) {
-        return NULL;
-    } else {
-        RDBZString_t *pzs;
-        if (len == (ub4)(-1)) {
-            len = (ub4) cstr_length(str, -1);
-        }
+    RDBZString_t *pzs;
 
-        pzs = (RDBZString_t *) RDBMemAlloc(sizeof(*pzs) + len + 1);
-        if (! pzs) {
-            fprintf(stderr, "(%s:%d) out of memory.\n", __FILE__, __LINE__);
-            exit(EXIT_FAILURE);
-        }
-
-        memcpy(pzs->str, str, len);
-        pzs->len = len;
-        return pzs;
+    if (len == (ub4)(-1)) {
+        len = (ub4)cstr_length(str, RDBZSTRING_LEN_MAX);
     }
+
+    pzs = (RDBZString_t *) RDBMemAlloc(sizeof(*pzs) + len + 1);
+    if (! pzs) {
+        fprintf(stderr, "(%s:%d) out of memory.\n", __FILE__, __LINE__);
+        exit(EXIT_FAILURE);
+    }
+    pzs->len = len;
+
+    if (str) {
+        memcpy(pzs->str, str, len);
+    }
+
+    return pzs;
 }
 
 

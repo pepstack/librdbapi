@@ -33,16 +33,40 @@
  */
 #include "redplusapp.h"
 
+RDBZString cshbuf = NULL;
+RDBZString cluster = NULL;
+RDBZString command = NULL;    
+RDBZString rdbsql  = NULL;
+RDBZString sqlfile = NULL;
+RDBZString output  = NULL;
+
+static void redplus_cleanup(void)
+{
+    RDBZStringFree(cluster);
+    RDBZStringFree(command);
+    RDBZStringFree(rdbsql);
+    RDBZStringFree(sqlfile);
+    RDBZStringFree(output);
+    RDBZStringFree(cshbuf);
+
+    fprintf(stdout, "\n\nredplus exit.\n");
+}
+
 
 int main(int argc, const char *argv[])
 {
     WINDOWS_CRTDBG_ON
 
-    int ch, index;
+    int clen, flag, optindex;
 
-    const char *line;
-    char cshbuf[1024];
-    int interactive = 0;
+    int interactive = 0;    
+
+    ub8 startTime;
+    
+    int ctxtimout = RDBCTX_TIMEOUT;
+    int sotimeoms = RDBCTX_SOTIMEOMS;
+
+    char appcfg[256] = {0};
 
     const struct option lopts[] = {
         {"help", no_argument, 0, 'h'},
@@ -50,73 +74,67 @@ int main(int argc, const char *argv[])
         {"rediscluster", required_argument, 0, 'R'},
         {"command", required_argument, 0, 'C'},
         {"rdbsql", required_argument, 0, 'S'},
-        {"interactive", no_argument, 0, 'I'},
+        {"sqlfile", required_argument, 0, 'F'},
         {"output", required_argument, 0, 'O'},
+        {"interactive", no_argument, 0, 'I'},
+        {"ctxtimout", required_argument, &flag, 101},
+        {"sotimeoms", required_argument, &flag, 102},
         {0, 0, 0, 0}
     };
 
-    char cluster[1024] = {0};
-    char command[1024] = {0};
-    char rdbsql[2048] = {0};
-
-    char sqlfile[256] = {0};
-    char output[256] = {0};
-
-    char appcfg[260] = {0};
-
-    char *nodenames[RDB_CLUSTER_NODES_MAX] = {0};
-
-    char ts[24];
-    ub8 startTime, endTime;
-
     RDBEnv env = NULL;
+    RDBCtx ctx = NULL;
 
-    startTime = RDBCurrentTime(1, ts);
-    printf("# %s-%s start : %s\n", APPNAME, APPVER, ts);
+    cshbuf = RDBZStringNew(NULL, CSHELL_BUFSIZE - 1);
 
+    atexit(redplus_cleanup);
+
+    startTime = RDBCurrentTime(1, appcfg);
+    printf("# %s-%s start : %s\n", APPNAME, APPVER, appcfg);
+
+    // makeup default config pathfile
     strcpy(appcfg, "file://");
-
-    ch = get_app_path(argv[0], appcfg+7, 240);
-    if (ch == -1) {
-        exit(-1);
+    clen = get_app_path(argv[0], appcfg+7, sizeof(appcfg) - strlen(APPNAME) - 10);
+    if (clen == -1) {
+        exit(EXIT_FAILURE);
     }
+    snprintf_chkd_V1(appcfg+7+clen, strlen(APPNAME) + 6, "%c%s.cfg", PATH_SEPARATOR_CHAR, APPNAME);
 
-    snprintf_chkd_V1(appcfg+7+ch, strlen(APPNAME) + 6, "%c%s.cfg", PATH_SEPARATOR_CHAR, APPNAME);
-
-    while ((ch = getopt_long_only(argc, (char *const *) argv, "hVIR:C:S:O:F:", lopts, &index)) != -1) {
-        switch (ch) {
+    while ((clen = getopt_long_only(argc, (char *const *) argv, "hVIR:C:S:O:F:", lopts, &optindex)) != -1) {
+        switch (clen) {
         case '?':
             fprintf(stderr, "ERROR: option not defined.\n");
             exit(-1);
 
         case 0:
-            // flag not used
-            switch (index) {
-            case 1:
-            case 2:
-            default:
+            switch (flag) {
+            case 101:
+                ctxtimout = atoi(optarg);
+                break;
+            case 102:
+                sotimeoms = atoi(optarg);
                 break;
             }
             break;
 
         case 'R':
-            snprintf_chkd_V1(cluster, sizeof(cluster), "%s", optarg);
+            cluster = RDBZStringNew(optarg, CSHELL_BUFSIZE);
             break;
 
         case 'C':
-            snprintf_chkd_V1(command, sizeof(command), "%s", optarg);
+            command = RDBZStringNew(optarg, CSHELL_BUFSIZE);
             break;
 
         case 'S':
-            snprintf_chkd_V1(rdbsql, sizeof(rdbsql), "%s", optarg);
+            rdbsql = RDBZStringNew(optarg, CSHELL_BUFSIZE);
             break;
 
         case 'F':
-            snprintf_chkd_V1(sqlfile, sizeof(sqlfile), "%s", optarg);
+            sqlfile = RDBZStringNew(optarg, sizeof(appcfg));
             break;
 
         case 'O':
-            snprintf_chkd_V1(output, sizeof(output), "%s", optarg);
+            output = RDBZStringNew(optarg, sizeof(appcfg));
             break;
 
         case 'I':
@@ -135,34 +153,37 @@ int main(int argc, const char *argv[])
         }
     }
 
-    if (cluster[0]) {
-        printf("# (%s:%d) redis cluster: %s\n", __FILE__, __LINE__, cluster);
-
-        RDBEnvCreate(cluster, 0, 0, &env);
+    if (cluster) {
+        printf("# redis cluster: %s\n", RDBZStringAddr(cluster));
+        RDBEnvCreate(RDBZStringAddr(cluster), ctxtimout, sotimeoms, &env);
     } else {
-        printf("# (%s:%d) load config: %s\n", __FILE__, __LINE__, appcfg);
-
-        RDBEnvCreate(appcfg, 0, 0, &env);
+        printf("# load config: %s\n", appcfg);
+        RDBEnvCreate(appcfg, ctxtimout, sotimeoms, &env);
     }
 
     if (! env) {
         printf("# Error No Cluster.\n");
         exit(EXIT_FAILURE);
     }
+    if (RDBCtxCreate(env, &ctx) != RDBAPI_SUCCESS) {
+        printf("# RDBCtxCreate error).\n");
+        exit(EXIT_FAILURE);
+    }
 
     if (interactive) {
-        int clen;
-
         ub8 tm0, tm2;
-        char tmstr0[24];
-        char tmstr2[24];
+        char ts0[24];
+        char ts2[24];
 
         CSH_chunk cache = CSH_chunk_new (1);
 
         print_guide();
 
         while (interactive) {
-            line = CSH_get_input(cache->offset? "+ ":"redplus> ", cshbuf, sizeof(cshbuf), &clen);
+            char *end;
+            const char *line;
+
+            line = CSH_get_input(cache->offset? "+ ":"redplus> ", RDBZStringAddr(cshbuf), RDBZStringLen(cshbuf), &clen);
 
             if (line) {
                 if (clen) {
@@ -175,87 +196,97 @@ int main(int argc, const char *argv[])
 
                     if (line[0] == '?') {
                         print_usage();
-
                         CSH_chunk_reset(cache);
                         continue;
                     }
 
-                    if (line[clen - 1] == ';') {
-                        tm0 = RDBCurrentTime(1, tmstr0);
+                    end = (char*) &line[clen - 1];
 
-                        redplusExecuteRdbsql(env, cache->chunk, output);
-
-                        tm2 = RDBCurrentTime(1, tmstr2);
-
-                        printf("\n# elapsed  : %.3lf seconds. (%"PRIu64" ms)"
-                               "\n# duration : %s ~ %s\n\n",
-                            (tm2 - tm0) * 0.001, (ub8)(tm2 - tm0),
-                            tmstr0, tmstr2);
-
+                    if (*end == '!') {
+                        // cancel an execution for sql
+                        fprintf(stdout, "\n# inputs are cancelled;"
+                                        "\n# press ; to execute inputs;"
+                                        "\n\n");
                         CSH_chunk_reset(cache);
                         continue;
+                    }
+
+                    // execute sql at once
+                    if (*end == ';') {
+                        line = cache->chunk;
+                        while ((end = strchr(line, ';')) != NULL) {
+                            *end++ = 0;
+
+                            if (*line == '#') {
+                                printf("%s;\n", line);
+                            } else {
+                                tm0 = RDBCurrentTime(1, ts0);
+
+                                redplusExecuteRdbsql(ctx, line, RDBZStringAddr(output));
+
+                                tm2 = RDBCurrentTime(1, ts2);
+
+                                printf("\n# elapsed : %.3lf seconds. (%"PRIu64" ms);"
+                                       "\n# duration : %s ~ %s;\n\n", (tm2 - tm0) * 0.001, (ub8)(tm2 - tm0), ts0, ts2);
+                            }
+
+                            line = end;
+                        }
+
+                        CSH_chunk_reset(cache);
                     }
                 }
             }
         }
 
         CSH_chunk_free(cache);
+    } else {
+        if (command) {
+            redplusExecuteCommand(ctx, RDBZStringAddr(command), RDBZStringAddr(output));
+        }
+
+        if (sqlfile) {
+            redplusExecuteSqlfile(ctx, RDBZStringAddr(sqlfile), RDBZStringAddr(output));
+        }
+
+        if (rdbsql) {
+            redplusExecuteRdbsql(ctx, RDBZStringAddr(rdbsql), RDBZStringAddr(output));
+        }
     }
 
-    if (*command) {
-        redplusExecuteCommand(env, command, output);
+    if (ctx) {
+        RDBCtxFree(ctx);
     }
 
-    if (*sqlfile) {
-        redplusExecuteSqlfile(env, sqlfile, output);
+    if (env) {
+        RDBEnvDestroy(env);
     }
 
-    if (*rdbsql) {
-        redplusExecuteRdbsql(env, rdbsql, output);
-    }
-
-    RDBEnvDestroy(env);
-
-    endTime = RDBCurrentTime(1, ts);
-    printf("\n\n# end on: %s. elapsed: %.3lf seconds.\n", ts, (endTime - startTime) * 0.001);
- 	return 0;
+ 	exit(0);
 }
 
 
-void redplusExecuteCommand (RDBEnv env, const char *command, const char *output)
+void redplusExecuteCommand (RDBCtx ctx, const char *command, const char *output)
 {
-
+    // TODO:
 }
 
 
-void redplusExecuteSqlfile (RDBEnv env, const char *sqlfile, const char *output)
+void redplusExecuteSqlfile (RDBCtx ctx, const char *sqlfile, const char *output)
 {
-    RDBAPI_RESULT err = RDBAPI_ERROR;
-    RDBCtx ctx = NULL;
-
-    int nmaps = 0;
     RDBResultMap resultmap = NULL;
+    if (RDBCtxExecuteFile(ctx, sqlfile, &resultmap) == RDBAPI_SUCCESS) {
+        RDBResultMapPrint(ctx, resultmap, stdout);
 
-    err = RDBCtxCreate(env, &ctx);
-    if (err) {
-        printf("RDBCtxCreate error(%d).\n", err);
-        return;
-    }
-
-    RDBCtxExecuteFile(ctx, sqlfile, &resultmap);
-
-    RDBResultMapDestroy(resultmap);
-
-    RDBCtxFree(ctx);
+        RDBResultMapDestroy(resultmap);
+    }    
 }
 
 
-void redplusExecuteRdbsql (RDBEnv env, const char *rdbsql, const char *output)
+void redplusExecuteRdbsql (RDBCtx ctx, const char *rdbsql, const char *output)
 {
     RDBAPI_RESULT res;
-
-    RDBCtx ctx = NULL;
-    RDBResultMap resultMap = NULL;
+    RDBResultMap resultmap = NULL;
 
     RDBBlob_t sqlblob;
 
@@ -263,27 +294,10 @@ void redplusExecuteRdbsql (RDBEnv env, const char *rdbsql, const char *output)
     sqlblob.length = cstr_length(rdbsql, -1);
     sqlblob.maxsz = sqlblob.length + 1;
 
-    res = RDBCtxCreate(env, &ctx);
-    if (res != RDBAPI_SUCCESS) {
-        printf("# RDBCtxCreate error(%d).\n", res);
-        goto error_exit;
-    }
-
-
-    res = RDBCtxExecuteSql(ctx, &sqlblob, &resultMap);
-    if (res != RDBAPI_SUCCESS) {
+    res = RDBCtxExecuteSql(ctx, &sqlblob, &resultmap);
+    if (RDBCtxExecuteSql(ctx, &sqlblob, &resultmap) == RDBAPI_SUCCESS) {
+        RDBResultMapPrint(ctx, resultmap, stdout);
+    } else {
         printf("# RDBCtxExecuteSql failed: %s\n", RDBCtxErrMsg(ctx));
-        goto error_exit;
     }
-
-    RDBResultMapPrint(ctx, resultMap, stdout);
-    RDBResultMapDestroy(resultMap);
-    RDBCtxFree(ctx);
-
-    // success
-    return;
-
-error_exit:
-    RDBResultMapDestroy(resultMap);
-    RDBCtxFree(ctx);
 }
