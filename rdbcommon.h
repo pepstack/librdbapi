@@ -52,8 +52,6 @@ extern "C"
 #include "common/cstrut.h"
 #include "common/threadlock.h"
 
-#include "common/red_black_tree.h"
-
 #include "common/uthash/uthash.h"
 #include "common/uthash/utarray.h"
 

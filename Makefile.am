@@ -1,8 +1,7 @@
 noinst_LIBRARIES = librdbapi.a
 
 
-librdbapi_a_SOURCES = common/red_black_tree.c \
-	common/tiny-regex-c/re.c \
+librdbapi_a_SOURCES = common/tiny-regex-c/re.c \
 	common/tpl/tpl.c \
     rdbactx.c \
     rdbctx.c \
@@ -11,6 +10,7 @@ librdbapi_a_SOURCES = common/red_black_tree.c \
     rdbparam.c \
     rdbsqlstmt.c \
     rdbresultmap.c \
+	rdbtablefilter.c \
     rdbtable.c \
     rdbexpr.c \
     rdbtpl.c \
