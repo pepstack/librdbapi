@@ -33,6 +33,7 @@
  * @update:
  */
 #include "rdbresultmap.h"
+#include "rdbtablefilter.h"
 
 
 /**************************************
@@ -102,7 +103,9 @@ void RDBResultMapDestroy (RDBResultMap resultmap)
 
         RDBResultMapDeleteAll(resultmap);
 
-        RDBMemFree(resultmap->filter);
+        if (resultmap->filter) {
+            RDBTableFilterFree(resultmap->filter);
+        }
 
         RDBMemFree(resultmap);
     }

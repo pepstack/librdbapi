@@ -275,17 +275,17 @@ void redplusExecuteCommand (RDBCtx ctx, const char *command, const char *output)
 void redplusExecuteSqlfile (RDBCtx ctx, const char *sqlfile, const char *output)
 {
     RDBResultMap resultmap = NULL;
+
     if (RDBCtxExecuteFile(ctx, sqlfile, &resultmap) == RDBAPI_SUCCESS) {
         RDBResultMapPrint(ctx, resultmap, stdout);
+    }
 
-        RDBResultMapDestroy(resultmap);
-    }    
+    RDBResultMapDestroy(resultmap);
 }
 
 
 void redplusExecuteRdbsql (RDBCtx ctx, const char *rdbsql, const char *output)
 {
-    RDBAPI_RESULT res;
     RDBResultMap resultmap = NULL;
 
     RDBBlob_t sqlblob;
@@ -294,10 +294,11 @@ void redplusExecuteRdbsql (RDBCtx ctx, const char *rdbsql, const char *output)
     sqlblob.length = cstr_length(rdbsql, -1);
     sqlblob.maxsz = sqlblob.length + 1;
 
-    res = RDBCtxExecuteSql(ctx, &sqlblob, &resultmap);
     if (RDBCtxExecuteSql(ctx, &sqlblob, &resultmap) == RDBAPI_SUCCESS) {
         RDBResultMapPrint(ctx, resultmap, stdout);
     } else {
         printf("# RDBCtxExecuteSql failed: %s\n", RDBCtxErrMsg(ctx));
     }
+
+    RDBResultMapDestroy(resultmap);
 }
