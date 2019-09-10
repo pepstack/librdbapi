@@ -532,7 +532,7 @@ extern redisReply * RedisExecCommandArgv (RDBCtx ctx, int argc, const char **arg
 
 
 // exec A redis Command on all nodes, such as for: keys, scan
-extern int RedisExecCommandArgvOnAllNodes (RDBCtx ctx, char *command, redisReply **replys, RDBCtxNode *replyNodes);
+extern int RedisExecCommandOnAllNodes (RDBCtx ctx, char *command, redisReply **replys, RDBCtxNode *replyNodes);
 
 // exec A redis Command on given RDBCtxNode
 extern RDBAPI_RESULT RedisExecArgvOnNode (RDBCtxNode ctxnode, int argc, const char *argv[], const size_t *argvlen, redisReply **outReply);

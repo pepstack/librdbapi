@@ -445,23 +445,104 @@ void RedisFreeReplyObjects (redisReply **replys, int numReplys)
 
 redisReply * RedisExecCommand (RDBCtx ctx, const char *command, RDBCtxNode *whichnode)
 {
-    redisReply * reply = NULL;
+    RDBCtxNode anode;
+    redisContext *redCtx;
+    redisReply *reply = NULL;
 
     *ctx->errmsg = 0;
 
-    RDBCtxNode anode = RDBCtxGetActiveNode(ctx, NULL, 0);
+    anode = RDBCtxGetActiveNode(ctx, NULL, 0);
 
-    if (whichnode) {
-        *whichnode = anode;
-    }
+    *whichnode = anode;
 
-    redisContext * redCtx = RDBCtxNodeGetRedisContext(anode);
+    redCtx = RDBCtxNodeGetRedisContext(anode);
     if (! redCtx) {
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "Active node not found");
         return NULL;
     }
 
     reply = (redisReply *) redisCommand(redCtx, command);
+
+    if (! reply) {
+        // failed to exec command
+        if (redCtx->err == REDIS_ERR_IO) {
+            /* hiredis/read.h
+             *
+             * When an error occurs, the err flag in a context is set to hold the type of
+             * error that occurred. REDIS_ERR_IO means there was an I/O error and you
+             * should use the "errno" variable to find out what is wrong.
+             * For other values, the "errstr" field will hold a description.
+             *
+             * Add timeo_data can close this error!!
+             */
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "redisCommandArgv REDIS_ERR_IO(errno=%d): %s", errno, strerror(errno));
+        } else {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "redisCommandArgv RedisContext Error(%d): %.*s", redCtx->err, cstr_length(redCtx->errstr, RDB_ERROR_MSG_LEN), redCtx->errstr);
+        }
+
+        RDBCtxNodeClose(anode);
+        return NULL;
+    }
+
+    if (reply->type == REDIS_REPLY_ERROR) {
+        // 'MOVED 7142 127.0.0.1:7002'
+        // if remote call, 127.0.0.1 ?
+        if (cstr_startwith(reply->str, reply->len, "MOVED ", 6)) {
+            char * start = &(reply->str[6]);
+            char * end = strchr(start, 32);
+
+            if (end) {
+                start = end;
+                ++start;
+                *end = 0;
+
+                end = strchr(start, ':');
+
+                if (end) {
+                    *end++ = 0;
+
+                    /**
+                     * start => host
+                     * end => port
+                     */
+                    redCtx = RDBCtxNodeGetRedisContext(RDBCtxGetActiveNode(ctx, start, (ub4) atoi(end)));
+                    if (redCtx) {
+                        RedisFreeReplyObject(&reply);
+                        return RedisExecCommand(ctx, command, whichnode);
+                    }
+                }
+            }
+        } else if (cstr_startwith(reply->str, reply->len, "NOAUTH ", 7)) {
+            /* 'NOAUTH Authentication required.' */
+            RDBEnvNode enode = RDBCtxNodeGetEnvNode(anode);
+
+            const char *cmds[] = { "auth", enode->authpass };
+
+            RedisFreeReplyObject(&reply);
+
+            reply = RedisExecCommandArgv(ctx, sizeof(cmds)/sizeof(cmds[0]), cmds, 0);
+
+            if (RedisIsReplyStatusOK(reply)) {
+                // authentication success
+                RedisFreeReplyObject(&reply);
+
+                // do command
+                return RedisExecCommand(ctx, command, whichnode);
+            }
+
+            if (reply) {
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "AUTH failed(%d): %s", reply->type, reply->str);
+                RedisFreeReplyObject(&reply);
+            }
+
+            return NULL;
+        }
+
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "REDIS_REPLY_ERROR: %s", reply->str);
+
+        RedisFreeReplyObject(&reply);
+        return NULL;
+    }
 
     return reply;
 }
@@ -515,7 +596,7 @@ redisReply * RedisExecCommandArgv (RDBCtx ctx, int argc, const char **argv, cons
         }
 
         RDBCtxNodeClose(anode);
-        return reply;
+        return NULL;
     }
 
     if (reply->type == REDIS_REPLY_ERROR) {
@@ -655,7 +736,7 @@ RDBAPI_RESULT RedisExecCommandArgvOnNode (RDBCtxNode ctxnode, char *command, red
 }
 
 
-int RedisExecCommandArgvOnAllNodes (RDBCtx ctx, char *command, redisReply **replys, RDBCtxNode *replyNodes)
+int RedisExecCommandOnAllNodes (RDBCtx ctx, char *command, redisReply **replys, RDBCtxNode *replyNodes)
 {
     const char *argv[256];
     char *p;
