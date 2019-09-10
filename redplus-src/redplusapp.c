@@ -295,7 +295,7 @@ void redplusExecuteRdbsql (RDBCtx ctx, const char *rdbsql, const char *output)
     sqlblob.maxsz = sqlblob.length + 1;
 
     if (RDBCtxExecuteSql(ctx, &sqlblob, &resultmap) == RDBAPI_SUCCESS) {
-        RDBResultMapPrint(ctx, resultmap, stdout);
+        /////RDBResultMapPrint(ctx, resultmap, stdout);
     } else {
         printf("# RDBCtxExecuteSql failed: %s\n", RDBCtxErrMsg(ctx));
     }

@@ -72,9 +72,10 @@ extern "C"
 #define RDBSQL_ERR_TOO_SHORT        0x106
 
 
-#define UPSERT_MODE_INSERT     0
-#define UPSERT_MODE_IGNORE     1
-#define UPSERT_MODE_UPDATE     2
+#define RDBSQL_UPSERT_MODE_INSERT     0
+#define RDBSQL_UPSERT_MODE_IGNORE     1
+#define RDBSQL_UPSERT_MODE_UPDATE     2
+#define RDBSQL_UPSERT_MODE_SELECT     3
 
 
 typedef struct _RDBSQLStmt_t
@@ -83,49 +84,8 @@ typedef struct _RDBSQLStmt_t
 
     RDBSQLStmtType stmt;
 
-    struct UPSERT_INTO {
-        char tablespace[RDB_KEY_NAME_MAXLEN + 1];
-        char tablename[RDB_KEY_NAME_MAXLEN + 1];
-
-        // check_upsert_fields
-        int rowkeys[RDBAPI_KEYS_MAXNUM + 1];
-        int rowkeyid[RDBAPI_KEYS_MAXNUM + 1];
-        char *rowkeypattern;
-
-        RDBBlob_t rkpattern;
-
-        int numfields;
-        char *fieldnames[RDBAPI_ARGV_MAXNUM + 1];
-        char *fieldvalues[RDBAPI_ARGV_MAXNUM + 1];
-        char fieldindex[RDBAPI_ARGV_MAXNUM + 1];
-
-        // 0 for IGNORE, > 0 for UPDATE
-        int numupdates;
-        char *updatenames[RDBAPI_ARGV_MAXNUM + 1];
-        char *updatevalues[RDBAPI_ARGV_MAXNUM + 1];
-        char updateindex[RDBAPI_ARGV_MAXNUM + 1];
-
-        // RedisExecCommand
-        // <ON DUPLICATE KEY IGNORE| UPDATE>
-        int upsert_mode;
-        char hmset_cmd[6];
-
-        // INSERT new ...
-        int argcNew;
-        const char *argvNew[RDBAPI_ARGV_MAXNUM + 4];
-        size_t argvlenNew[RDBAPI_ARGV_MAXNUM + 4];
-
-        // UPDATE exist...
-        int argcUpd;
-        const char *argvUpd[RDBAPI_ARGV_MAXNUM + 4];
-        size_t argvlenUpd[RDBAPI_ARGV_MAXNUM + 4];
-
-        // DESC table
-        RDBTableDes_t tabledes;
-    } upsert;
-
     union {
-        // DELETE also use select
+        // SELECT and DELETE
         struct SELECT {
             char tablespace[RDB_KEY_NAME_MAXLEN + 1];
             char tablename[RDB_KEY_NAME_MAXLEN + 1];
@@ -150,6 +110,36 @@ typedef struct _RDBSQLStmt_t
             ub4 limit;
         } select;
 
+        // UPSERT INTO tablespace.tablename(fieldnames...) VALUES(fieldvalues...);
+        // UPSERT INTO tablespace.tablename(fieldnames...) VALUES(fieldvalues...) ON DUPLICATE KEY IGNORE;
+        // UPSERT INTO tablespace.tablename(fieldnames...) VALUES(fieldvalues...) ON DUPLICATE KEY UPDATE col1=val1, col2=val2,...;
+        //?? UPSERT INTO tablespace.tablename(fieldnames...) SELECT * FROM ...
+        //?? UPSERT INTO tablespace.tablename(fieldnames...) SELECT (fieldnames...) FROM ...            
+        //?? UPSERT INTO tablespace.tablename SELECT * FROM ...
+        struct UPSERT_INTO {
+            char tablespace[RDB_KEY_NAME_MAXLEN + 1];
+            char tablename[RDB_KEY_NAME_MAXLEN + 1];
+
+            int numfields;
+            char *fieldnames[RDBAPI_ARGV_MAXNUM + 1];
+            int   fieldnameslen[RDBAPI_ARGV_MAXNUM + 1];
+            char *fieldvalues[RDBAPI_ARGV_MAXNUM + 1];
+            int   fieldvalueslen[RDBAPI_ARGV_MAXNUM + 1];
+
+            int updcols;
+            char *updcolnames[RDBAPI_ARGV_MAXNUM + 1];
+            int   updcolnameslen[RDBAPI_ARGV_MAXNUM + 1];
+            char *updcolvalues[RDBAPI_ARGV_MAXNUM + 1];
+            int   updcolvalueslen[RDBAPI_ARGV_MAXNUM + 1];
+
+            // RDBSQL_UPSERT_MODE_INSERT
+            // RDBSQL_UPSERT_MODE_IGNORE
+            // RDBSQL_UPSERT_MODE_UPDATE
+            // RDBSQL_UPSERT_MODE_SELECT
+            int upsertmode;
+
+            RDBSQLStmt selectstmt;
+        } upsert;
 
         struct CREATE_TABLE {
             char tablespace[RDB_KEY_NAME_MAXLEN + 1];
