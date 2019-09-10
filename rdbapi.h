@@ -525,16 +525,20 @@ extern void RedisFreeReplyObject (redisReply **pReply);
 extern void RedisFreeReplyObjects (redisReply **replys, int numReplys);
 
 // exec A redis Command on any an active node
-extern redisReply * RedisExecCommand (RDBCtx ctx, int argc, const char **argv, const size_t *argvlen);
+extern redisReply * RedisExecCommand (RDBCtx ctx, const char *command, RDBCtxNode *whichnode);
+
+// exec A redis Command on any an active node
+extern redisReply * RedisExecCommandArgv (RDBCtx ctx, int argc, const char **argv, const size_t *argvlen);
+
 
 // exec A redis Command on all nodes, such as for: keys, scan
-extern int RedisExecCommandOnAllNodes (RDBCtx ctx, char *command, redisReply **replys, RDBCtxNode *replyNodes);
+extern int RedisExecCommandArgvOnAllNodes (RDBCtx ctx, char *command, redisReply **replys, RDBCtxNode *replyNodes);
 
 // exec A redis Command on given RDBCtxNode
 extern RDBAPI_RESULT RedisExecArgvOnNode (RDBCtxNode ctxnode, int argc, const char *argv[], const size_t *argvlen, redisReply **outReply);
 
 // exec A redis Command on given RDBCtxNode
-extern RDBAPI_RESULT RedisExecCommandOnNode (RDBCtxNode ctxnode, char *command, redisReply **outReply);
+extern RDBAPI_RESULT RedisExecCommandArgvOnNode (RDBCtxNode ctxnode, char *command, redisReply **outReply);
 
 
 typedef void (* redisReplyWatchCallback) (int type, void *data, size_t datalen, void *arg);
@@ -667,7 +671,7 @@ extern void RDBSQLStmtFree (RDBSQLStmt sqlstmt);
 extern void RDBSQLStmtPrint (RDBSQLStmt sqlstmt, FILE *fout);
 extern RDBSQLStmtType RDBSQLStmtGetType (RDBSQLStmt sqlstmt, char **parsedClause, int pretty);
 extern RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap);
-extern RDBAPI_RESULT RDBCtxExecuteSql (RDBCtx ctx, const RDBBlob_t *sqlblob, RDBResultMap *outResultMap);
+extern RDBAPI_RESULT RDBCtxExecuteSql (RDBCtx ctx, RDBZString sqlstr, RDBResultMap *outResultMap);
 extern RDBAPI_RESULT RDBCtxExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResultMap *outResultMap);
 
 

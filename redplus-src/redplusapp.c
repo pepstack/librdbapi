@@ -170,6 +170,26 @@ int main(int argc, const char *argv[])
         exit(EXIT_FAILURE);
     }
 
+    if (command) {
+        redplusExecuteCommand(ctx, RDBZStringAddr(command), RDBZStringAddr(output));
+    }
+    if (sqlfile) {
+        redplusExecuteSqlfile(ctx, RDBZStringAddr(sqlfile), RDBZStringAddr(output));
+    }
+    if (rdbsql) {
+        redplusExecuteRdbsql(ctx, RDBZStringAddr(rdbsql), RDBZStringAddr(output));
+    }
+
+    RDBZStringFree(cluster);
+    RDBZStringFree(command);
+    RDBZStringFree(sqlfile);    
+    RDBZStringFree(rdbsql);
+
+    cluster = NULL;
+    command = NULL;
+    sqlfile = NULL;
+    rdbsql = NULL;
+
     if (interactive) {
         ub8 tm0, tm2;
         char ts0[24];
@@ -219,6 +239,15 @@ int main(int argc, const char *argv[])
 
                             if (*line == '#') {
                                 printf("%s;\n", line);
+                            } else if (*line == '$') {
+                                tm0 = RDBCurrentTime(1, ts0);
+
+                                redplusExecuteCommand(ctx, cstr_Ltrim_whitespace((char*) &line[1]), RDBZStringAddr(output));
+
+                                tm2 = RDBCurrentTime(1, ts2);
+
+                                printf("\n# elapsed : %.3lf seconds. (%"PRIu64" ms);"
+                                       "\n# duration : %s ~ %s;\n\n", (tm2 - tm0) * 0.001, (ub8)(tm2 - tm0), ts0, ts2);
                             } else {
                                 tm0 = RDBCurrentTime(1, ts0);
 
@@ -240,35 +269,32 @@ int main(int argc, const char *argv[])
         }
 
         CSH_chunk_free(cache);
-    } else {
-        if (command) {
-            redplusExecuteCommand(ctx, RDBZStringAddr(command), RDBZStringAddr(output));
-        }
-
-        if (sqlfile) {
-            redplusExecuteSqlfile(ctx, RDBZStringAddr(sqlfile), RDBZStringAddr(output));
-        }
-
-        if (rdbsql) {
-            redplusExecuteRdbsql(ctx, RDBZStringAddr(rdbsql), RDBZStringAddr(output));
-        }
     }
 
     if (ctx) {
         RDBCtxFree(ctx);
     }
-
     if (env) {
         RDBEnvDestroy(env);
     }
-
  	exit(0);
 }
 
 
 void redplusExecuteCommand (RDBCtx ctx, const char *command, const char *output)
 {
-    // TODO:
+    printf("# RedisExecCommand: %s;\n", command, RDBCtxErrMsg(ctx));
+
+    RDBCtxNode ctxnode = NULL;
+    redisReply *reply = RedisExecCommand(ctx, command, &ctxnode);
+
+    if (reply) {
+        printf("# SUCCESS:\n");
+        RedisReplyObjectPrint(reply, ctxnode);
+        RedisFreeReplyObject(&reply);
+    } else {
+        printf("# FAILED: %s\n", RDBCtxErrMsg(ctx));
+    }    
 }
 
 
@@ -288,17 +314,20 @@ void redplusExecuteRdbsql (RDBCtx ctx, const char *rdbsql, const char *output)
 {
     RDBResultMap resultmap = NULL;
 
-    RDBBlob_t sqlblob;
+    RDBZString sqlstr = RDBZStringNew(rdbsql, -1);
 
-    sqlblob.str = (char *) rdbsql;
-    sqlblob.length = cstr_length(rdbsql, -1);
-    sqlblob.maxsz = sqlblob.length + 1;
+    if (RDBCtxExecuteSql(ctx, sqlstr, &resultmap) == RDBAPI_SUCCESS) {
+        RDBZStringFree(sqlstr);
 
-    if (RDBCtxExecuteSql(ctx, &sqlblob, &resultmap) == RDBAPI_SUCCESS) {
-        /////RDBResultMapPrint(ctx, resultmap, stdout);
+        if (resultmap) {
+            RDBResultMapPrint(ctx, resultmap, stdout);
+        }
     } else {
+        RDBZStringFree(sqlstr);
         printf("# RDBCtxExecuteSql failed: %s\n", RDBCtxErrMsg(ctx));
     }
 
-    RDBResultMapDestroy(resultmap);
+    if (resultmap) {
+        RDBResultMapDestroy(resultmap);
+    }
 }

@@ -443,8 +443,32 @@ void RedisFreeReplyObjects (redisReply **replys, int numReplys)
 }
 
 
+redisReply * RedisExecCommand (RDBCtx ctx, const char *command, RDBCtxNode *whichnode)
+{
+    redisReply * reply = NULL;
+
+    *ctx->errmsg = 0;
+
+    RDBCtxNode anode = RDBCtxGetActiveNode(ctx, NULL, 0);
+
+    if (whichnode) {
+        *whichnode = anode;
+    }
+
+    redisContext * redCtx = RDBCtxNodeGetRedisContext(anode);
+    if (! redCtx) {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "Active node not found");
+        return NULL;
+    }
+
+    reply = (redisReply *) redisCommand(redCtx, command);
+
+    return reply;
+}
+
+
 /**
- *  RedisConnExecCommand/RedisExecCommand
+ *  RedisConnExecCommand/RedisExecCommandArgv
  *
  *   https://github.com/redis/hiredis
  *   
@@ -457,7 +481,7 @@ void RedisFreeReplyObjects (redisReply **replys, int numReplys)
  *
  * https://stackoverflow.com/questions/10041120/hiredis-c-socket
  */
-redisReply * RedisExecCommand (RDBCtx ctx, int argc, const char **argv, const size_t *argvlen)
+redisReply * RedisExecCommandArgv (RDBCtx ctx, int argc, const char **argv, const size_t *argvlen)
 {
     redisReply * reply = NULL;
 
@@ -518,7 +542,7 @@ redisReply * RedisExecCommand (RDBCtx ctx, int argc, const char **argv, const si
                     redCtx = RDBCtxNodeGetRedisContext(RDBCtxGetActiveNode(ctx, start, (ub4) atoi(end)));
                     if (redCtx) {
                         RedisFreeReplyObject(&reply);
-                        return RedisExecCommand(ctx, argc, argv, argvlen);
+                        return RedisExecCommandArgv(ctx, argc, argv, argvlen);
                     }
                 }
             }
@@ -530,14 +554,14 @@ redisReply * RedisExecCommand (RDBCtx ctx, int argc, const char **argv, const si
 
             RedisFreeReplyObject(&reply);
 
-            reply = RedisExecCommand(ctx, sizeof(cmds)/sizeof(cmds[0]), cmds, 0);
+            reply = RedisExecCommandArgv(ctx, sizeof(cmds)/sizeof(cmds[0]), cmds, 0);
 
             if (RedisIsReplyStatusOK(reply)) {
                 // authentication success
                 RedisFreeReplyObject(&reply);
 
                 // do command
-                return RedisExecCommand(ctx, argc, argv, argvlen);
+                return RedisExecCommandArgv(ctx, argc, argv, argvlen);
             }
 
             if (reply) {
@@ -571,7 +595,7 @@ RDBAPI_RESULT RedisExecArgvOnNode (RDBCtxNode ctxnode, int argc, const char *arg
     if (RDBCtxNodeIsOpen(ctxnode)) {
         ctxnode->ctx->activenode = ctxnode;
 
-        redisReply *reply = RedisExecCommand(ctxnode->ctx, argc, argv, argvlen);
+        redisReply *reply = RedisExecCommandArgv(ctxnode->ctx, argc, argv, argvlen);
         if (reply) {
             *outReply = reply;
             return RDBAPI_SUCCESS;
@@ -584,7 +608,7 @@ RDBAPI_RESULT RedisExecArgvOnNode (RDBCtxNode ctxnode, int argc, const char *arg
 }
 
 
-RDBAPI_RESULT RedisExecCommandOnNode (RDBCtxNode ctxnode, char *command, redisReply **outReply)
+RDBAPI_RESULT RedisExecCommandArgvOnNode (RDBCtxNode ctxnode, char *command, redisReply **outReply)
 {
     const char *argv[256];
     char *p;
@@ -631,7 +655,7 @@ RDBAPI_RESULT RedisExecCommandOnNode (RDBCtxNode ctxnode, char *command, redisRe
 }
 
 
-int RedisExecCommandOnAllNodes (RDBCtx ctx, char *command, redisReply **replys, RDBCtxNode *replyNodes)
+int RedisExecCommandArgvOnAllNodes (RDBCtx ctx, char *command, redisReply **replys, RDBCtxNode *replyNodes)
 {
     const char *argv[256];
     char *p;
@@ -849,10 +873,10 @@ RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, size_t keylen, sb8 ex
         argl[0] = 7;
         argl[1] = (keylen == -1? strlen(key) : keylen);
 
-        reply = RedisExecCommand(ctx, 2, argv, argl);
+        reply = RedisExecCommandArgv(ctx, 2, argv, argl);
         if (! reply) {
             // error
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: RedisExecCommand failed");
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERROR: RedisExecCommandArgv failed");
             return RDBAPI_ERROR;
         }
 
@@ -901,7 +925,7 @@ RDBAPI_RESULT RedisExpireKey (RDBCtx ctx, const char *key, size_t keylen, sb8 ex
 
     val[21] = 0;
 
-    reply = RedisExecCommand(ctx, 3, argv, argl);
+    reply = RedisExecCommandArgv(ctx, 3, argv, argl);
     if (! reply) {
         return RDBAPI_ERROR;
     }
@@ -971,7 +995,7 @@ RDBAPI_RESULT RedisSetKey (RDBCtx ctx, const char *key, size_t keylen, const cha
         }
     }
 
-    reply = RedisExecCommand(ctx, argc, argv, argl);
+    reply = RedisExecCommandArgv(ctx, argc, argv, argl);
 
     if (RedisIsReplyStatusOK(reply)) {
         RedisFreeReplyObject(&reply);
@@ -1027,7 +1051,7 @@ RDBAPI_RESULT RedisHMSet (RDBCtx ctx, const char *key, const char * fields[], co
         return RDBAPI_ERR_BADARG;
     }
 
-    reply = RedisExecCommand(ctx, argc, argv, argvlen);
+    reply = RedisExecCommandArgv(ctx, argc, argv, argvlen);
     if (! reply) {
         return RDBAPI_ERROR;
     }
@@ -1092,7 +1116,7 @@ RDBAPI_RESULT RedisHMSetLen (RDBCtx ctx, const char *key, size_t keylen, const c
         return RDBAPI_ERR_BADARG;
     }
 
-    reply = RedisExecCommand(ctx, argc, argv, argvlen);
+    reply = RedisExecCommandArgv(ctx, argc, argv, argvlen);
     if (! reply) {
         return RDBAPI_ERROR;
     }
@@ -1181,7 +1205,7 @@ RDBAPI_RESULT RedisHMGetLen (RDBCtx ctx, const char * key, size_t keylen, const 
             return RDBAPI_ERR_BADARG;
         }
 
-        reply = RedisExecCommand(ctx, argc, argv, argvlen);
+        reply = RedisExecCommandArgv(ctx, argc, argv, argvlen);
         if (! reply) {
             ctx->errmsg[0] = 0;
             return RDBAPI_ERROR;
@@ -1210,7 +1234,7 @@ RDBAPI_RESULT RedisHMGetLen (RDBCtx ctx, const char * key, size_t keylen, const 
         argl[0] = 7;
         argl[1] = (keylen == -1)? strlen(key) : keylen;
 
-        reply = RedisExecCommand(ctx, 2, argv, argl);
+        reply = RedisExecCommandArgv(ctx, 2, argv, argl);
         if (! reply) {
             ctx->errmsg[0] = 0;
             return RDBAPI_ERROR;
@@ -1252,7 +1276,7 @@ int RedisDeleteKey (RDBCtx ctx, const char * key, size_t keylen, const char * fi
 
         numfields = 1;
 
-        reply = RedisExecCommand(ctx, 2, argv, argvlen);
+        reply = RedisExecCommandArgv(ctx, 2, argv, argvlen);
     } else {
         int i, argc;
 
@@ -1275,7 +1299,7 @@ int RedisDeleteKey (RDBCtx ctx, const char * key, size_t keylen, const char * fi
 
         argc = i + 2;
 
-        reply = RedisExecCommand(ctx, 2, argv, argvlen);
+        reply = RedisExecCommandArgv(ctx, 2, argv, argvlen);
     }
 
     if (! reply) {
@@ -1314,7 +1338,7 @@ int RedisExistsKey (RDBCtx ctx, const char * key, size_t keylen)
 
     *ctx->errmsg = 0;
 
-    reply = RedisExecCommand(ctx, 2, argv, argvlen);
+    reply = RedisExecCommandArgv(ctx, 2, argv, argvlen);
 
     if (! reply) {
         return RDBAPI_ERROR;
@@ -1344,7 +1368,7 @@ RDBAPI_RESULT RedisClusterKeyslot (RDBCtx ctx, const char *key, sb8 *slot)
     const char *argv[3] = { "cluster", "keyslot", key };
     size_t argvlen[3] = { 7, 7, strlen(key) };
 
-    reply = RedisExecCommand(ctx, 3, argv, argvlen);
+    reply = RedisExecCommandArgv(ctx, 3, argv, argvlen);
     if (! reply) {
         return RDBAPI_ERROR;
     }
@@ -1369,7 +1393,7 @@ RDBAPI_RESULT RedisTransStart (RDBCtx ctx)
     redisReply *reply;
     const char *cmds[] = { "multi", '\0' };
 
-    reply = RedisExecCommand(ctx, 1, cmds, 0);
+    reply = RedisExecCommandArgv(ctx, 1, cmds, 0);
 
     if (RedisIsReplyStatusOK(reply)) {
         RedisFreeReplyObject(&reply);
@@ -1387,7 +1411,7 @@ RDBAPI_RESULT RedisTransCommit (RDBCtx ctx, redisReply **outReply)
     redisReply *reply;
     const char *cmds[] = { "exec", '\0' };
 
-    reply = RedisExecCommand(ctx, 1, cmds, 0);
+    reply = RedisExecCommandArgv(ctx, 1, cmds, 0);
 
     if (RedisIsReplyStatusOK(reply)) {
         *outReply = reply;
@@ -1405,7 +1429,7 @@ void RedisTransDiscard (RDBCtx ctx)
     redisReply *reply;
     const char *cmds[] = { "discard", '\0' };
 
-    reply = RedisExecCommand(ctx, 1, cmds, 0);
+    reply = RedisExecCommandArgv(ctx, 1, cmds, 0);
 
     RedisFreeReplyObject(&reply);
 }
@@ -1416,7 +1440,7 @@ RDBAPI_RESULT RedisWatchKey (RDBCtx ctx, const char *key)
     redisReply *reply;
     const char *cmds[] = { "watch", key, 0 };
 
-    reply = RedisExecCommand(ctx, 2, cmds, 0);
+    reply = RedisExecCommandArgv(ctx, 2, cmds, 0);
 
     if (RedisIsReplyStatusOK(reply)) {
         RedisFreeReplyObject(&reply);
@@ -1451,7 +1475,7 @@ RDBAPI_RESULT RedisWatchKeys (RDBCtx ctx, const char *keys[], int numkeys)
     argv[0] = "watch";
     argc++;
 
-    reply = RedisExecCommand(ctx, argc, argv, 0);
+    reply = RedisExecCommandArgv(ctx, argc, argv, 0);
 
     if (RedisIsReplyStatusOK(reply)) {
         RedisFreeReplyObject(&reply);
@@ -1469,7 +1493,7 @@ void RedisUnwatch (RDBCtx ctx)
 
     const char *cmds[] = { "unwatch", 0 };
 
-    reply = RedisExecCommand(ctx, 1, cmds, 0);
+    reply = RedisExecCommandArgv(ctx, 1, cmds, 0);
 
     RedisFreeReplyObject(&reply);
 }
@@ -1488,12 +1512,12 @@ RDBAPI_RESULT RedisGenerateId (RDBCtx ctx, const char *generator, int count, sb8
 
         const char *cmds[] = { "incrby", generator, bycount };
 
-        reply = RedisExecCommand(ctx, 3, cmds, 0);
+        reply = RedisExecCommandArgv(ctx, 3, cmds, 0);
     } else {
         // redis:port > INCR generator
         const char *cmds[] = { "incr", generator };
 
-        reply = RedisExecCommand(ctx, 2, cmds, 0);
+        reply = RedisExecCommandArgv(ctx, 2, cmds, 0);
     }
 
     if (reply) {
@@ -1507,7 +1531,7 @@ RDBAPI_RESULT RedisGenerateId (RDBCtx ctx, const char *generator, int count, sb8
         // reset id generator
         const char * cmds[] = { "set", generator, "0" };
 
-        reply = RedisExecCommand(ctx, 3, cmds, 0);
+        reply = RedisExecCommandArgv(ctx, 3, cmds, 0);
 
         if (RedisIsReplyStatusOK(reply)) {
             // reset ok
@@ -1534,7 +1558,7 @@ RDBAPI_RESULT RedisIncrIntegerField (RDBCtx ctx, const char *key, const char *fi
 
     const char *cmds[] = {"hincrby", key, field, incrbuf};
 
-    reply = RedisExecCommand(ctx, 4, cmds, 0);
+    reply = RedisExecCommandArgv(ctx, 4, cmds, 0);
 
     if (reply) {
         if (reply->type == REDIS_REPLY_INTEGER) {
@@ -1547,7 +1571,7 @@ RDBAPI_RESULT RedisIncrIntegerField (RDBCtx ctx, const char *key, const char *fi
         // reset id generator
         const char * cmds[] = {"hset", key, field, "0"};
 
-        reply = RedisExecCommand(ctx, 4, cmds, 0);
+        reply = RedisExecCommandArgv(ctx, 4, cmds, 0);
 
         if (reply->type == REDIS_REPLY_INTEGER) {
             if (    reply->integer == 0     // existed field
@@ -1577,7 +1601,7 @@ RDBAPI_RESULT RedisIncrFloatField (RDBCtx ctx, const char *key, const char *fiel
 
     const char *cmds[] = {"hincrbyfloat", key, field, incrbuf};
 
-    reply = RedisExecCommand(ctx, 4, cmds, 0);
+    reply = RedisExecCommandArgv(ctx, 4, cmds, 0);
 
     if (reply) {
         if (reply->type == REDIS_REPLY_STRING) {
@@ -1602,7 +1626,7 @@ RDBAPI_RESULT RedisIncrFloatField (RDBCtx ctx, const char *key, const char *fiel
     } else if (reset) {
         const char * cmds[] = {"hset", key, field, "0"};
 
-        reply = RedisExecCommand(ctx, 4, cmds, 0);
+        reply = RedisExecCommandArgv(ctx, 4, cmds, 0);
 
         if (reply->type == REDIS_REPLY_INTEGER) {
             if (    reply->integer == 0     // existed field

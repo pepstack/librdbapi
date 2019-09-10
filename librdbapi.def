@@ -61,9 +61,10 @@ EXPORTS
 	RedisFreeReplyObject
 	RedisFreeReplyObjects
 	RedisExecCommand
-	RedisExecCommandOnAllNodes
+	RedisExecCommandArgv
+	RedisExecCommandArgvOnAllNodes
 	RedisExecArgvOnNode
-	RedisExecCommandOnNode
+	RedisExecCommandArgvOnNode
 	RedisReplyObjectWatch
 	RedisReplyObjectPrint
 	RedisReplyDetachString

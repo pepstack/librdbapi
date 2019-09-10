@@ -1903,18 +1903,16 @@ void RDBSQLStmtFree (RDBSQLStmt sqlstmt)
     }
 
     if (sqlstmt->stmt == RDBSQL_SELECT || sqlstmt->stmt == RDBSQL_DELETE) {
-
         cstr_varray_free(sqlstmt->select.selectfields, RDBAPI_ARGV_MAXNUM);
         cstr_varray_free(sqlstmt->select.fields, RDBAPI_ARGV_MAXNUM);
         cstr_varray_free(sqlstmt->select.fieldvals, RDBAPI_ARGV_MAXNUM);
-
     } else if (sqlstmt->stmt == RDBSQL_UPSERT) {
-
         cstr_varray_free(sqlstmt->upsert.fieldnames, RDBAPI_ARGV_MAXNUM);
         cstr_varray_free(sqlstmt->upsert.fieldvalues, RDBAPI_ARGV_MAXNUM);
         cstr_varray_free(sqlstmt->upsert.updcolnames, RDBAPI_ARGV_MAXNUM);
         cstr_varray_free(sqlstmt->upsert.updcolvalues, RDBAPI_ARGV_MAXNUM);
 
+        RDBSQLStmtFree(sqlstmt->upsert.selectstmt);
     } else if (sqlstmt->stmt == RDBSQL_CREATE) {
         // TODO:
     }
@@ -1936,25 +1934,40 @@ void RDBSQLStmtPrint (RDBSQLStmt sqlstmt, FILE *fout)
 
     RDBCtx ctx = sqlstmt->ctx;
 
+    static const char *rdbsql_exprs[] = {
+        NULL
+        ,"="
+        ,"LLIKE"
+        ,"RLIKE"
+        ,"LIKE"
+        ,"MATCH"
+        ,"!="
+        ,">"
+        ,"<"
+        ,">="
+        ,"<="
+        ,NULL
+    };
+
     switch (sqlstmt->stmt) {
     case RDBSQL_SELECT:
-        fprintf(fout, "  SELECT\n");
         if (sqlstmt->select.numselect == -1) {
-            fprintf(fout, "    *");
+            fprintf(fout, "  SELECT *\n");
         } else {
-            fprintf(fout, "    %.*s", sqlstmt->select.selectfieldslen[0], sqlstmt->select.selectfields[0]);
+            fprintf(fout, "  SELECT %.*s", sqlstmt->select.selectfieldslen[0], sqlstmt->select.selectfields[0]);
             for (j = 1; j < sqlstmt->select.numselect; j++) {
-                fprintf(fout, ",\n    %.*s", sqlstmt->select.selectfieldslen[j], sqlstmt->select.selectfields[j]);
+                fprintf(fout, ",\n      %.*s", sqlstmt->select.selectfieldslen[j], sqlstmt->select.selectfields[j]);
             }
+            fprintf(fout, "\n");
         }
-        fprintf(fout, "\n  FROM %s.%s", sqlstmt->select.tablespace, sqlstmt->select.tablename);
+        fprintf(fout, "    FROM %s.%s", sqlstmt->select.tablespace, sqlstmt->select.tablename);
 
         if (sqlstmt->select.numwhere) {
             fprintf(fout, "\n    WHERE\n");
 
             fprintf(fout, "        %.*s %s %.*s",
                 sqlstmt->select.fieldslen[0], sqlstmt->select.fields[0],
-                    ">",
+                rdbsql_exprs[ sqlstmt->select.fieldexprs[0] ],
                 sqlstmt->select.fieldvalslen[0], sqlstmt->select.fieldvals[0]);
 
             for (j = 1; j < sqlstmt->select.numwhere; j++) {
@@ -1962,44 +1975,44 @@ void RDBSQLStmtPrint (RDBSQLStmt sqlstmt, FILE *fout)
 
                 fprintf(fout, "        %.*s %s %.*s",
                     sqlstmt->select.fieldslen[j], sqlstmt->select.fields[j],
-                        ">",
+                    rdbsql_exprs[ sqlstmt->select.fieldexprs[j] ],
                     sqlstmt->select.fieldvalslen[j], sqlstmt->select.fieldvals[j]);
             }
         }
 
         if (sqlstmt->select.offset) {
-            fprintf(fout, "\n  OFFSET %"PRIu64, sqlstmt->select.offset);
+            fprintf(fout, "\n    OFFSET %"PRIu64, sqlstmt->select.offset);
         }
 
         if (sqlstmt->select.limit) {
-            fprintf(fout, "\n  LIMIT %"PRIu32, sqlstmt->select.limit);
+            fprintf(fout, "\n    LIMIT %"PRIu32, sqlstmt->select.limit);
         }
 
-        fprintf(fout, ";\n");
+        fprintf(fout, "\n");
         break;
 
     case RDBSQL_UPSERT:
         fprintf(fout, "  UPSERT INTO %s.%s ", sqlstmt->upsert.tablespace, sqlstmt->upsert.tablename);
 
         if (sqlstmt->upsert.numfields) {
-            fprintf(fout, "(\n    %.*s", sqlstmt->upsert.fieldnameslen[0], sqlstmt->upsert.fieldnames[0]);
+            fprintf(fout, "(\n      %.*s", sqlstmt->upsert.fieldnameslen[0], sqlstmt->upsert.fieldnames[0]);
 
             for (j = 1; j < sqlstmt->upsert.numfields; j++) {
-                fprintf(fout, ",\n    %.*s", sqlstmt->upsert.fieldnameslen[j], sqlstmt->upsert.fieldnames[j]);
+                fprintf(fout, ",\n      %.*s", sqlstmt->upsert.fieldnameslen[j], sqlstmt->upsert.fieldnames[j]);
             }
         }
 
         if (*sqlstmt->upsert.fieldvalues) {
-            fprintf(fout, " VALUES (\n    %.*s", sqlstmt->upsert.fieldvalueslen[0], sqlstmt->upsert.fieldvalues[0]);
+            fprintf(fout, "\n    VALUES (\n      %.*s", sqlstmt->upsert.fieldvalueslen[0], sqlstmt->upsert.fieldvalues[0]);
 
             for (j = 1; j < sqlstmt->upsert.numfields; j++) {
-                fprintf(fout, ",\n    %.*s", sqlstmt->upsert.fieldvalueslen[j], sqlstmt->upsert.fieldvalues[j]);
+                fprintf(fout, ",\n      %.*s", sqlstmt->upsert.fieldvalueslen[j], sqlstmt->upsert.fieldvalues[j]);
             }
         }
-        fprintf(fout, "\n  )");
+        fprintf(fout, "\n    )");
 
         if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_INSERT) {
-            fprintf(fout, ";\n");
+            fprintf(fout, "\n");
         } else if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_IGNORE) {
             fprintf(fout, " ON DUPLICATE KEY IGNORE;\n");
         } else if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_UPDATE) {
@@ -2013,10 +2026,11 @@ void RDBSQLStmtPrint (RDBSQLStmt sqlstmt, FILE *fout)
                     sqlstmt->upsert.updcolnameslen[j], sqlstmt->upsert.updcolnames[j],
                     sqlstmt->upsert.updcolvalueslen[j], sqlstmt->upsert.updcolvalues[j]);
             }
-            fprintf(fout, ";\n");
-        } else if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_SELECT) {
             fprintf(fout, "\n");
+        } else if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_SELECT) {
+            fprintf(fout, "  (\n");
             RDBSQLStmtPrint(sqlstmt->upsert.selectstmt, fout);
+            fprintf(fout, "  )\n");
         }
         break;
 
@@ -2079,10 +2093,18 @@ void RDBSQLStmtPrint (RDBSQLStmt sqlstmt, FILE *fout)
         fprintf(fout, ")");
 
         if (*sqlstmt->create.tablecomment) {
-            fprintf(fout, "\n  ) COMMENT '%s';\n", sqlstmt->create.tablecomment);
+            fprintf(fout, "\n  ) COMMENT '%s'\n", sqlstmt->create.tablecomment);
         } else {
-            fprintf(fout, "\n  );\n");
+            fprintf(fout, "\n  )\n");
         }
+        break;
+
+    case RDBSQL_DROP_TABLE:
+        fprintf(fout, "  DROP TABLE %s.%s\n", sqlstmt->droptable.tablespace, sqlstmt->droptable.tablename);
+        break;
+
+    case RDBSQL_DESC_TABLE:
+        fprintf(fout, "  DESC %s.%s\n", sqlstmt->desctable.tablespace, sqlstmt->desctable.tablename);
         break;
 
     default:
@@ -2172,7 +2194,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
 
                             // here we found existed key, then set its value use below command:
                             //   "hmset key field1 value1 field2 value2"
-                            replyUpdate = RedisExecCommand(ctx, sqlstmt->upsert.argcUpd, sqlstmt->upsert.argvUpd, sqlstmt->upsert.argvlenUpd);
+                            replyUpdate = RedisExecCommandArgv(ctx, sqlstmt->upsert.argcUpd, sqlstmt->upsert.argvUpd, sqlstmt->upsert.argvlenUpd);
 
                             if (! RedisCheckReplyStatus(replyUpdate, "OK", 2)) {
                                 printf("(%s:%d) TODO: fail to update key: %.*s - (%s) \n", __FILE__, __LINE__, (int)reply->len, reply->str, ctx->errmsg);
@@ -2184,7 +2206,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                             sqlstmt->upsert.argvNew[1] = reply->str;
                             sqlstmt->upsert.argvlenNew[1] = reply->len;
 
-                            replyUpdate = RedisExecCommand(ctx, sqlstmt->upsert.argcNew, sqlstmt->upsert.argvNew, sqlstmt->upsert.argvlenNew);
+                            replyUpdate = RedisExecCommandArgv(ctx, sqlstmt->upsert.argcNew, sqlstmt->upsert.argvNew, sqlstmt->upsert.argvlenNew);
 
                             if (! RedisCheckReplyStatus(replyUpdate, "OK", 2)) {
                                 printf("(%s:%d) TODO: fail to update key: %.*s - (%s) \n", __FILE__, __LINE__, (int)reply->len, reply->str, ctx->errmsg);
@@ -2214,7 +2236,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                 sqlstmt->upsert.argvNew[1] = sqlstmt->upsert.rkpattern.str;
                 sqlstmt->upsert.argvlenNew[1] = sqlstmt->upsert.rkpattern.length;
 
-                replyNew = RedisExecCommand(ctx, sqlstmt->upsert.argcNew, sqlstmt->upsert.argvNew, sqlstmt->upsert.argvlenNew);
+                replyNew = RedisExecCommandArgv(ctx, sqlstmt->upsert.argcNew, sqlstmt->upsert.argvNew, sqlstmt->upsert.argvlenNew);
                 if (! RedisCheckReplyStatus(replyNew, "OK", 2)) {
                     printf("(%s:%d) TODO: fail to insert key: %.*s - (%s)\n",
                         __FILE__, __LINE__,
@@ -2502,20 +2524,22 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
 }
 
 
-RDBAPI_RESULT RDBCtxExecuteSql (RDBCtx ctx, const RDBBlob_t *sqlblob, RDBResultMap *outResultMap)
+RDBAPI_RESULT RDBCtxExecuteSql (RDBCtx ctx, RDBZString sqlstr, RDBResultMap *outResultMap)
 {
     RDBResultMap resultmap = NULL;
     RDBSQLStmt sqlstmt = NULL;
 
     *outResultMap = NULL;
 
-    if (RDBSQLStmtCreate(ctx, sqlblob->str, sqlblob->length, &sqlstmt) != RDBAPI_SUCCESS) {
+    if (RDBSQLStmtCreate(ctx, sqlstr->str, sqlstr->len, &sqlstmt) != RDBAPI_SUCCESS) {
         goto ret_error;
     }
 
     if (ctx->env->verbose) {
-        // VERBOSE ON
+        fprintf(stdout, "# VERBOSE ON\n");
         RDBSQLStmtPrint(sqlstmt, stdout);
+        fprintf(stdout, "  ;\n");
+        fflush(stdout);
     }
 
     if (sqlstmt->stmt < RDBENV_COMMAND_START) {
@@ -2539,22 +2563,26 @@ ret_error:
 RDBAPI_RESULT RDBCtxExecuteFile (RDBCtx ctx, const char *scriptfile, RDBResultMap *outResultMap)
 {
     FILE * fp;
-    ub8 offset;
 
     if ((fp = fopen(scriptfile, "r")) != NULL) {
         int len;
-        char line[256];
+        char line[4096];
+
+        int num = 1;
+        char key[30];
+        int keylen;
+
+        RDBResultMap hResultMap = NULL;
+        const char *colnames[] = {"results", 0};
+
+        RDBResultMapCreate(scriptfile, colnames, NULL, 1, &hResultMap);
 
         RDBBlob_t sqlblob;
-
-        int nmaps = 0;
-        int mapsz = 256;
-
-        sqlblob.maxsz = 4096;
+        sqlblob.maxsz = sizeof(line) * 2;
         sqlblob.length = 0;
         sqlblob.str = RDBMemAlloc(sqlblob.maxsz);
 
-        while ((len = cstr_readline (fp, line, 255)) != -1) {
+        while ((len = cstr_readline(fp, line, sizeof(line) - 1)) != -1) {
             if (len > 0 && line[0] != '#') {
                 char *endp = strrchr(line, ';');
                 if (endp) {
@@ -2566,19 +2594,25 @@ RDBAPI_RESULT RDBCtxExecuteFile (RDBCtx ctx, const char *scriptfile, RDBResultMa
                 sqlblob.length += len;
 
                 if (sqlblob.maxsz - sqlblob.length < sizeof(line)) {
-                    sqlblob.str = RDBMemRealloc(sqlblob.str, sqlblob.maxsz, sqlblob.maxsz + sizeof(line) * 4);
-                    sqlblob.maxsz += sizeof(line) * 4;
+                    sqlblob.str = RDBMemRealloc(sqlblob.str, sqlblob.maxsz, sqlblob.maxsz + sizeof(line) * 2);
+                    sqlblob.maxsz += sizeof(line) * 2;
                 }
 
                 if (endp) {
-                    RDBResultMap resultMap = NULL;
-                    offset = RDBCtxExecuteSql(ctx, &sqlblob, &resultMap);
-                    //DEL??resultMaps[nmaps++] = resultMap;
+                    RDBResultMap resultmap = NULL;
+                    RDBZString sqlstr = RDBZStringNew(sqlblob.str, sqlblob.length);
 
-                    if (nmaps == mapsz) {
-                        //DEL??resultMaps = (RDBResultMap *) RDBMemRealloc(resultMaps, sizeof(RDBResultMap) * mapsz, sizeof(RDBResultMap) * (mapsz + 256));
-                        mapsz += 256;
+                    //$hmget ...
+
+                    if (RDBCtxExecuteSql(ctx, sqlstr, &resultmap) == RDBAPI_SUCCESS) {
+                        RDBRow row = NULL;
+                        keylen = snprintf_chkd_V1(key, sizeof(key), "resultmap(%d)", num++);
+                        RDBRowNew(hResultMap, key, keylen, &row);
+                        RDBCellSetResult(RDBRowCell(row, 0), resultmap);
+                        RDBResultMapInsertRow(hResultMap, row);
                     }
+
+                    RDBZStringFree(sqlstr);
 
                     sqlblob.length = 0;
                     bzero(sqlblob.str, sqlblob.maxsz);
@@ -2587,19 +2621,25 @@ RDBAPI_RESULT RDBCtxExecuteFile (RDBCtx ctx, const char *scriptfile, RDBResultMa
         }
 
         if (sqlblob.length > 0) {
-            RDBResultMap resultMap = NULL;
-            if (RDBCtxExecuteSql(ctx, &sqlblob, &resultMap) == RDBAPI_SUCCESS) {
+            RDBResultMap resultmap = NULL;
+            RDBZString sqlstr = RDBZStringNew(sqlblob.str, sqlblob.length);
 
+            if (RDBCtxExecuteSql(ctx, sqlstr, &resultmap) == RDBAPI_SUCCESS) {
+                RDBRow row = NULL;
+                keylen = snprintf_chkd_V1(key, sizeof(key), "resultmap(%d)", num++);
+                RDBRowNew(hResultMap, key, keylen, &row);
+                RDBCellSetResult(RDBRowCell(row, 0), resultmap);
+                RDBResultMapInsertRow(hResultMap, row);
             }
-            //DEL??resultMaps[nmaps++] = resultMap;
+
+            RDBZStringFree(sqlstr);
         }
 
         RDBMemFree(sqlblob.str);
+
         fclose(fp);
 
-        //TODO:
-        outResultMap = NULL;
-
+        *outResultMap = hResultMap;
         return RDBAPI_SUCCESS;
     }
 
