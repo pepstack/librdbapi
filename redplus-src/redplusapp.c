@@ -283,7 +283,7 @@ int main(int argc, const char *argv[])
 
 void redplusExecuteCommand (RDBCtx ctx, const char *command, const char *output)
 {
-    printf("# RedisExecCommand: %s;\n", command, RDBCtxErrMsg(ctx));
+    printf("# RedisExecCommand: %s\n", command);
 
     RDBCtxNode ctxnode = NULL;
     redisReply *reply = RedisExecCommand(ctx, command, &ctxnode);
