@@ -605,6 +605,7 @@ void RDBCellClean (RDBCell cell)
 extern void RDBCellPrint (RDBCell cell, FILE *fout, int colwidth)
 {
     if (colwidth > 0) {
+        int vlen;
         char valbuf[RDB_KEY_VALUE_SIZE] = {0};
 
         char format[20] = {0};
@@ -618,20 +619,20 @@ extern void RDBCellPrint (RDBCell cell, FILE *fout, int colwidth)
             fprintf(fout, format, (int) cell->reply->len, cell->reply->str);
             break;
         case RDB_CELLTYPE_BINARY:
-            snprintf_chkd_V1(valbuf, sizeof(valbuf), "(@BINARY:%"PRIu32")", cell->bin->sz);
+            vlen = snprintf_chkd_V1(valbuf, sizeof(valbuf), "(@BINARY:%"PRIu32")", cell->bin->sz);
 
-            fprintf(fout, format, valbuf);
+            fprintf(fout, format, vlen, valbuf);
             break;
         case RDB_CELLTYPE_RESULTMAP:
-            snprintf_chkd_V1(valbuf, sizeof(valbuf), "(@RESULTMAP:%.*s)",
+            vlen = snprintf_chkd_V1(valbuf, sizeof(valbuf), "(@RESULTMAP:%.*s)",
                 RDBZSTRLEN(RDBResultMapTitle(cell->resultmap)),
                 RDBCZSTR(RDBResultMapTitle(cell->resultmap))
             );
 
-            fprintf(fout, format, valbuf);
+            fprintf(fout, format, vlen, valbuf);
             break;
         default:
-            fprintf(fout, " (@INVALID) ");
+            fprintf(fout, format, 10, "(@INVALID)");
             break;
         }
     } else {
@@ -648,8 +649,7 @@ extern void RDBCellPrint (RDBCell cell, FILE *fout, int colwidth)
         case RDB_CELLTYPE_RESULTMAP:
             fprintf(fout, " (@RESULTMAP:%.*s) ",
                 RDBZSTRLEN(RDBResultMapTitle(cell->resultmap)),
-                RDBCZSTR(RDBResultMapTitle(cell->resultmap))
-            );
+                RDBCZSTR(RDBResultMapTitle(cell->resultmap)));
             break;
         default:
             fprintf(fout, " (@INVALID) ");

@@ -42,10 +42,10 @@ static RDBResultMap ResultMapBuildDescTable (const char *tablespace, const char 
     int j, len;
     char buf[RDB_KEY_VALUE_SIZE];
 
-    RDBResultMap tablemap;
-    RDBResultMap fieldsmap;
+    RDBResultMap tablemap = NULL;
+    RDBResultMap fieldsmap = NULL;
 
-    RDBRow tablerow;
+    RDBRow tablerow = NULL;
 
     const char *tblnames[] = {
         "tablespace",
@@ -74,19 +74,29 @@ static RDBResultMap ResultMapBuildDescTable (const char *tablespace, const char 
 
     snprintf_chkd_V1(buf, sizeof(buf), "{%s::%s}", tablespace, tablename);
     res = RDBResultMapCreate(buf, tblnames, tblnameslen, 6, &tablemap);
-    //TODO: check res
+    if (res != RDBAPI_SUCCESS) {
+        fprintf(stderr, "(%s:%d) RDBResultMapCreate('%s') failed", __FILE__, __LINE__, buf);
+        exit(EXIT_FAILURE);
+    }
 
     res = RDBResultMapCreate("=>fields", fldnames, fldnameslen, 7, &fieldsmap);
-    //TODO: check res
+    if (res != RDBAPI_SUCCESS) {
+        fprintf(stderr, "(%s:%d) RDBResultMapCreate('=>fields') failed", __FILE__, __LINE__);
+        exit(EXIT_FAILURE);
+    }
 
-    res = RDBRowNew(tablemap, tabledes->table_rowkey, -1, &tablerow);
-    //TODO: check res
+    res = RDBRowNew(tablemap, tabledes->table_rowkey, sizeof(tabledes->table_rowkey) - 1, &tablerow);
+    if (res != RDBAPI_SUCCESS) {
+        fprintf(stderr, "(%s:%d) RDBRowNew('%s') failed", __FILE__, __LINE__, tabledes->table_rowkey);
+        exit(EXIT_FAILURE);
+    }
 
     RDBCellSetString(RDBRowCell(tablerow, 0), tablespace, -1);
     RDBCellSetString(RDBRowCell(tablerow, 1), tablename, -1);
     RDBCellSetString(RDBRowCell(tablerow, 2), tabledes->table_datetime, -1);
 
-    len = snprintf_chkd_V1(buf, sizeof(buf), "%"PRIu64, tabledes->table_timestamp);
+    len = snprintf_chkd_V1(buf, sizeof(buf), "%"PRIu64"", tabledes->table_timestamp);
+
     RDBCellSetString(RDBRowCell(tablerow, 3), buf, len);
     RDBCellSetString(RDBRowCell(tablerow, 4), tabledes->table_comment, -1);
     RDBCellSetResult(RDBRowCell(tablerow, 5), fieldsmap);
