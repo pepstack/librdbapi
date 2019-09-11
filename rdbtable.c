@@ -193,9 +193,7 @@ RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx, RDBSQLStmt sqlstmt, RDBResultMap *o
     filter->patternprefixlen = snprintf_chkd_V1(filter->keypattern, sizeof(filter->keypattern), "{%s::%s", sqlstmt->select.tablespace, sqlstmt->select.tablename);
     offsz = filter->patternprefixlen++;
 
-    // set HMGET rather than SCAN default
-    filter->numrkpattern = filter->rowkeyids[0];
-
+    // set $HMGET rather than SCAN default
     for (rowkeyid = 1; rowkeyid <= filter->rowkeyids[0]; rowkeyid++) {
         RDBFilterNode rknode = filter->rowkeyfilters[rowkeyid];
 
@@ -204,6 +202,10 @@ RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx, RDBSQLStmt sqlstmt, RDBResultMap *o
         if (rknode && ! rknode->next && rknode->expr != RDBFIL_IGNORE) {
             switch (rknode->expr) {
             case RDBFIL_EQUAL:
+                n = snprintf_chkd_V1(filter->keypattern + offsz, sizeof(filter->keypattern) - offsz, ":%.*s", rknode->destlen, rknode->dest);
+                filter->use_hmget++;
+                break;
+
             case RDBFIL_MATCH:
                 n = snprintf_chkd_V1(filter->keypattern + offsz, sizeof(filter->keypattern) - offsz, ":%.*s", rknode->destlen, rknode->dest);
                 break;
@@ -227,12 +229,15 @@ RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx, RDBSQLStmt sqlstmt, RDBResultMap *o
 
         if (! n) {
             n = snprintf_chkd_V1(filter->keypattern + offsz, sizeof(filter->keypattern) - offsz, ":*");
-            filter->numrkpattern--;
         }
 
         offsz += n;
     }
     offsz += snprintf_chkd_V1(filter->keypattern + offsz, sizeof(filter->keypattern) - offsz, "}");
+
+    if (filter->use_hmget != filter->rowkeyids[0]) {
+        filter->use_hmget = 0;
+    }
 
     if (offsz >= sizeof(filter->keypattern) || filter->keypattern[offsz - 1] != '}') {
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "RDBAPI_ERR_BADARG: invalid key pattern: '%.*s'", offsz, filter->keypattern);
@@ -269,7 +274,7 @@ RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx, RDBSQLStmt sqlstmt, RDBResultMap *o
     sqlstmt->select.limit = LmtRows;
 
     if (ctx->env->verbose) {
-        if (filter->numrkpattern == filter->rowkeyids[0]) {
+        if (filter->use_hmget) {
             printf("$HMGET %.*s", filter->patternlen, filter->keypattern);
             for (j = 0; j < filter->getfieldids[0]; j++) {
                 printf(" %.*s", (int) filter->getfieldnameslen[j], filter->getfieldnames[j]);
@@ -430,7 +435,7 @@ ub8 RDBTableScanNext (RDBResultMap resultmap, ub8 OffRows, ub4 limit)
 
     RDBCtx ctx = resultmap->ctx;
 
-    if (resultmap->filter->numrkpattern == resultmap->filter->rowkeyids[0]) {
+    if (resultmap->filter->use_hmget) {
         if (RedisExistsKey(ctx, resultmap->filter->keypattern, resultmap->filter->patternlen) == RDBAPI_TRUE) {
             // use HMGET rather than SCAN
             if (RedisHMGetLen(ctx, resultmap->filter->keypattern, resultmap->filter->patternlen,

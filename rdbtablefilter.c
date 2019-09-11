@@ -149,11 +149,9 @@ int RDBTableFilterRowkeyVals(RDBTableFilter filter, int prefixlen, char *rowkeys
         rkvalslen[i] = (int)(end - str);
 
         if (filter) {
-            if (filter->numrkpattern != filter->rowkeyids[0]) {
-                // scan match key needs filter
-                if (RDBFilterNodeExpr(filter->rowkeyfilters[i + 1], rkvals[i], rkvalslen[i]) != RDBTABLE_FILTER_ACCEPT) {
-                    return (-1);
-                }
+            // scan match key needs filter
+            if (RDBFilterNodeExpr(filter->rowkeyfilters[i + 1], rkvals[i], rkvalslen[i]) != RDBTABLE_FILTER_ACCEPT) {
+                return (-1);
             }
         }
 
@@ -169,10 +167,8 @@ int RDBTableFilterRowkeyVals(RDBTableFilter filter, int prefixlen, char *rowkeys
     rkvalslen[i] = (int) (&rowkeystr[rowkeylen - 1] - str);
 
     if (filter) {
-        if (filter->numrkpattern != filter->rowkeyids[0]) {
-            if (RDBFilterNodeExpr(filter->rowkeyfilters[i+1], rkvals[i], rkvalslen[i]) != RDBTABLE_FILTER_ACCEPT) {
-                return (-1);
-            }
+        if (RDBFilterNodeExpr(filter->rowkeyfilters[i+1], rkvals[i], rkvalslen[i]) != RDBTABLE_FILTER_ACCEPT) {
+            return (-1);
         }
     }
 

@@ -93,8 +93,8 @@ typedef struct _RDBTableFilter_t
     // max field id (1-based) for select getfieldids
     int selfieldnum;
 
-    // number of rowkeys in keypattern
-    int numrkpattern;
+    // use $HMGET than SCAN
+    int use_hmget;
 
     // rowkey pattern used in SCAN cursor MATCH $keypattern
     int patternprefixlen;
