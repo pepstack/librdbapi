@@ -239,78 +239,105 @@ ub4 RDBResultMapRows (RDBResultMap resultmap)
     return 0;
 }
 
-/*
--------------+-----------+----------+-----------+---------+---------
-[ tablespace | tablename | datetime | timestamp | comment | fields ]
--------------+-----------+----------+-----------+---------+---------
-xsdb | test22 | 2019-09-04 19:30:40 | 0 | test table | (@RESULTMAP@fields:1)
 
-(RESULTMAP@fields:1)
-*/
+static void ResultMapPrintHeadLine (RDBResultMap resultmap, FILE *fout, int numcols, int numrkcols)
+{
+    int len, col = 0;
+
+    for (; col < numcols; col++) {
+        len = RDBZSTRLEN(RDBResultMapColHeadName(resultmap, col));
+
+        if (col < numrkcols) {
+            if (col == 0) {
+                fprintf(fout, "---");            
+                while (len-- > 0) fprintf(fout, "-");
+            } else {
+                fprintf(fout, "--+---");
+                while (len-- > 0) fprintf(fout, "-");
+            }
+        } else {
+            if (col == 0) {
+                fprintf(fout, "--");            
+                while (len-- > 0) fprintf(fout, "-");
+            } else {
+                fprintf(fout, "--+--");
+                while (len-- > 0) fprintf(fout, "-");
+            }
+        }
+    }
+
+    if (numcols > 0) {
+        fprintf(fout, "--\n");
+    }
+}
+
+
+static void ResultMapPrintTableHead (RDBResultMap resultmap, FILE *fout)
+{
+    int len, col = 0;
+
+    int numcols = RDBResultMapColHeads(resultmap);
+    int numrkcols = resultmap->filter? resultmap->filter->rowkeyids[0] : 0;
+
+    ResultMapPrintHeadLine(resultmap, fout, numcols, numrkcols);
+
+    for (col = 0; col < numcols; col++) {
+        RDBZString zstr = RDBResultMapColHeadName(resultmap, col);
+        len = RDBZSTRLEN(zstr);
+
+        if (col == 0) {
+            if (col < numrkcols) {
+                fprintf(fout, "[ .%.*s", len, RDBCZSTR(zstr));
+                len += len + 2;
+            } else {
+                fprintf(fout, "[ %.*s", len, RDBCZSTR(zstr));
+                len += len + 2;
+            }
+        } else {
+            if (col < numrkcols) {
+                fprintf(fout, "  |  .%.*s", len, RDBCZSTR(zstr));
+                len += len + 3;
+            } else {
+                fprintf(fout, "  |  %.*s", len, RDBCZSTR(zstr));
+                len += len + 3;
+            }
+        }
+    }
+
+    if (numcols > 0) {
+        fprintf(fout, " ]\n");
+    }
+
+    ResultMapPrintHeadLine(resultmap, fout, numcols, numrkcols);
+
+    fflush(fout);    
+}
 
 
 void RDBResultMapPrint (RDBCtx ctx, RDBResultMap resultmap, FILE *fout)
 {
-    int col, chlen;
+    int col;
 
     RDBRow row;
     RDBCell cell;
     RDBRowIter rowiter;
 
+    int numrkcols = 0;
+
+    if (resultmap->filter) {
+        numrkcols = resultmap->filter->rowkeyids[0];
+    }
+
     int verbose = ctx->env->verbose;
     char delimt = ctx->env->delimiter;
 
-    fprintf(fout, "%.*s\n", (int) resultmap->title->len, resultmap->title->str);
-
-    // print table head
     int numcols = RDBResultMapColHeads(resultmap);
 
-    for (col = 0; col < numcols; col++) {
-        chlen = (int) RDBZStringLen(RDBResultMapColHeadName(resultmap, col));
+    fprintf(fout, "%.*s\n", RDBZSTRLEN(resultmap->title), RDBCZSTR(resultmap->title));
 
-        if (col == 0) {
-            fprintf(fout, "--");            
-            while (chlen-- > 0) fprintf(fout, "-");
-        } else {
-            fprintf(fout, "-+-");
-            while (chlen-- > 0) fprintf(fout, "-");
-        }
-    }
-    if (numcols > 0) {
-        fprintf(fout, "--\n");
-    }
+    ResultMapPrintTableHead(resultmap, fout);
 
-    for (col = 0; col < numcols; col++) {
-        RDBZString zstr = RDBResultMapColHeadName(resultmap, col);
-        if (col == 0) {
-            fprintf(fout, "[ %*s", (int) RDBZStringLen(zstr), RDBZStringAddr(zstr));
-            chlen += (int) RDBZStringLen(zstr) + 2;
-        } else {
-            fprintf(fout, " | %*s", (int) RDBZStringLen(zstr), RDBZStringAddr(zstr));
-            chlen += (int) RDBZStringLen(zstr) + 3;
-        }
-    }
-    if (numcols > 0) {
-        fprintf(fout, " ]\n");
-    }
-
-    for (col = 0; col < numcols; col++) {
-        chlen = (int) RDBZStringLen(RDBResultMapColHeadName(resultmap, col));
-
-        if (col == 0) {
-            fprintf(fout, "--");            
-            while (chlen-- > 0) fprintf(fout, "-");
-        } else {
-            fprintf(fout, "-+-");
-            while (chlen-- > 0) fprintf(fout, "-");
-        }
-    }
-    if (numcols > 0) {
-        fprintf(fout, "--\n");
-    }
-    fflush(fout);
-
-    // print body rows
+    // print table body rows
     rowiter = RDBResultMapFirstRow(resultmap);
     while (rowiter) {
         row = RDBRowIterGetRow(rowiter);
@@ -322,7 +349,11 @@ void RDBResultMapPrint (RDBCtx ctx, RDBResultMap resultmap, FILE *fout)
                 fprintf(fout, "%c", delimt);
             }
 
-            RDBCellPrint(cell, fout);
+            if (col < numrkcols) {
+                RDBCellPrint(cell, fout, RDBZSTRLEN(resultmap->colheadnames[col]) + 1);
+            } else {
+                RDBCellPrint(cell, fout, RDBZSTRLEN(resultmap->colheadnames[col]));
+            }
         }
 
         fprintf(fout, "\n");
@@ -331,7 +362,7 @@ void RDBResultMapPrint (RDBCtx ctx, RDBResultMap resultmap, FILE *fout)
         for (col = 0; col < numcols; col++) {
             cell = RDBRowCell(row, col);
 
-            if (RDBCellGetValue(cell, NULL)== RDB_CELLTYPE_RESULTMAP) {
+            if (RDBCellGetValue(cell, NULL) == RDB_CELLTYPE_RESULTMAP) {
                 RDBResultMapPrint(ctx, RDBCellGetResult(cell), fout);
             }
         }
@@ -571,24 +602,58 @@ void RDBCellClean (RDBCell cell)
 }
 
 
-extern void RDBCellPrint (RDBCell cell, FILE *fout)
+extern void RDBCellPrint (RDBCell cell, FILE *fout, int colwidth)
 {
-    switch (cell->type) {
-    case RDB_CELLTYPE_ZSTRING:
-        fprintf(fout, " %.*s ", (int) cell->zstr->len, cell->zstr->str);
-        break;
-    case RDB_CELLTYPE_REPLY:
-        fprintf(fout, " %.*s ", (int) cell->reply->len, cell->reply->str);
-        break;
-    case RDB_CELLTYPE_BINARY:
-        fprintf(fout, " (@BINARY:%"PRIu32") ", cell->bin->sz);
-        break;
-    case RDB_CELLTYPE_RESULTMAP:
-        fprintf(fout, " (@RESULTMAP:%.*s) ",
-            (int) RDBZStringLen(RDBResultMapTitle(cell->resultmap)), RDBZStringAddr(RDBResultMapTitle(cell->resultmap)));
-        break;
-    default:
-        fprintf(fout, " (@INVALID) ");
-        break;
+    if (colwidth > 0) {
+        char valbuf[RDB_KEY_VALUE_SIZE] = {0};
+
+        char format[20] = {0};
+        snprintf_chkd_V1(format, sizeof(format), " %%-%d.*s ", colwidth+2);
+
+        switch (cell->type) {
+        case RDB_CELLTYPE_ZSTRING:
+            fprintf(fout, format, RDBZSTRLEN(cell->zstr), RDBCZSTR(cell->zstr));
+            break;
+        case RDB_CELLTYPE_REPLY:
+            fprintf(fout, format, (int) cell->reply->len, cell->reply->str);
+            break;
+        case RDB_CELLTYPE_BINARY:
+            snprintf_chkd_V1(valbuf, sizeof(valbuf), "(@BINARY:%"PRIu32")", cell->bin->sz);
+
+            fprintf(fout, format, valbuf);
+            break;
+        case RDB_CELLTYPE_RESULTMAP:
+            snprintf_chkd_V1(valbuf, sizeof(valbuf), "(@RESULTMAP:%.*s)",
+                RDBZSTRLEN(RDBResultMapTitle(cell->resultmap)),
+                RDBCZSTR(RDBResultMapTitle(cell->resultmap))
+            );
+
+            fprintf(fout, format, valbuf);
+            break;
+        default:
+            fprintf(fout, " (@INVALID) ");
+            break;
+        }
+    } else {
+        switch (cell->type) {
+        case RDB_CELLTYPE_ZSTRING:
+            fprintf(fout, " %.*s ", RDBZSTRLEN(cell->zstr), RDBCZSTR(cell->zstr));
+            break;
+        case RDB_CELLTYPE_REPLY:
+            fprintf(fout, " %.*s ", (int) cell->reply->len, cell->reply->str);
+            break;
+        case RDB_CELLTYPE_BINARY:
+            fprintf(fout, " (@BINARY:%"PRIu32") ", cell->bin->sz);
+            break;
+        case RDB_CELLTYPE_RESULTMAP:
+            fprintf(fout, " (@RESULTMAP:%.*s) ",
+                RDBZSTRLEN(RDBResultMapTitle(cell->resultmap)),
+                RDBCZSTR(RDBResultMapTitle(cell->resultmap))
+            );
+            break;
+        default:
+            fprintf(fout, " (@INVALID) ");
+            break;
+        }
     }
 }

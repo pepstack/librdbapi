@@ -154,8 +154,8 @@ int main(int argc, const char *argv[])
     }
 
     if (cluster) {
-        printf("# redis cluster: %s\n", RDBZStringAddr(cluster));
-        RDBEnvCreate(RDBZStringAddr(cluster), ctxtimout, sotimeoms, &env);
+        printf("# redis cluster: %s\n", (const char*)cluster);
+        RDBEnvCreate((const char*)cluster, ctxtimout, sotimeoms, &env);
     } else {
         printf("# load config: %s\n", appcfg);
         RDBEnvCreate(appcfg, ctxtimout, sotimeoms, &env);
@@ -171,13 +171,13 @@ int main(int argc, const char *argv[])
     }
 
     if (command) {
-        redplusExecuteCommand(ctx, RDBZStringAddr(command), RDBZStringAddr(output));
+        redplusExecuteCommand(ctx, RDBCZSTR(command), RDBCZSTR(output));
     }
     if (sqlfile) {
-        redplusExecuteSqlfile(ctx, RDBZStringAddr(sqlfile), RDBZStringAddr(output));
+        redplusExecuteSqlfile(ctx, RDBCZSTR(sqlfile), RDBCZSTR(output));
     }
     if (rdbsql) {
-        redplusExecuteRdbsql(ctx, RDBZStringAddr(rdbsql), RDBZStringAddr(output));
+        redplusExecuteRdbsql(ctx, RDBCZSTR(rdbsql), RDBCZSTR(output));
     }
 
     RDBZStringFree(cluster);
@@ -203,7 +203,7 @@ int main(int argc, const char *argv[])
             char *end;
             const char *line;
 
-            line = CSH_get_input(cache->offset? "+ ":"redplus> ", RDBZStringAddr(cshbuf), RDBZStringLen(cshbuf), &clen);
+            line = CSH_get_input(cache->offset? "+ ":"redplus> ", RDBZSTR(cshbuf), RDBZSTRLEN(cshbuf), &clen);
 
             if (line) {
                 if (clen) {
@@ -242,7 +242,7 @@ int main(int argc, const char *argv[])
                             } else if (*line == '$') {
                                 tm0 = RDBCurrentTime(1, ts0);
 
-                                redplusExecuteCommand(ctx, cstr_Ltrim_whitespace((char*) &line[1]), RDBZStringAddr(output));
+                                redplusExecuteCommand(ctx, cstr_Ltrim_whitespace((char*) &line[1]), RDBCZSTR(output));
 
                                 tm2 = RDBCurrentTime(1, ts2);
 
@@ -251,7 +251,7 @@ int main(int argc, const char *argv[])
                             } else {
                                 tm0 = RDBCurrentTime(1, ts0);
 
-                                redplusExecuteRdbsql(ctx, line, RDBZStringAddr(output));
+                                redplusExecuteRdbsql(ctx, line, RDBCZSTR(output));
 
                                 tm2 = RDBCurrentTime(1, ts2);
 

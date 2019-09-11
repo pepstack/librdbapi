@@ -193,7 +193,11 @@ typedef int RDBAPI_BOOL;
  * RDB Objects
  *
  *********************************************************************/
-typedef struct _RDBZString_t     * RDBZString;
+#define RDBZSTR(zstr)  ((char *)(zstr))
+#define RDBCZSTR(zstr)  ((const char *)(zstr))
+#define RDBZSTRLEN(zstr)  ((int)RDBZStringLen(zstr))
+
+typedef void * RDBZString;
 
 typedef struct _RDBEnv_t         * RDBEnv;
 typedef struct _RDBEnvNode_t     * RDBEnvNode;
@@ -401,14 +405,9 @@ extern RDBBinary RDBBinaryNew (const void *addr, ub4 sz);
 
 extern void RDBBinaryFree (RDBBinary bin);
 
-
 extern RDBZString RDBZStringNew (const char *str, ub4 len);
-
 extern void RDBZStringFree (RDBZString zs);
-
 extern ub4 RDBZStringLen (RDBZString zs);
-
-extern char * RDBZStringAddr (RDBZString zs);
 
 
 /**********************************************************************
@@ -736,7 +735,7 @@ extern redisReply* RDBCellGetReply (RDBCell cell);
 extern RDBResultMap RDBCellGetResult (RDBCell cell);
 
 extern void RDBCellClean (RDBCell cell);
-extern void RDBCellPrint (RDBCell cell, FILE *fout);
+extern void RDBCellPrint (RDBCell cell, FILE *fout, int colwidth);
 
 #if defined(__cplusplus)
 }

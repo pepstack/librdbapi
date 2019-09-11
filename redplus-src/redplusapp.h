@@ -215,7 +215,7 @@ void print_usage()
     fprintf(stdout, "  -V, --version               show version.\n\n");
 
     fprintf(stdout, "  -R, --rediscluster=NODES    all nodes of redis cluster. (example: 'authpass@127.0.0.1:7001-7009')\n");
-    fprintf(stdout, "      --ctxtimout=SEC         redis connection timeout in seconds. (default: %s)\n", RDBCTX_TIMEOUT);
+    fprintf(stdout, "      --ctxtimout=SEC         redis connection timeout in seconds. (default: %d)\n", RDBCTX_TIMEOUT);
     fprintf(stdout, "      --sotimeoms=MS          redis socket timeout in milliseconds. (default: %d)\n\n", RDBCTX_SOTIMEOMS);
 
     fprintf(stdout, "  -C, --command=REDISCMD      execute a redis command.\n");

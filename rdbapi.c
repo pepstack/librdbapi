@@ -381,25 +381,27 @@ RDBZString RDBZStringNew (const char *str, ub4 len)
         memcpy(pzs->str, str, len);
     }
 
-    return pzs;
+    return (RDBZString) pzs->str;
 }
 
 
 void RDBZStringFree (RDBZString zs)
 {
-    RDBMemFree(zs);
+    if (zs) {
+        RDBZString_t *pzs = (RDBZString_t *)((char*) zs - sizeof(ub4));
+        RDBMemFree(pzs);
+    }
 }
 
 
 ub4 RDBZStringLen (RDBZString zs)
 {
-    return (zs? zs->len : 0);
-}
-
-
-char * RDBZStringAddr (RDBZString zs)
-{
-    return (zs? zs->str : NULL);
+    if (zs) {
+        RDBZString_t *pzs = (RDBZString_t *)((char*) zs - sizeof(ub4));
+        return pzs->len;
+    } else {
+        return 0;
+    }
 }
 
 

@@ -2531,7 +2531,7 @@ RDBAPI_RESULT RDBCtxExecuteSql (RDBCtx ctx, RDBZString sqlstr, RDBResultMap *out
 
     *outResultMap = NULL;
 
-    if (RDBSQLStmtCreate(ctx, sqlstr->str, sqlstr->len, &sqlstmt) != RDBAPI_SUCCESS) {
+    if (RDBSQLStmtCreate(ctx, RDBCZSTR(sqlstr), RDBZSTRLEN(sqlstr), &sqlstmt) != RDBAPI_SUCCESS) {
         goto ret_error;
     }
 
