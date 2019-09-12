@@ -50,6 +50,10 @@ typedef struct _RDBCell_t
     RDBCellType type;
 
     union {
+        sb8 integer;
+
+        double dblval;
+
         // RDB_COLTYPE_STRING
         RDBZString zstr;
 

@@ -112,10 +112,14 @@ EXPORTS
 	RDBCellSetValue
 	RDBCellGetValue
 	RDBCellSetString
+	RDBCellSetInteger
+	RDBCellSetDouble
 	RDBCellSetBinary
 	RDBCellSetReply
 	RDBCellSetResult
 	RDBCellGetString
+	RDBCellGetInteger
+	RDBCellGetDouble
 	RDBCellGetBinary
 	RDBCellGetReply
 	RDBCellGetResult

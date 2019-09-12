@@ -253,7 +253,7 @@ int RDBFieldDesCheckSet (const char valtypetable[256], const RDBFieldDes_t * fie
 
 int RDBNodeInfoQuery (RDBCtxNode ctxnode, RDBNodeInfoSection section, const char *propname, char propvalue[RDBAPI_PROP_MAXSIZE]);
 
-RDBAPI_RESULT RDBTableScanOnNode (RDBCtxNode ctxnode, RDBTableCursor nodestate, const char *pattern, size_t patternlen, ub4 maxlimit, redisReply **outReply);
+RDBAPI_RESULT RDBTableScanOnNode (RDBCtxNode ctxnode, RDBTableCursor nodestate, const char *pattern, size_t patternlen, ub8 maxlimit, redisReply **outReply);
 
 #if defined(__cplusplus)
 }

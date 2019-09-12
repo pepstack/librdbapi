@@ -78,11 +78,19 @@ extern "C"
 #define RDBSQL_UPSERT_MODE_SELECT     3
 
 
+#define RDBSQL_FUNC_NONE              0
+#define RDBSQL_FUNC_COUNT             1
+
+
 typedef struct _RDBSQLStmt_t
 {
     RDBCtx ctx;
 
     RDBSQLStmtType stmt;
+
+    // 0: none
+    // 1: COUNT(*)
+    int sqlfunc;
 
     union {
         // SELECT and DELETE
@@ -107,7 +115,7 @@ typedef struct _RDBSQLStmt_t
             ub8 offset;
 
             // LIMIT n
-            ub4 limit;
+            ub8 limit;
         } select;
 
         // UPSERT INTO tablespace.tablename(fieldnames...) VALUES(fieldvalues...);

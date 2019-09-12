@@ -479,6 +479,14 @@ RDBCell RDBCellSetValue (RDBCell cell, RDBCellType type, void *value)
         cell->zstr = (RDBZString) value;
         break;
 
+    case RDB_CELLTYPE_INTEGER:
+        cell->integer = (value? (*((sb8 *)value)) : 0);
+        break;
+
+    case RDB_CELLTYPE_DOUBLE:
+        cell->dblval = (value? (*((double *)value)) : 0);
+        break;
+
     case RDB_CELLTYPE_BINARY:
         cell->bin = (RDBBinary) value;
         break;
@@ -509,6 +517,14 @@ RDBCellType RDBCellGetValue (RDBCell cell, void **outvalue)
             *outvalue = (void*) cell->zstr;
             break;
 
+        case RDB_CELLTYPE_INTEGER:
+            *((sb8*) outvalue) = cell->integer;
+            break;
+
+        case RDB_CELLTYPE_DOUBLE:
+            *((double*) outvalue) = cell->dblval;
+            break;
+
         case RDB_CELLTYPE_BINARY:
             *outvalue = (void*) cell->bin;
             break;
@@ -536,6 +552,18 @@ RDBCell RDBCellSetString (RDBCell cell, const char *str, int len)
 }
 
 
+RDBCell RDBCellSetInteger (RDBCell cell, sb8 value)
+{
+    return RDBCellSetValue(cell, RDB_CELLTYPE_INTEGER, (void*) &value);
+}
+
+
+RDBCell RDBCellSetDouble (RDBCell cell, double value)
+{
+    return RDBCellSetValue(cell, RDB_CELLTYPE_DOUBLE, (void*) &value);
+}
+
+
 RDBCell RDBCellSetBinary (RDBCell cell, const void *addr, ub4 sz)
 {
     return RDBCellSetValue(cell, RDB_CELLTYPE_BINARY, (void*) RDBBinaryNew(addr, sz));
@@ -557,6 +585,18 @@ RDBCell RDBCellSetResult (RDBCell cell, RDBResultMap resultmap)
 RDBZString RDBCellGetString (RDBCell cell)
 {
     return cell->zstr;
+}
+
+
+sb8 RDBCellGetInteger (RDBCell cell)
+{
+    return cell->integer;
+}
+
+
+double RDBCellGetDouble (RDBCell cell)
+{
+    return cell->dblval;
 }
 
 
@@ -615,22 +655,32 @@ extern void RDBCellPrint (RDBCell cell, FILE *fout, int colwidth)
         case RDB_CELLTYPE_ZSTRING:
             fprintf(fout, format, RDBZSTRLEN(cell->zstr), RDBCZSTR(cell->zstr));
             break;
+
         case RDB_CELLTYPE_REPLY:
             fprintf(fout, format, (int) cell->reply->len, cell->reply->str);
             break;
+ 
         case RDB_CELLTYPE_BINARY:
             vlen = snprintf_chkd_V1(valbuf, sizeof(valbuf), "(@BINARY:%"PRIu32")", cell->bin->sz);
-
             fprintf(fout, format, vlen, valbuf);
             break;
+
         case RDB_CELLTYPE_RESULTMAP:
             vlen = snprintf_chkd_V1(valbuf, sizeof(valbuf), "(@RESULTMAP:%.*s)",
                 RDBZSTRLEN(RDBResultMapTitle(cell->resultmap)),
                 RDBCZSTR(RDBResultMapTitle(cell->resultmap))
             );
-
             fprintf(fout, format, vlen, valbuf);
             break;
+
+        case RDB_CELLTYPE_INTEGER:
+            fprintf(fout, "%"PRId64, cell->integer);
+            break;
+
+        case RDB_CELLTYPE_DOUBLE:
+            fprintf(fout, "%lf", cell->dblval);
+            break;
+
         default:
             fprintf(fout, format, 10, "(@INVALID)");
             break;
@@ -640,17 +690,29 @@ extern void RDBCellPrint (RDBCell cell, FILE *fout, int colwidth)
         case RDB_CELLTYPE_ZSTRING:
             fprintf(fout, " %.*s ", RDBZSTRLEN(cell->zstr), RDBCZSTR(cell->zstr));
             break;
+
         case RDB_CELLTYPE_REPLY:
             fprintf(fout, " %.*s ", (int) cell->reply->len, cell->reply->str);
             break;
+
         case RDB_CELLTYPE_BINARY:
             fprintf(fout, " (@BINARY:%"PRIu32") ", cell->bin->sz);
             break;
+
         case RDB_CELLTYPE_RESULTMAP:
             fprintf(fout, " (@RESULTMAP:%.*s) ",
                 RDBZSTRLEN(RDBResultMapTitle(cell->resultmap)),
                 RDBCZSTR(RDBResultMapTitle(cell->resultmap)));
             break;
+
+        case RDB_CELLTYPE_INTEGER:
+            fprintf(fout, "%"PRId64, cell->integer);
+            break;
+
+        case RDB_CELLTYPE_DOUBLE:
+            fprintf(fout, "%lf", cell->dblval);
+            break;
+
         default:
             fprintf(fout, " (@INVALID) ");
             break;

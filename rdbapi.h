@@ -193,8 +193,8 @@ typedef int RDBAPI_BOOL;
  * RDB Objects
  *
  *********************************************************************/
-#define RDBZSTR(zstr)  ((char *)(zstr))
-#define RDBCZSTR(zstr)  ((const char *)(zstr))
+#define RDBZSTR(zstr)     ((char *)(zstr))
+#define RDBCZSTR(zstr)    ((const char *)(zstr))
 #define RDBZSTRLEN(zstr)  ((int)RDBZStringLen(zstr))
 
 typedef void * RDBZString;
@@ -269,9 +269,11 @@ typedef enum
 {
     RDB_CELLTYPE_INVALID     = 0
     ,RDB_CELLTYPE_ZSTRING    = 1
-    ,RDB_CELLTYPE_BINARY     = 2  // tpl_bin
-    ,RDB_CELLTYPE_REPLY      = 3  // reply string
-    ,RDB_CELLTYPE_RESULTMAP  = 4  // nested result map
+    ,RDB_CELLTYPE_INTEGER    = 2
+    ,RDB_CELLTYPE_DOUBLE     = 3
+    ,RDB_CELLTYPE_BINARY     = 4  // tpl_bin
+    ,RDB_CELLTYPE_REPLY      = 5  // reply string
+    ,RDB_CELLTYPE_RESULTMAP  = 6  // nested result map
 } RDBCellType;
 
 
@@ -652,7 +654,7 @@ extern RDBAPI_RESULT RedisIncrFloatField (RDBCtx ctx, const char *key, const cha
  *
  *********************************************************************/
 extern RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx, RDBSQLStmt sqlstmt, RDBResultMap  *outresultmap);
-extern ub8 RDBTableScanNext (RDBResultMap hResultMap, ub8 offset, ub4 limit);
+extern ub8 RDBTableScanNext (RDBResultMap hResultMap, ub8 offset, ub8 limit);
 extern RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *tablename, const char *tablecomment, int numfields, RDBFieldDes_t *fielddes);
 extern RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *tablename, RDBTableDes_t *tabledes);
 
@@ -723,11 +725,15 @@ extern RDBCell RDBCellSetValue (RDBCell cell, RDBCellType type, void *value);
 extern RDBCellType RDBCellGetValue (RDBCell cell, void **outvalue);
 
 extern RDBCell RDBCellSetString (RDBCell cell, const char *str, int len);
+extern RDBCell RDBCellSetInteger (RDBCell cell, sb8 val);
+extern RDBCell RDBCellSetDouble (RDBCell cell, double val);
 extern RDBCell RDBCellSetBinary (RDBCell cell, const void *addr, ub4 sz);
 extern RDBCell RDBCellSetReply (RDBCell cell, redisReply *replyString);
 extern RDBCell RDBCellSetResult (RDBCell cell, RDBResultMap resultmap);
 
 extern RDBZString RDBCellGetString (RDBCell cell);
+extern sb8 RDBCellGetInteger (RDBCell cell);
+extern double RDBCellGetDouble (RDBCell cell);
 extern RDBBinary RDBCellGetBinary (RDBCell cell);
 extern redisReply* RDBCellGetReply (RDBCell cell);
 extern RDBResultMap RDBCellGetResult (RDBCell cell);

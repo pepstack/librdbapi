@@ -219,7 +219,7 @@ static int parse_table (char *table, char tablespace[RDB_KEY_NAME_MAXLEN + 1], c
 }
 
 
-static int parse_fields (char *fields, char *fieldnames[], int fieldnameslen[])
+static int parse_select_fields (char *fields, char *fieldnames[], int fieldnameslen[])
 {
     char namebuf[RDB_KEY_NAME_MAXLEN * 2 + 1];
 
@@ -239,10 +239,29 @@ static int parse_fields (char *fields, char *fieldnames[], int fieldnameslen[])
         snprintf_chkd_V1(namebuf, RDB_KEY_NAME_MAXLEN * 2, "%s", p);
 
         name = cstr_LRtrim_chr(namebuf, 32);
-
         namelen = RDBSQLNameValidateMaxLen(name, RDB_KEY_NAME_MAXLEN);
 
-        if (! name) {
+        if (! namelen) {
+            namelen = cstr_length(name, RDB_KEY_NAME_MAXLEN);
+
+            if (cstr_startwith(name, namelen, "COUNT(", 6) ||
+                cstr_startwith(name, namelen, "SUM(", 4) ||
+                cstr_startwith(name, namelen, "AVG(", 4)
+            ) {
+                name = cstr_trim_whitespace(name);
+                namelen = cstr_length(name, RDB_KEY_NAME_MAXLEN);
+            }
+
+            if (! cstr_compare_len(name, namelen, "COUNT(*)", 8) ||
+                ! cstr_compare_len(name, namelen, "COUNT(1)", 8)
+            ) {
+                fieldnames[i] = strdup("COUNT(*)");
+                fieldnameslen[i] = namelen;
+                return 1;
+            }
+
+            //?? TODO:
+
             return 0;
         }
 
@@ -945,7 +964,7 @@ void SQLStmtParseSelect (RDBCtx ctx, RDBSQLStmt sqlstmt)
     *psz++ = '\0';
 
     len = cstr_Rtrim_whitespace(sqlc, cstr_length(sqlc, -1));
-    sqlstmt->select.numselect = parse_fields(sqlc, sqlstmt->select.selectfields, sqlstmt->select.selectfieldslen);
+    sqlstmt->select.numselect = parse_select_fields(sqlc, sqlstmt->select.selectfields, sqlstmt->select.selectfieldslen);
     if (! sqlstmt->select.numselect || sqlstmt->select.numselect > RDBAPI_ARGV_MAXNUM) {
         snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: none fields. errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
         return;
@@ -1096,7 +1115,7 @@ void SQLStmtParseDelete (RDBCtx ctx, RDBSQLStmt sqlstmt)
             return;
         }
 
-        sqlstmt->select.limit = (ub4) limit;
+        sqlstmt->select.limit = limit;
     }
 
     sqlstmt->stmt = RDBSQL_DELETE;
@@ -1994,8 +2013,8 @@ void RDBSQLStmtPrint (RDBSQLStmt sqlstmt, FILE *fout)
             fprintf(fout, "\n    OFFSET %"PRIu64, sqlstmt->select.offset);
         }
 
-        if (sqlstmt->select.limit) {
-            fprintf(fout, "\n    LIMIT %"PRIu32, sqlstmt->select.limit);
+        if (sqlstmt->select.limit != -1) {
+            fprintf(fout, "\n    LIMIT %"PRIu64, sqlstmt->select.limit);
         }
 
         fprintf(fout, "\n");

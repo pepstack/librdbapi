@@ -54,6 +54,8 @@ extern "C"
 #define cstr_bool_true   1
 #define cstr_bool_false  0
 
+#define cstr_length(str, maxlen)    (str? ((maxlen)==-1? (int)strlen(str) : (int)strnlen(str, maxlen)) : 0)
+
 
 static void cstr_varray_free (char ** varr, int maxnum)
 {
@@ -237,6 +239,12 @@ static int cstr_Rtrim_whitespace (char *str, int len)
         }
     }
     return len + 1;
+}
+
+
+static char * cstr_trim_whitespace (char * s)
+{
+    return (*s==0)?s:((( ! isspace(*s) )?(((cstr_trim_whitespace(s+1)-1)==s)? s : (*(cstr_trim_whitespace(s+1)-1)=*s, *s=32 ,cstr_trim_whitespace(s+1))):cstr_trim_whitespace(s+1)));
 }
 
 
@@ -569,9 +577,6 @@ static int cstr_compare_len (const char *Astr, int Alen, const char *Bstr, int B
     // Alen == Blen
     return strncmp(Astr, Bstr, Alen);
 }
-
-
-#define cstr_length(str, maxlen)    (str? ((maxlen)==-1? (int)strlen(str) : (int)strnlen(str, maxlen)) : 0)
 
 
 /**
