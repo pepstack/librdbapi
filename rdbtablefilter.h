@@ -59,6 +59,22 @@ typedef struct _RDBFilterNode_t
 
     RDBFilterExpr expr;
 
+    // 0: not null; 1: is null
+    int null_dest;
+
+    // 0: invalid
+    // 1: ub8_dest
+    // 2: ub8_dest with hex
+    // 3: sb8_dest
+    // 4: dbl_dest
+    int val_dest;
+
+    union {
+        ub8 ub8_dest;       // val_dest=1, 2
+        sb8 sb8_dest;       // val_dest=3
+        double dbl_dest;    // val_dest=4
+    };
+
     int destlen;
     char dest[0];
 } RDBFilterNode_t, *RDBFilterNode;

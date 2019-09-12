@@ -6,7 +6,6 @@ EXPORTS
 	RDBMemAlloc
 	RDBMemRealloc
 	RDBMemFree
-	RDBExprValues
 
 	RDBBinaryNew
 	RDBBinaryFree

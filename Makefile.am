@@ -6,13 +6,11 @@ librdbapi_a_SOURCES = common/tiny-regex-c/re.c \
     rdbactx.c \
     rdbctx.c \
     rdbenv.c \
-    rdbmapr.c \
     rdbparam.c \
     rdbsqlstmt.c \
     rdbresultmap.c \
 	rdbtablefilter.c \
     rdbtable.c \
-    rdbexpr.c \
     rdbtpl.c \
     rdbapi.c
 

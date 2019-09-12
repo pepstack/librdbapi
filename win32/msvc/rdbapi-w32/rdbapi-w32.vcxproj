@@ -19,8 +19,6 @@
     <ClCompile Include="..\..\..\rdbapi.c" />
     <ClCompile Include="..\..\..\rdbctx.c" />
     <ClCompile Include="..\..\..\rdbenv.c" />
-    <ClCompile Include="..\..\..\rdbexpr.c" />
-    <ClCompile Include="..\..\..\rdbmapr.c" />
     <ClCompile Include="..\..\..\rdbparam.c" />
     <ClCompile Include="..\..\..\rdbresultmap.c" />
     <ClCompile Include="..\..\..\rdbsqlstmt.c" />

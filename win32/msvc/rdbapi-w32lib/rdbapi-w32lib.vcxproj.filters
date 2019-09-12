@@ -33,16 +33,10 @@
     <ClCompile Include="..\..\..\rdbenv.c">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\rdbmapr.c">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\rdbparam.c">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\rdbtable.c">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\rdbexpr.c">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\common\tiny-regex-c\re.c">

@@ -399,8 +399,6 @@ extern void * RDBMemRealloc (void *oldp, size_t oldsizeb, size_t newsizeb);
 
 extern void RDBMemFree (void *addr);
 
-extern int RDBExprValues (RDBValueType vt, const char *val1, int len1, RDBFilterExpr expr, const char *val2, int len2);
-
 extern RDBBinary RDBBinaryNew (const void *addr, ub4 sz);
 
 extern void RDBBinaryFree (RDBBinary bin);

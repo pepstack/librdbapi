@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS xsdb.logentry (
     logstash       STR(1020),
     filemd5        STR(32),
     route          STR(255),
+	age            UB4,
     ROWKEY(sid , uid , entrykey)
 ) COMMENT 'log entry table';
 

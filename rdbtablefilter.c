@@ -35,12 +35,179 @@
 #include "rdbtablefilter.h"
 
 
+/**
+ * https://github.com/kokke/tiny-regex-c
+ */
+#include "common/tiny-regex-c/re.h"
+
+
+#define RDBEXPR_SGN(a, b)  ((a)>(b)? 1:((a)<(b)? (-1):0))
+
+
+// src $expr dst ? true(1) : false(0)
+
+//  1: accept
+//  0: reject
+// -1: reject with error
+//
+int doNodeExprValue (RDBFilterNode node, const char *src, int slen)
+{
+    sb8 s8val;
+    ub8 u8val;
+    double dbval;
+
+    // reject with error
+    int result = -1;
+
+    int cmp = 0;
+
+    if (node->expr == RDBFIL_IGNORE) {
+        // always accept if expr not given
+        return 1;
+    }
+
+    if (node->null_dest) {
+        if (node->expr == RDBFIL_EQUAL) {
+            // is null?
+            return src? 0 : 1;
+        }
+
+        if (node->expr == RDBFIL_NOT_EQUAL) {
+            // not null?
+            return src? 1 : 0;
+        }
+    }
+
+    if (node->valtype == RDBVT_STR) {
+        cmp = cstr_compare_len(src, slen, node->dest, node->destlen);
+
+        switch (node->expr) {
+        case RDBFIL_EQUAL:
+            result = (!cmp? 1 : 0);
+            break;
+
+        case RDBFIL_NOT_EQUAL:
+            result = (!cmp? 0 : 1);
+            break;
+
+        case RDBFIL_GREAT_THAN:
+            result = (cmp > 0? 1 : 0);
+            break;
+
+        case RDBFIL_LESS_THAN:
+            result = (cmp < 0? 1 : 0);
+            break;
+
+        case RDBFIL_GREAT_EQUAL:
+            result = (cmp >= 0? 1 : 0);
+            break;
+
+        case RDBFIL_LESS_EQUAL:
+            result = (cmp <= 0? 1 : 0);
+            break;
+
+        case RDBFIL_LEFT_LIKE:
+            // a like 'left%'
+            //   src="aaaaB"
+            //   dst="aaaaBBBB"    
+            result = cstr_startwith(src, slen, node->dest, node->destlen);
+            break;
+
+        case RDBFIL_RIGHT_LIKE:
+            // a like '%right'
+            //   src="aBBBB"            
+            //   dst="aaaaBBBB" 
+            result = cstr_endwith(src, slen, node->dest, node->destlen);
+            break;
+
+        case RDBFIL_LIKE:
+            // a like 'left%' or '%mid%' or '%right'
+            result = cstr_containwith(src, slen, node->dest, node->destlen);
+            break;
+
+        case RDBFIL_MATCH:
+            if (re_match(src, node->dest) == -1) {
+                result = 0;
+            } else {
+                result = 1;
+            }
+            break;
+        }
+
+        return result;
+    }
+
+    if (node->val_dest == 3) {
+        if (cstr_to_sb8(10, src, slen, &s8val) > 0) {
+            cmp = RDBEXPR_SGN(s8val, node->sb8_dest);
+        } else {
+            return (-1);
+        }
+    } else if (node->val_dest == 1) {
+        if (cstr_to_ub8(10, src, slen, &u8val) > 0) {
+            cmp = RDBEXPR_SGN(u8val, node->ub8_dest);
+        } else {
+            return (-1);
+        }
+    } else if (node->val_dest == 2) {
+        if (cstr_to_ub8(16, src, slen, &u8val) > 0) {
+            cmp = RDBEXPR_SGN(u8val, node->ub8_dest);
+        } else {
+            return (-1);
+        }
+    } else if (node->val_dest == 4) {
+        if (cstr_to_dbl(src, slen, &dbval) > 0) {
+            cmp = RDBEXPR_SGN(dbval, node->dbl_dest);
+        } else {
+            return (-1);
+        }
+    } else {
+        // reject for error
+        return (-1);
+    }
+
+    switch (node->expr) {
+    case RDBFIL_EQUAL:
+        result = (!cmp? 1 : 0);
+        break;
+
+    case RDBFIL_NOT_EQUAL:
+        result = (! cmp? 0 : 1);
+        break;
+
+    case RDBFIL_GREAT_THAN:
+        result = (cmp > 0? 1 : 0);
+        break;
+
+    case RDBFIL_LESS_THAN:
+        result = (cmp < 0? 1 : 0);
+        break;
+
+    case RDBFIL_GREAT_EQUAL:
+        result = (cmp >= 0? 1 : 0);
+        break;
+
+    case RDBFIL_LESS_EQUAL:
+        result = (cmp <= 0? 1 : 0);
+        break;
+    }
+
+    return result;
+}
+
+
 RDBFilterNode RDBFilterNodeAdd (RDBFilterNode existed, RDBFilterExpr expr, RDBValueType valtype, const char *dest, int destlen)
 {
     RDBFilterNode newnode;
-    
+
+    int null_dest = 0;
+
     if (destlen == -1) {
         destlen = cstr_length(dest, RDB_KEY_VALUE_SIZE - 1);
+    }
+
+    if (! cstr_compare_len(dest, destlen, "(null)", 6)) {
+        null_dest = 1;
     }
 
     newnode = (RDBFilterNode) RDBMemAlloc(sizeof(RDBFilterNode_t) + destlen + 1);
@@ -50,8 +217,49 @@ RDBFilterNode RDBFilterNodeAdd (RDBFilterNode existed, RDBFilterExpr expr, RDBVa
     newnode->expr = expr;
     newnode->valtype = valtype;
 
+    newnode->null_dest = null_dest;
     newnode->destlen = destlen;
     memcpy(newnode->dest, dest, destlen);
+
+    // validate dest value
+    if (! newnode->null_dest) {
+        switch (valtype) {
+        case RDBVT_SB8:
+        case RDBVT_SB4:
+        case RDBVT_SB2:
+        case RDBVT_CHAR:
+            if (cstr_to_sb8(10, newnode->dest, newnode->destlen, &newnode->sb8_dest) > 0) {
+                newnode->val_dest = 3;
+            }
+            break;
+
+        case RDBVT_UB8:
+        case RDBVT_UB4:
+        case RDBVT_UB2:
+        case RDBVT_BYTE:
+            if (cstr_to_ub8(10, newnode->dest, newnode->destlen, &newnode->ub8_dest) > 0) {
+                newnode->val_dest = 1;
+            }
+            break;
+
+        case RDBVT_UB8X:
+        case RDBVT_UB4X:
+            if (cstr_to_ub8(16, newnode->dest, newnode->destlen, &newnode->ub8_dest) > 0) {
+                newnode->val_dest = 2;
+            }
+            break;
+
+        case RDBVT_FLT64:
+            if (cstr_to_dbl(newnode->dest, newnode->destlen, &newnode->dbl_dest) > 0) {
+                newnode->val_dest = 4;
+            }
+            break;
+        }
+    }
+
+    if (! newnode->valtype) {
+        newnode->valtype = RDBVT_STR;
+    }
 
     return newnode;
 }
@@ -71,12 +279,12 @@ void RDBFilterNodeFree (RDBFilterNode node)
 
 int RDBFilterNodeExpr (RDBFilterNode node, const char *sour, int sourlen)
 {
-    while (node) {
-        if (! RDBExprValues(node->valtype, sour, sourlen, node->expr, node->dest, node->destlen)) {
+    if (node) {
+        if (doNodeExprValue(node, sour, sourlen) != 1) {
             return RDBTABLE_FILTER_REJECT;
         }
-  
-        node = node->next;
+
+        return RDBFilterNodeExpr(node->next, sour, sourlen);
     }
 
     return RDBTABLE_FILTER_ACCEPT;
