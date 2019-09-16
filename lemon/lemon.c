@@ -1,4 +1,4 @@
-/*
+﻿/*
 * https://github.com/winkyao/lemon/blob/master/src/lemon.c
 * fixed by 350137278@qq.com
 *

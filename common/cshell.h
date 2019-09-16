@@ -1,4 +1,4 @@
-/***********************************************************************
+﻿/***********************************************************************
 * Copyright (c) 2008-2080 syna-tech.com, pepstack.com, 350137278@qq.comcstr_replace_new
 *
 * ALL RIGHTS RESERVED.
@@ -22,7 +22,6 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************/
-
 /**
  * cshell.h
  *   C Interactive Shell

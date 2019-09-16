@@ -1,4 +1,4 @@
-#ifndef _MMAN_H_
+﻿#ifndef _MMAN_H_
 #define _MMAN_H_
 
 /* Protections */

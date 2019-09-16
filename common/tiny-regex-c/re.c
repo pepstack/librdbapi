@@ -1,4 +1,4 @@
-/**
+﻿/**
  *
  * Mini regex-module inspired by Rob Pike's regex code described in:
  *

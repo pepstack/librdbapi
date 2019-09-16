@@ -1,4 +1,4 @@
-/***********************************************************************
+﻿/***********************************************************************
 * Copyright (c) 2018 pepstack, pepstack.com
 *
 * This software is provided 'as-is', without any express or implied
@@ -18,7 +18,6 @@
 *
 * 3. This notice may not be removed or altered from any source distribution.
 ***********************************************************************/
-
 /**
  * threadlock.h
  *

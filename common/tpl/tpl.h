@@ -1,4 +1,4 @@
-/*
+﻿/*
 Copyright (c) 2005-2013, Troy D. Hanson     http://troydhanson.github.com/tpl/
 All rights reserved.
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 2019-08-28
  * Mini regex-module inspired by Rob Pike's regex code described in:
  *
@@ -41,7 +41,6 @@
 #ifdef __cplusplus
 extern "C"{
 #endif
-
 
 /* Typedef'd pointer to get abstract datatype. */
 typedef struct regex_t* re_t;
