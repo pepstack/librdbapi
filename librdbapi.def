@@ -13,8 +13,6 @@ EXPORTS
 	RDBZStringNew
 	RDBZStringFree
 	RDBZStringLen
-	RDBZStringMaxsz
-	RDBZStringCat
 
 	RDBThreadCtxCreate
 	RDBThreadCtxAttach

@@ -123,7 +123,6 @@ static void zstringbufFree (zstringbuf zs)
 static zstringbuf zstringbufCat (zstringbuf zs, const char *fmt, ...)
 {
     int len;
-    zstringbuf_t *pzs;
 
     if (! zs) {
         zs = zstringbufNew(zstringbuf_blksize(0), NULL, 0);

@@ -1264,6 +1264,10 @@ void SQLStmtParseUpsert (RDBCtx ctx, RDBSQLStmt sqlstmt)
         }
 
         sqlstmt->upsert.numfields = numfields;
+        sqlc = endp;
+    } else {
+        // fields_by_select
+        sqlc = NULL;
     }
 
     if (selectsql) {
@@ -1279,9 +1283,9 @@ void SQLStmtParseUpsert (RDBCtx ctx, RDBSQLStmt sqlstmt)
         }
 
         sqlstmt->upsert.upsertmode = RDBSQL_UPSERT_MODE_SELECT;
-    } else {
+    } else if (sqlc) {
         // VALUES(...)
-        sqlc = cstr_Ltrim_whitespace(endp);
+        sqlc = cstr_Ltrim_whitespace(sqlc);
         np = re_match("VALUES[\\s]*(", sqlc);
         if (np != 0) {
             snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: VALUES not found. errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
