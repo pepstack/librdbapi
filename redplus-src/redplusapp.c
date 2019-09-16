@@ -121,23 +121,23 @@ int main(int argc, const char *argv[])
             break;
 
         case 'R':
-            cluster = RDBZStringNew(optarg, CSHELL_BUFSIZE);
+            cluster = RDBZStringNew(optarg, -1);
             break;
 
         case 'C':
-            command = RDBZStringNew(optarg, CSHELL_BUFSIZE);
+            command = RDBZStringNew(optarg, -1);
             break;
 
         case 'S':
-            rdbsql = RDBZStringNew(optarg, CSHELL_BUFSIZE);
+            rdbsql = RDBZStringNew(optarg, -1);
             break;
 
         case 'F':
-            sqlfile = RDBZStringNew(optarg, sizeof(appcfg));
+            sqlfile = RDBZStringNew(optarg, -1);
             break;
 
         case 'O':
-            output = RDBZStringNew(optarg, sizeof(appcfg));
+            output = RDBZStringNew(optarg, -1);
             break;
 
         case 'I':
@@ -157,8 +157,8 @@ int main(int argc, const char *argv[])
     }
 
     if (cluster) {
-        printf("# redis cluster: %s\n", (const char*)cluster);
-        RDBEnvCreate((const char*)cluster, ctxtimout, sotimeoms, &env);
+        printf("# redis cluster: %s\n", RDBCZSTR(cluster));
+        RDBEnvCreate(RDBCZSTR(cluster), ctxtimout, sotimeoms, &env);
     } else {
         printf("# load config: %s\n", appcfg);
         RDBEnvCreate(appcfg, ctxtimout, sotimeoms, &env);
@@ -183,15 +183,13 @@ int main(int argc, const char *argv[])
         redplusExecuteRdbsql(ctx, RDBCZSTR(rdbsql), RDBCZSTR(output));
     }
 
-    RDBZStringFree(cluster);
-    RDBZStringFree(command);
-    RDBZStringFree(sqlfile);    
-    RDBZStringFree(rdbsql);
-
-    cluster = NULL;
-    command = NULL;
-    sqlfile = NULL;
-    rdbsql = NULL;
+    do {
+        RDBZString zstr;
+        zstr = cluster;  cluster = NULL;  RDBZStringFree(zstr);
+        zstr = command;  command = NULL;  RDBZStringFree(zstr);
+        zstr = sqlfile;  sqlfile = NULL;  RDBZStringFree(zstr);
+        zstr = rdbsql;   rdbsql = NULL;   RDBZStringFree(zstr);
+    } while(0);
 
     if (interactive) {
         ub8 tm0, tm2;
