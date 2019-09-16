@@ -35,6 +35,57 @@
 #include "rdbsqlstmt.h"
 
 
+
+static ub8 RDBTableGetTimestamp (RDBCtx ctx, const char *tablespace, const char *tablename)
+{
+    ub8 u8val = (ub8)(-1);
+
+    redisReply *reply = NULL;
+
+    char table_rowkey[256] = {0};
+
+    const char *fldnames[] = {"timestamp", 0};
+
+    snprintf_chkd_V1(table_rowkey, sizeof(table_rowkey), "{%s::%s:%s}", RDB_SYSTEM_TABLE_PREFIX, tablespace, tablename);
+
+    // HMGET {redisdb::$tablespace:$tablename} timestamp
+    if (RedisHMGet(ctx, table_rowkey, fldnames, &reply) == RDBAPI_SUCCESS) {
+        cstr_to_ub8(10, reply->element[0]->str, reply->element[0]->len, &u8val);
+    }
+
+    if (reply) {
+        freeReplyObject(reply);
+    }
+
+    return u8val;
+}
+
+
+// create stmt object and trim sql unnecessary whilespaces
+//
+static RDBSQLStmt RDBSQLStmtObjectNew (RDBCtx ctx, const char *sql_block, size_t sql_len)
+{
+    RDBSQLStmt sqlstmt = (RDBSQLStmt) RDBMemAlloc(sizeof(RDBSQLStmt_t) + sql_len + 1);
+    if (sqlstmt) {
+        sqlstmt->ctx = ctx;
+
+        memcpy(sqlstmt->sqlblock, sql_block, sql_len);
+        sqlstmt->sqlblocksize = (ub4) (sql_len + 1);
+
+        sql_len = cstr_Rtrim_whitespace(sqlstmt->sqlblock, (int) sql_len);
+
+        cstr_Rtrim_chr(sqlstmt->sqlblock, ';');
+
+        sqlstmt->sqloffset = cstr_Ltrim_whitespace(sqlstmt->sqlblock);
+        sqlstmt->offsetlen = cstr_Rtrim_whitespace(sqlstmt->sqloffset, cstr_length(sqlstmt->sqloffset, sql_len));
+    } else {
+        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(rdbsqlstmt.c:%d) out of memory.", __LINE__);
+    }
+
+    return sqlstmt;
+}
+
+
 static RDBResultMap ResultMapBuildDescTable (const char *tablespace, const char *tablename, const char **vtnames, RDBTableDes_t *tabledes)
 {
     RDBAPI_RESULT res;
@@ -50,14 +101,13 @@ static RDBResultMap ResultMapBuildDescTable (const char *tablespace, const char 
     const char *tblnames[] = {
         "tablespace",
         "tablename",
-        "datetime",
         "timestamp",
         "comment",
         "fields",
         0
     };
 
-    int tblnameslen[] = {10, 9, 8, 9, 7, 6, 0};
+    int tblnameslen[] = {10, 9, 9, 7, 6, 0};
 
     const char *fldnames[] = {
         "fieldname",
@@ -73,7 +123,7 @@ static RDBResultMap ResultMapBuildDescTable (const char *tablespace, const char 
     int fldnameslen[] = {9, 9, 6, 5, 6, 8, 7, 0};
 
     snprintf_chkd_V1(buf, sizeof(buf), "{%s::%s}", tablespace, tablename);
-    res = RDBResultMapCreate(buf, tblnames, tblnameslen, 6, &tablemap);
+    res = RDBResultMapCreate(buf, tblnames, tblnameslen, 5, &tablemap);
     if (res != RDBAPI_SUCCESS) {
         fprintf(stderr, "(%s:%d) RDBResultMapCreate('%s') failed", __FILE__, __LINE__, buf);
         exit(EXIT_FAILURE);
@@ -93,13 +143,9 @@ static RDBResultMap ResultMapBuildDescTable (const char *tablespace, const char 
 
     RDBCellSetString(RDBRowCell(tablerow, 0), tablespace, -1);
     RDBCellSetString(RDBRowCell(tablerow, 1), tablename, -1);
-    RDBCellSetString(RDBRowCell(tablerow, 2), tabledes->table_datetime, -1);
-
-    len = snprintf_chkd_V1(buf, sizeof(buf), "%"PRIu64"", tabledes->table_timestamp);
-
-    RDBCellSetString(RDBRowCell(tablerow, 3), buf, len);
-    RDBCellSetString(RDBRowCell(tablerow, 4), tabledes->table_comment, -1);
-    RDBCellSetResult(RDBRowCell(tablerow, 5), fieldsmap);
+    RDBCellSetInteger(RDBRowCell(tablerow, 2), (sb8) tabledes->table_timestamp);
+    RDBCellSetString(RDBRowCell(tablerow, 3), tabledes->table_comment, -1);
+    RDBCellSetResult(RDBRowCell(tablerow, 4), fieldsmap);
 
     RDBResultMapInsertRow(tablemap, tablerow);
 
@@ -1122,217 +1168,6 @@ void SQLStmtParseDelete (RDBCtx ctx, RDBSQLStmt sqlstmt)
 }
 
 
-// UPSERT INTO xsdb.logentry (uid, entrykey, sid, filemd5) VALUES (1, 'fc8397137a6bc16d38f383c524460b87', 1, 'haha') ON DUPLICATE KEY UPDATE status=999;
-// UPSERT INTO xsdb.logentry (uid, entrykey, sid, filemd5) VALUES (1, 'fc8397137a6bc16d38f383c524460b8a', 1, 'hahahaha') ON DUPLICATE KEY IGNORE;
-// UPSERT INTO xsdb.logentry (uid, entrykey, sid, filemd5) VALUES (1, 'fc8397137a6bc16d38f383c524460b8b', 1, 'haha');
-//
-static int check_upsert_fields (RDBSQLStmt sqlstmt)
-{
-/*
-    int i, j, fieldnamelen, offlen;
-    const char *fieldname, *fieldvalue;
-
-    int argc = 2;
-
-    int *rowkeys = &sqlstmt->upsert.rowkeys[0];
-
-    RDBCtx ctx = sqlstmt->ctx;
-
-    for (i = 0; i < sqlstmt->upsert.numfields; i++) {
-        const RDBFieldDes_t *fldes = NULL;
-
-        fieldname = sqlstmt->upsert.fieldnames[i];
-        fieldnamelen = cstr_length(fieldname, -1);
-
-        fieldvalue = sqlstmt->upsert.fieldvalues[i];
-
-        for (j = 0; j < sqlstmt->upsert.tabledes.nfields; j++) {
-            fldes = &sqlstmt->upsert.tabledes.fielddes[j];
-
-            if (! cstr_compare_len(fldes->fieldname, fldes->namelen, fieldname, fieldnamelen)) {
-                // success
-                sqlstmt->upsert.fieldindex[i] = j;
-
-                if (fldes->rowkey) {
-                    if (rowkeys[0] < RDBAPI_KEYS_MAXNUM) {
-                        if (rowkeys[fldes->rowkey]) {
-                            // error
-                            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: duplicated field: '%.*s'", fieldnamelen, fieldname);
-                            return 0;
-                        }
-                        rowkeys[fldes->rowkey] = i + 1;
-                        rowkeys[0] += 1;
-                    } else {
-                        // error
-                        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: too many field: '%.*s'", fieldnamelen, fieldname);
-                        return 0;
-                    }
-                }
-
-                // find ok here
-                fldes = NULL;
-                break;
-            }
-        }
-
-        if (fldes) {
-            // error
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: undefined field: '%.*s'", fieldnamelen, fieldname);
-            return 0;
-        }
-
-        fldes = &sqlstmt->upsert.tabledes.fielddes[j];
-        if (! fldes->rowkey) {
-            // only non rowkey field can be updated!
-            sqlstmt->upsert.argvNew[argc] = fieldname;
-            sqlstmt->upsert.argvlenNew[argc] = fieldnamelen;
-
-            if (fieldvalue[0] == 39) {
-                sqlstmt->upsert.argvNew[argc + 1] = &fieldvalue[1];
-                sqlstmt->upsert.argvlenNew[argc + 1] = cstr_length(fieldvalue, -1) - 2;
-            } else {
-                sqlstmt->upsert.argvNew[argc + 1] = fieldvalue;
-                sqlstmt->upsert.argvlenNew[argc + 1] = cstr_length(fieldvalue, -1);
-            }
-
-            argc += 2;
-        }
-    }
-
-    sqlstmt->upsert.rkpattern.maxsz = RDBAPI_SQL_PATTERN_SIZE;
-    sqlstmt->upsert.rkpattern.length = 0;
-    sqlstmt->upsert.rkpattern.str = RDBMemAlloc(sqlstmt->upsert.rkpattern.maxsz);
-
-    sqlstmt->upsert.rkpattern.length = snprintf_chkd_V1(sqlstmt->upsert.rkpattern.str, sqlstmt->upsert.rkpattern.maxsz,
-                "{%s::%s", sqlstmt->upsert.tablespace,  sqlstmt->upsert.tablename);
-
-    for (i = 1; i <= sqlstmt->upsert.rowkeyid[0]; i++) {
-        const char *fldval = NULL;
-
-        j = rowkeys[i];
-        if (j) {
-            fldval = sqlstmt->upsert.fieldvalues[j-1];
-
-            offlen = cstr_length(fldval, RDBAPI_SQL_PATTERN_SIZE);
-            if (offlen == RDBAPI_SQL_PATTERN_SIZE) {
-                // error
-                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: too long value: '%.*s'", offlen, sqlstmt->upsert.fieldvalues[j-1]);
-                return 0;
-            }
-
-            if (fldval[0] == 39) {
-                fldval++;
-                offlen -= 2;
-            }
-        } else {
-            // key field not given
-            offlen = 1;
-        }
-
-        if (sqlstmt->upsert.rkpattern.length + offlen > sqlstmt->upsert.rkpattern.maxsz - 4) {
-            sqlstmt->upsert.rkpattern.str = RDBMemRealloc(sqlstmt->upsert.rkpattern.str, sqlstmt->upsert.rkpattern.maxsz, sqlstmt->upsert.rkpattern.maxsz + RDBAPI_SQL_PATTERN_SIZE);
-            if (! sqlstmt->upsert.rkpattern.str || sqlstmt->upsert.rkpattern.maxsz > RDBAPI_SQL_PATTERN_SIZE * 4) {
-                // error
-                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: no memory for too many values");
-                return 0;
-            }
-            sqlstmt->upsert.rkpattern.maxsz += RDBAPI_SQL_PATTERN_SIZE;
-        }
-
-        if (fldval) {
-            offlen = snprintf_chkd_V1(sqlstmt->upsert.rkpattern.str + sqlstmt->upsert.rkpattern.length, sqlstmt->upsert.rkpattern.maxsz - sqlstmt->upsert.rkpattern.length,
-                        ":%.*s", offlen, fldval);
-        } else {
-            offlen = snprintf_chkd_V1(sqlstmt->upsert.rkpattern.str + sqlstmt->upsert.rkpattern.length, sqlstmt->upsert.rkpattern.maxsz - sqlstmt->upsert.rkpattern.length,
-                        ":*");
-        }
-        sqlstmt->upsert.rkpattern.length += offlen;
-    }
-
-    sqlstmt->upsert.rkpattern.length += snprintf_chkd_V1(sqlstmt->upsert.rkpattern.str + sqlstmt->upsert.rkpattern.length, sqlstmt->upsert.rkpattern.maxsz - sqlstmt->upsert.rkpattern.length, "}");
-
-    if (sqlstmt->upsert.rowkeys[0] == sqlstmt->upsert.rowkeyid[0]) {
-        sqlstmt->upsert.argvNew[0] = sqlstmt->upsert.hmset_cmd;
-        sqlstmt->upsert.argvlenNew[0] = 5;
-        sqlstmt->upsert.argcNew = argc;
-    }
-*/
-    // success
-    return 1;
-}
-
-
-static int check_upsert_updates (RDBSQLStmt sqlstmt)
-{
-/*
-    int i, j, fieldnamelen, fieldvaluelen, ok;
-    const char *fieldname, *fieldvalue;
-    const RDBFieldDes_t *fldes;
-
-    RDBCtx ctx = sqlstmt->ctx;
-
-    for (i = 0; i < sqlstmt->upsert.numupdates; i++) {
-        fieldname = sqlstmt->upsert.updatenames[i];
-        fieldnamelen = cstr_length(fieldname, -1);
-
-        fieldvalue = sqlstmt->upsert.updatevalues[i];
-        fieldvaluelen = cstr_length(fieldvalue, -1);
-
-        ok = -1;
-
-        for (j = 0; j < sqlstmt->upsert.tabledes.nfields; j++) {
-            fldes = &sqlstmt->upsert.tabledes.fielddes[j];
-
-            if (! cstr_compare_len(fldes->fieldname, fldes->namelen, fieldname, fieldnamelen)) {
-                // success
-                ok = fldes->rowkey;
-                sqlstmt->upsert.updateindex[i] = j;
-                break;
-            }
-        }
-
-        if (ok < 0) {
-            // error
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: undefined update field: '%.*s'", fieldnamelen, fieldname);
-            return 0;
-        }
-        if (ok > 0) {
-            // error
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLError: update rowkey field: '%.*s'", fieldnamelen, fieldname);
-            return 0;
-        }
-
-        sqlstmt->upsert.argvUpd[i*2 + 2] = fieldname;
-        sqlstmt->upsert.argvUpd[i*2 + 3] = fieldvalue;
-
-        sqlstmt->upsert.argvlenUpd[i*2 + 2] = fieldnamelen;
-        sqlstmt->upsert.argvlenUpd[i*2 + 3] = fieldvaluelen;
-    }
-
-    // hmset rkey f1 v1 f2 v2 ...
-    sqlstmt->upsert.argvUpd[0] = sqlstmt->upsert.hmset_cmd;
-    sqlstmt->upsert.argvlenUpd[0] = 5;
-
-    sqlstmt->upsert.argcUpd = sqlstmt->upsert.numupdates * 2 + 2;
-*/
-    // success
-    return 1;
-}
-
-
-// UPSERT INTO xsdb.test(name,id) VALUES('foo', 123);
-// UPSERT INTO xsdb.test(id, counter) VALUES(123, 0) ON DUPLICATE KEY UPDATE id=1,counter = counter + 1;
-// UPSERT INTO xsdb.test(id, my_col) VALUES(123, 0) ON DUPLICATE KEY IGNORE;
-//
-// UPSERT INTO xsdb.connect(sid, connfd, host) VALUES(1,1,'127.0.0.1') ON DUPLICATE KEY UPDATE sid=666, addr='888';
-// UPSERT INTO xsdb.connect(sid, connfd, host) VALUES(1,1,'127.0.0.1') ON DUPLICATE KEY UPDATE sid='888';
-// TODO: UPSERT INTO db.tbl (...) SELECT ... FROM ...
-// TODO: UPSERT INTO db.tbl SELECT * FROM ...
-// TODO: UPSERT INTO db.tbl (f1, f2) SELECT f1,f2 FROM ...
-//
-// UPSERT INTO xsdb.connect (sid, connfd, host) VALUES(1,1, 'localhost');
-// UPSERT INTO xsdb.connect (sid, connfd, host) SELECT * FROM xsdb.connect;
-//
 void SQLStmtParseUpsert (RDBCtx ctx, RDBSQLStmt sqlstmt)
 {
     int i, np, len;
@@ -1343,6 +1178,8 @@ void SQLStmtParseUpsert (RDBCtx ctx, RDBSQLStmt sqlstmt)
     int numvalues = 0;
     int update = 0;
 
+    char *selectsql = NULL;
+
     // pass UPSERT_
     char *sqlc = cstr_Ltrim_whitespace(sqlstmt->sqloffset + 7);
 
@@ -1352,10 +1189,45 @@ void SQLStmtParseUpsert (RDBCtx ctx, RDBSQLStmt sqlstmt)
     // find '('
     startp = strchr(sqlc, 40);
     if (! startp) {
-        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: tablename not assigned. errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
-        return;
+        int select = re_match("[\\s]+SELECT[\\s]+", sqlc);
+
+        if (select == -1) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: tablename not assigned. errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
+            return;
+        }
+
+        selectsql = &sqlc[select];
+        *selectsql++ = '\0';
+
+        // no field names, use all fields default
+        sqlstmt->upsert.fields_by_select = 1;
+    } else {
+        int select = re_match("([\\s]*SELECT[\\s]+", startp);
+        if (select == -1) {
+            select = re_match("[\\s]+SELECT[\\s]+", startp);
+        } else {
+            endp = strrchr(startp, 41);
+            if (! endp) {
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: non closure char '('. errat(%d): '%.*s ...'",
+                    (int) (startp + select - sqlstmt->sqlblock),
+                    cstr_length(startp + select, 40), startp + select);
+                return;
+            }
+            *endp = '\0';
+        }
+
+        if (select != -1) {
+            selectsql = &startp[select];
+            *selectsql++ = '\0';
+        }
+
+        if (select == 0) {
+            // no field names, use all fields default
+            sqlstmt->upsert.fields_by_select = 1;
+        }
+
+        *startp++ = 0;
     }
-    *startp++ = 0;
 
     len = cstr_Rtrim_whitespace(sqlc, cstr_length(sqlc, -1));
     if (! parse_table(sqlc, sqlstmt->upsert.tablespace, sqlstmt->upsert.tablename)) {
@@ -1363,143 +1235,143 @@ void SQLStmtParseUpsert (RDBCtx ctx, RDBSQLStmt sqlstmt)
         return;
     }
 
-    // fieldnames
-    sqlc = cstr_Ltrim_whitespace(startp);
-    endp = strchr(sqlc, 41);
-    if (! endp) {
-        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: non closure char. errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
-        return;
-    }
-    *endp++ = 0;
-
-    len = cstr_Rtrim_whitespace(sqlc, cstr_length(sqlc, -1));
-    numfields = cstr_slpit_chr(sqlc, len, 44, sqlstmt->upsert.fieldnames, RDBAPI_ARGV_MAXNUM + 1);
-    if (numfields == 0) {
-        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: fields not found");
-        return;
-    }
-    if (numfields > RDBAPI_ARGV_MAXNUM) {
-        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: too many fields");
-        return;
-    }
-    for(i = 0; i < numfields; i++) {
-        sqlstmt->upsert.fieldnameslen[i] = cstr_length(sqlstmt->upsert.fieldnames[i], RDB_KEY_NAME_MAXLEN + 1);
-        if (sqlstmt->upsert.fieldnameslen[i] > RDB_KEY_NAME_MAXLEN) {
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: too long fieldname: %s", sqlstmt->upsert.fieldnames[i]);
+    if (! sqlstmt->upsert.fields_by_select) {
+        // fieldnames
+        sqlc = cstr_Ltrim_whitespace(startp);
+        endp = strchr(sqlc, 41);
+        if (! endp) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: non closure char. errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
             return;
         }
+        *endp++ = 0;
+
+        len = cstr_Rtrim_whitespace(sqlc, cstr_length(sqlc, -1));
+        numfields = cstr_slpit_chr(sqlc, len, 44, sqlstmt->upsert.fieldnames, RDBAPI_ARGV_MAXNUM + 1);
+        if (numfields == 0) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: fields not found");
+            return;
+        }
+        if (numfields > RDBAPI_ARGV_MAXNUM) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: too many fields");
+            return;
+        }
+        for(i = 0; i < numfields; i++) {
+            sqlstmt->upsert.fieldnameslen[i] = cstr_length(sqlstmt->upsert.fieldnames[i], RDB_KEY_NAME_MAXLEN + 1);
+            if (sqlstmt->upsert.fieldnameslen[i] > RDB_KEY_NAME_MAXLEN) {
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: too long fieldname: %s", sqlstmt->upsert.fieldnames[i]);
+                return;
+            }
+        }
+
+        sqlstmt->upsert.numfields = numfields;
     }
 
-    sqlstmt->upsert.numfields = numfields;
+    if (selectsql) {
+        sqlstmt->upsert.selectstmt = RDBSQLStmtObjectNew(ctx, selectsql, cstr_length(selectsql, -1));
+        if (! sqlstmt->upsert.selectstmt) {
+            return;
+        }
 
-    // VALUES(...)
-    sqlc = cstr_Ltrim_whitespace(endp);
-    np = re_match("VALUES[\\s]*(", sqlc);
-    if (np != 0) {
-        if (re_match(RDBSQL_PATTERN_SELECT_FROM, sqlc) == 0) {
-            if (RDBSQLStmtCreate(ctx, sqlc, -1, &sqlstmt->upsert.selectstmt) == RDBAPI_SUCCESS) {
-                SQLStmtParseSelect(ctx, sqlstmt->upsert.selectstmt);
+        SQLStmtParseSelect(ctx, sqlstmt->upsert.selectstmt);
 
-                if (sqlstmt->upsert.selectstmt->stmt == RDBSQL_INVALID) {
-                    snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: UPSERT INTO... SELECT.... errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
+        if (sqlstmt->upsert.selectstmt->stmt != RDBSQL_SELECT) {
+            return;
+        }
+
+        sqlstmt->upsert.upsertmode = RDBSQL_UPSERT_MODE_SELECT;
+    } else {
+        // VALUES(...)
+        sqlc = cstr_Ltrim_whitespace(endp);
+        np = re_match("VALUES[\\s]*(", sqlc);
+        if (np != 0) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: VALUES not found. errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
+            return;
+        }
+
+        sqlc = cstr_Ltrim_whitespace(sqlc + 6);
+
+        np = re_match(")[\\s]*ON[\\s]+DUPLICATE[\\s]+KEY[\\s]+", sqlc);
+        if (np == -1) {
+            endp = strrchr(sqlc, 41);
+        } else {
+            endp = &sqlc[np];
+        }
+
+        if (!endp) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: non closure char. errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
+            return;
+        }
+        *endp++ = 0;
+
+        sqlc = cstr_Ltrim_whitespace(sqlc + 1);
+        len = cstr_Rtrim_whitespace(sqlc, cstr_length(sqlc, -1));
+
+        // ( a,b,'hello,shanghai' )
+        while (sqlc && numvalues < numfields + 1) {
+            char *value = NULL;
+            int valuelen = 0;
+            sqlc = parse_upsert_value(sqlstmt->sqlblock, sqlc, &value, &valuelen);
+            if (value) {
+                sqlstmt->upsert.fieldvalues[numvalues] = value;
+                sqlstmt->upsert.fieldvalueslen[numvalues] = valuelen;
+                numvalues++;
+            }
+        }
+
+        if (numvalues > numfields) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: excess field value: '%s'", sqlstmt->upsert.fieldvalues[numfields]);
+            return;
+        } else if (numvalues < numfields) {
+            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: excess fieldname: '%s'", sqlstmt->upsert.fieldnames[numvalues]);
+            return;
+        }
+
+        sqlstmt->upsert.upsertmode = RDBSQL_UPSERT_MODE_INSERT;
+
+        sqlc = endp;
+        if (np != -1) {
+            np = re_match("ON[\\s]+DUPLICATE[\\s]+KEY[\\s]+UPDATE[\\s]+", sqlc);
+
+            if (np == -1) {
+                np = re_match("ON[\\s]+DUPLICATE[\\s]+KEY[\\s]+IGNORE[\\W]*", sqlc);
+                if (np == -1) {
+                    snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: non closure char. errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
                     return;
                 }
+                sqlstmt->upsert.upsertmode = RDBSQL_UPSERT_MODE_IGNORE;
+            } else {
+                startp = strstr(sqlc, "UPDATE") + 6;
+                *startp++ = 0;
+                sqlc = cstr_Ltrim_whitespace(startp);
 
-                sqlstmt->upsert.upsertmode = RDBSQL_UPSERT_MODE_SELECT;
+                sqlstmt->upsert.upsertmode = RDBSQL_UPSERT_MODE_UPDATE;
+            }
+        }
 
-                // success
-                sqlstmt->stmt = RDBSQL_UPSERT;
+        if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_UPDATE) {
+            // UPDATE a=b, c=c+1, e='hello= , world';
+            while (sqlc && sqlstmt->upsert.updcols < RDBAPI_ARGV_MAXNUM + 1) {
+                char *colname;
+                char *colvalue;
+                int colnamelen;
+                int colvaluelen;
+
+                sqlc = parse_upsert_col(sqlstmt->sqlblock, sqlc, &colname, &colnamelen, &colvalue, &colvaluelen);
+
+                if (colname && colvalue) {
+                    sqlstmt->upsert.updcolnames[sqlstmt->upsert.updcols] = colname;
+                    sqlstmt->upsert.updcolvalues[sqlstmt->upsert.updcols] = colvalue;
+
+                    sqlstmt->upsert.updcolnameslen[sqlstmt->upsert.updcols] = colnamelen;
+                    sqlstmt->upsert.updcolvalueslen[sqlstmt->upsert.updcols] = colvaluelen;
+
+                    sqlstmt->upsert.updcols++;
+                }
+            }
+            if (! sqlstmt->upsert.updcols || sqlstmt->upsert.updcols > RDBAPI_ARGV_MAXNUM) {
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: UPDATE clause error. errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
                 return;
             }
-        }
-
-        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: VALUES not found. errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
-        return;
-    }
-
-    sqlc = cstr_Ltrim_whitespace(sqlc + 6);
-
-    np = re_match(")[\\s]*ON[\\s]+DUPLICATE[\\s]+KEY[\\s]+", sqlc);
-    if (np == -1) {
-        endp = strrchr(sqlc, 41);
-    } else {
-        endp = &sqlc[np];
-    }
-
-    if (!endp) {
-        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: non closure char. errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
-        return;
-    }
-    *endp++ = 0;
-
-    sqlc = cstr_Ltrim_whitespace(sqlc + 1);
-    len = cstr_Rtrim_whitespace(sqlc, cstr_length(sqlc, -1));
-
-    // ( a,b,'hello,shanghai' )
-    while (sqlc && numvalues < numfields + 1) {
-        char *value = NULL;
-        int valuelen = 0;
-        sqlc = parse_upsert_value(sqlstmt->sqlblock, sqlc, &value, &valuelen);
-        if (value) {
-            sqlstmt->upsert.fieldvalues[numvalues] = value;
-            sqlstmt->upsert.fieldvalueslen[numvalues] = valuelen;
-            numvalues++;
-        }
-    }
-
-    if (numvalues > numfields) {
-        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: excess field value: '%s'", sqlstmt->upsert.fieldvalues[numfields]);
-        return;
-    } else if (numvalues < numfields) {
-        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: excess fieldname: '%s'", sqlstmt->upsert.fieldnames[numvalues]);
-        return;
-    }
-
-    sqlstmt->upsert.upsertmode = RDBSQL_UPSERT_MODE_INSERT;
-
-    sqlc = endp;
-    if (np != -1) {
-        np = re_match("ON[\\s]+DUPLICATE[\\s]+KEY[\\s]+UPDATE[\\s]+", sqlc);
-
-        if (np == -1) {
-            np = re_match("ON[\\s]+DUPLICATE[\\s]+KEY[\\s]+IGNORE[\\W]*", sqlc);
-            if (np == -1) {
-                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: non closure char. errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
-                return;
-            }
-            sqlstmt->upsert.upsertmode = RDBSQL_UPSERT_MODE_IGNORE;
-        } else {
-            startp = strstr(sqlc, "UPDATE") + 6;
-            *startp++ = 0;
-            sqlc = cstr_Ltrim_whitespace(startp);
-
-            sqlstmt->upsert.upsertmode = RDBSQL_UPSERT_MODE_UPDATE;
-        }
-    }
-
-    if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_UPDATE) {
-        // UPDATE a=b, c=c+1, e='hello= , world';
-        while (sqlc && sqlstmt->upsert.updcols < RDBAPI_ARGV_MAXNUM + 1) {
-            char *colname;
-            char *colvalue;
-            int colnamelen;
-            int colvaluelen;
-
-            sqlc = parse_upsert_col(sqlstmt->sqlblock, sqlc, &colname, &colnamelen, &colvalue, &colvaluelen);
-
-            if (colname && colvalue) {
-                sqlstmt->upsert.updcolnames[sqlstmt->upsert.updcols] = colname;
-                sqlstmt->upsert.updcolvalues[sqlstmt->upsert.updcols] = colvalue;
-
-                sqlstmt->upsert.updcolnameslen[sqlstmt->upsert.updcols] = colnamelen;
-                sqlstmt->upsert.updcolvalueslen[sqlstmt->upsert.updcols] = colvaluelen;
-
-                sqlstmt->upsert.updcols++;
-            }
-        }
-        if (! sqlstmt->upsert.updcols || sqlstmt->upsert.updcols > RDBAPI_ARGV_MAXNUM) {
-            snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: UPDATE clause error. errat(%d): '%s'", (int)(sqlc - sqlstmt->sqlblock), sqlc);
-            return;
         }
     }
 
@@ -1833,23 +1705,14 @@ RDBAPI_RESULT RDBSQLStmtCreate (RDBCtx ctx, const char *sql_block, size_t sql_le
     }
 
     // create stmt object and trim sql unnecessary whilespaces
-
-    sqlstmt = (RDBSQLStmt) RDBMemAlloc(sizeof(RDBSQLStmt_t) + sql_len + 1);
-
-    sqlstmt->ctx = ctx;
-
-    memcpy(sqlstmt->sqlblock, sql_block, sql_len);
-    sqlstmt->sqlblocksize = (ub4) (sql_len + 1);
-
-    sql_len = cstr_Rtrim_whitespace(sqlstmt->sqlblock, (int) sql_len);
-
-    cstr_Rtrim_chr(sqlstmt->sqlblock, ';');
-
-    sqlstmt->sqloffset = cstr_Ltrim_whitespace(sqlstmt->sqlblock);
-    sqlstmt->offsetlen = cstr_Rtrim_whitespace(sqlstmt->sqloffset, cstr_length(sqlstmt->sqloffset, sql_len));
+    //
+    sqlstmt = RDBSQLStmtObjectNew(ctx, sql_block, sql_len);
+    if (! sqlstmt) {
+        return RDBAPI_ERR_NOMEM;
+    }
 
     // use pattern to match sqlstmt
-
+    //
     if (re_match(RDBSQL_PATTERN_UPSERT_INTO, sqlstmt->sqloffset) == 0) {
         SQLStmtParseUpsert(ctx, sqlstmt);
         goto parse_finished;
@@ -1942,6 +1805,8 @@ void RDBSQLStmtFree (RDBSQLStmt sqlstmt)
         cstr_varray_free(sqlstmt->upsert.updcolvalues, RDBAPI_ARGV_MAXNUM);
 
         RDBSQLStmtFree(sqlstmt->upsert.selectstmt);
+
+        zstringbufFree(sqlstmt->upsert.prepare.keypattern);
     } else if (sqlstmt->stmt == RDBSQL_CREATE) {
         // TODO:
     }
@@ -1950,124 +1815,130 @@ void RDBSQLStmtFree (RDBSQLStmt sqlstmt)
 }
 
 
-RDBSQLStmtType RDBSQLStmtGetType (RDBSQLStmt sqlstmt, char **parsedClause, int pretty)
-{
-    return sqlstmt->stmt;
-}
-
-
-void RDBSQLStmtPrint (RDBSQLStmt sqlstmt, FILE *fout)
+RDBSQLStmtType RDBSQLStmtGetSql (RDBSQLStmt sqlstmt, int indent, RDBZString *outsql)
 {
     int j;
+
+    RDBSQLStmtType stmt = RDBSQL_INVALID;
+
     int rowids[RDBAPI_KEYS_MAXNUM + 1] = {0};
 
-    RDBCtx ctx = sqlstmt->ctx;
+    char indents[] = {32, 32, 32, 32,  32, 32, 32, 32, 0};
 
-    static const char *rdbsql_exprs[] = {
-        NULL
-        ,"="
-        ,"LLIKE"
-        ,"RLIKE"
-        ,"LIKE"
-        ,"MATCH"
-        ,"!="
-        ,">"
-        ,"<"
-        ,">="
-        ,"<="
-        ,NULL
-    };
+    RDBCtx ctx = sqlstmt->ctx;
+    RDBEnv env = ctx->env;
+
+    zstringbuf sqlbuf = NULL;
+
+    *outsql = NULL;
+
+    if (indent >= 0 && indent < 8) {
+        indents[indent] = '\0';
+    }
 
     switch (sqlstmt->stmt) {
     case RDBSQL_SELECT:
         if (sqlstmt->select.numselect == -1) {
-            fprintf(fout, "  SELECT *\n");
+            sqlbuf = zstringbufCat(sqlbuf, "%sSELECT *\n", indents);
         } else {
-            fprintf(fout, "  SELECT %.*s", sqlstmt->select.selectfieldslen[0], sqlstmt->select.selectfields[0]);
+            sqlbuf = zstringbufCat(sqlbuf, "%sSELECT %.*s", indents, sqlstmt->select.selectfieldslen[0], sqlstmt->select.selectfields[0]);
+
             for (j = 1; j < sqlstmt->select.numselect; j++) {
-                fprintf(fout, ",\n      %.*s", sqlstmt->select.selectfieldslen[j], sqlstmt->select.selectfields[j]);
+                sqlbuf = zstringbufCat(sqlbuf, ",\n%s%s%s%.*s", indents, indents, indents, sqlstmt->select.selectfieldslen[j], sqlstmt->select.selectfields[j]);
             }
-            fprintf(fout, "\n");
+
+            sqlbuf = zstringbufCat(sqlbuf, "\n");
         }
-        fprintf(fout, "    FROM %s.%s", sqlstmt->select.tablespace, sqlstmt->select.tablename);
+        sqlbuf = zstringbufCat(sqlbuf, "%s%sFROM %s.%s", indents, indents, sqlstmt->select.tablespace, sqlstmt->select.tablename);
 
         if (sqlstmt->select.numwhere) {
-            fprintf(fout, "\n    WHERE\n");
+            sqlbuf = zstringbufCat(sqlbuf, "\n%s%sWHERE\n", indents, indents);
 
-            fprintf(fout, "        %.*s %s %.*s",
+            sqlbuf = zstringbufCat(sqlbuf, "%s%s%s%s%.*s %s %.*s",
+                indents, indents, indents, indents,
                 sqlstmt->select.fieldslen[0], sqlstmt->select.fields[0],
-                rdbsql_exprs[ sqlstmt->select.fieldexprs[0] ],
+                ctx->env->filterexprs[ sqlstmt->select.fieldexprs[0] ],
                 sqlstmt->select.fieldvalslen[0], sqlstmt->select.fieldvals[0]);
 
             for (j = 1; j < sqlstmt->select.numwhere; j++) {
-                fprintf(fout, "\n      AND\n");
+                sqlbuf = zstringbufCat(sqlbuf, "\n%s%s%sAND\n", indents, indents, indents);
 
-                fprintf(fout, "        %.*s %s %.*s",
+                sqlbuf = zstringbufCat(sqlbuf, "%s%s%s%s%.*s %s %.*s",
+                    indents, indents, indents, indents,
                     sqlstmt->select.fieldslen[j], sqlstmt->select.fields[j],
-                    rdbsql_exprs[ sqlstmt->select.fieldexprs[j] ],
+                    ctx->env->filterexprs[ sqlstmt->select.fieldexprs[j] ],
                     sqlstmt->select.fieldvalslen[j], sqlstmt->select.fieldvals[j]);
             }
         }
 
         if (sqlstmt->select.offset) {
-            fprintf(fout, "\n    OFFSET %"PRIu64, sqlstmt->select.offset);
+            sqlbuf = zstringbufCat(sqlbuf, "\n%s%sOFFSET %"PRIu64, indents, indents, sqlstmt->select.offset);
         }
 
         if (sqlstmt->select.limit != -1) {
-            fprintf(fout, "\n    LIMIT %"PRIu64, sqlstmt->select.limit);
+            sqlbuf = zstringbufCat(sqlbuf, "\n%s%sLIMIT %"PRIu64, indents, indents, sqlstmt->select.limit);
         }
 
-        fprintf(fout, "\n");
+        sqlbuf = zstringbufCat(sqlbuf, "\n");
+        stmt = sqlstmt->stmt;
         break;
 
     case RDBSQL_UPSERT:
-        fprintf(fout, "  UPSERT INTO %s.%s ", sqlstmt->upsert.tablespace, sqlstmt->upsert.tablename);
+        sqlbuf = zstringbufCat(sqlbuf, "%sUPSERT INTO %s.%s ", indents, sqlstmt->upsert.tablespace, sqlstmt->upsert.tablename);
 
         if (sqlstmt->upsert.numfields) {
-            fprintf(fout, "(\n      %.*s", sqlstmt->upsert.fieldnameslen[0], sqlstmt->upsert.fieldnames[0]);
+            sqlbuf = zstringbufCat(sqlbuf, "(\n%s%s%s%.*s", indents, indents, indents, sqlstmt->upsert.fieldnameslen[0], sqlstmt->upsert.fieldnames[0]);
 
             for (j = 1; j < sqlstmt->upsert.numfields; j++) {
-                fprintf(fout, ",\n      %.*s", sqlstmt->upsert.fieldnameslen[j], sqlstmt->upsert.fieldnames[j]);
+                sqlbuf = zstringbufCat(sqlbuf, ",\n%s%s%s%.*s", indents, indents, indents, sqlstmt->upsert.fieldnameslen[j], sqlstmt->upsert.fieldnames[j]);
             }
+
+            sqlbuf = zstringbufCat(sqlbuf, "\n%s%s)", indents, indents);
         }
 
         if (*sqlstmt->upsert.fieldvalues) {
-            fprintf(fout, "\n    VALUES (\n      %.*s", sqlstmt->upsert.fieldvalueslen[0], sqlstmt->upsert.fieldvalues[0]);
+            sqlbuf = zstringbufCat(sqlbuf, "\n%s%sVALUES (\n%s%s%s%.*s", indents, indents, indents, indents, indents, sqlstmt->upsert.fieldvalueslen[0], sqlstmt->upsert.fieldvalues[0]);
 
             for (j = 1; j < sqlstmt->upsert.numfields; j++) {
-                fprintf(fout, ",\n      %.*s", sqlstmt->upsert.fieldvalueslen[j], sqlstmt->upsert.fieldvalues[j]);
+                sqlbuf = zstringbufCat(sqlbuf, ",\n%s%s%s%.*s", indents, indents, indents, sqlstmt->upsert.fieldvalueslen[j], sqlstmt->upsert.fieldvalues[j]);
             }
+
+            sqlbuf = zstringbufCat(sqlbuf, "\n%s%s)", indents, indents);
         }
-        fprintf(fout, "\n    )");
 
         if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_INSERT) {
-            fprintf(fout, "\n");
+            sqlbuf = zstringbufCat(sqlbuf, "\n");
         } else if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_IGNORE) {
-            fprintf(fout, " ON DUPLICATE KEY IGNORE;\n");
+            sqlbuf = zstringbufCat(sqlbuf, " ON DUPLICATE KEY IGNORE;\n");
         } else if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_UPDATE) {
-            fprintf(fout, " ON DUPLICATE KEY UPDATE\n");
-            fprintf(fout, "    %.*s=%.*s",
+            sqlbuf = zstringbufCat(sqlbuf, " ON DUPLICATE KEY UPDATE\n");
+            sqlbuf = zstringbufCat(sqlbuf, "%s%s%.*s=%.*s", indents, indents,
                 sqlstmt->upsert.updcolnameslen[0], sqlstmt->upsert.updcolnames[0],
                 sqlstmt->upsert.updcolvalueslen[0], sqlstmt->upsert.updcolvalues[0]);
 
             for (j = 1; j < sqlstmt->upsert.updcols; j++) {
-                fprintf(fout, ",\n    %.*s=%.*s",
+                sqlbuf = zstringbufCat(sqlbuf, ",\n%s%s%.*s=%.*s", indents, indents,
                     sqlstmt->upsert.updcolnameslen[j], sqlstmt->upsert.updcolnames[j],
                     sqlstmt->upsert.updcolvalueslen[j], sqlstmt->upsert.updcolvalues[j]);
             }
-            fprintf(fout, "\n");
+            sqlbuf = zstringbufCat(sqlbuf, "\n");
         } else if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_SELECT) {
-            fprintf(fout, "  (\n");
-            RDBSQLStmtPrint(sqlstmt->upsert.selectstmt, fout);
-            fprintf(fout, "  )\n");
+            RDBZString selsqlb;
+            sqlbuf = zstringbufCat(sqlbuf, "\n", indents);
+
+            if (RDBSQLStmtGetSql(sqlstmt->upsert.selectstmt, indent*2, &selsqlb) == RDBSQL_SELECT) {
+                sqlbuf = zstringbufCat(sqlbuf, "%.*s", RDBZSTRLEN(selsqlb), RDBCZSTR(selsqlb));
+                RDBZStringFree(selsqlb);
+            }
         }
+        stmt = sqlstmt->stmt;
         break;
 
     case RDBSQL_CREATE:
         if (! sqlstmt->create.fail_on_exists) {
-            fprintf(fout, "  CREATE TABLE IF NOT EXISTS %s.%s (\n", sqlstmt->create.tablespace, sqlstmt->create.tablename);
+            sqlbuf = zstringbufCat(sqlbuf, "%sCREATE TABLE IF NOT EXISTS %s.%s (\n", indents, sqlstmt->create.tablespace, sqlstmt->create.tablename);
         } else {
-            fprintf(fout, "  CREATE TABLE %s.%s (\n", sqlstmt->create.tablespace, sqlstmt->create.tablename);
+            sqlbuf = zstringbufCat(sqlbuf, "%sCREATE TABLE %s.%s (\n", indents, sqlstmt->create.tablespace, sqlstmt->create.tablename);
         }
 
         for (j = 0; j < sqlstmt->create.numfields; j++) {
@@ -2078,68 +1949,192 @@ void RDBSQLStmtPrint (RDBSQLStmt sqlstmt, FILE *fout)
                 rowids[0] += 1;
             }
 
-            fprintf(fout, "    %-20.*s"
-                " %s",
-                fdes->namelen, fdes->fieldname,
-                ctx->env->valtypenames[fdes->fieldtype]);
+            sqlbuf = zstringbufCat(sqlbuf, "%s%s%-20.*s %s", indents, indents, fdes->namelen, fdes->fieldname, env->valtypenames[fdes->fieldtype]);
 
             if (fdes->length) {
-                fprintf(fout, "(%d", fdes->length);
+                sqlbuf = zstringbufCat(sqlbuf, "(%d", fdes->length);
 
                 if (fdes->dscale) {
-                    fprintf(fout, ",%d)", fdes->dscale);
+                    sqlbuf = zstringbufCat(sqlbuf, ",%d)", fdes->dscale);
                 } else {
-                    fprintf(fout, ")");
+                    sqlbuf = zstringbufCat(sqlbuf, ")");
                 }
             }
 
             if (! fdes->nullable) {
-                fprintf(fout, " NOT NULL");
+                sqlbuf = zstringbufCat(sqlbuf, " NOT NULL");
             }
 
             if (*fdes->comment) {
-                fprintf(fout, " COMMENT '%s'", fdes->comment);
+                sqlbuf = zstringbufCat(sqlbuf, " COMMENT '%s'", fdes->comment);
             }
 
-            fprintf(fout, ",\n");
+            sqlbuf = zstringbufCat(sqlbuf, ",\n");
         }
 
-        fprintf(fout, "    ROWKEY (");
+        sqlbuf = zstringbufCat(sqlbuf, "%s%sROWKEY (", indents, indents);
+
         for (j = 1; j <= rowids[0]; j++) {
             // colindex: 0-based
             int colindex = rowids[j];
-
             if (j == 1) {
-                fprintf(fout, "%.*s",
-                    sqlstmt->create.fielddefs[colindex].namelen,
-                    sqlstmt->create.fielddefs[colindex].fieldname);
+                sqlbuf = zstringbufCat(sqlbuf, "%.*s", sqlstmt->create.fielddefs[colindex].namelen, sqlstmt->create.fielddefs[colindex].fieldname);
             } else {
-                fprintf(fout, ", %.*s",
-                    sqlstmt->create.fielddefs[colindex].namelen,
-                    sqlstmt->create.fielddefs[colindex].fieldname);
-            }            
+                sqlbuf = zstringbufCat(sqlbuf, ", %.*s", sqlstmt->create.fielddefs[colindex].namelen, sqlstmt->create.fielddefs[colindex].fieldname);
+            }
         }
-        fprintf(fout, ")");
+        sqlbuf = zstringbufCat(sqlbuf, ")");
 
         if (*sqlstmt->create.tablecomment) {
-            fprintf(fout, "\n  ) COMMENT '%s'\n", sqlstmt->create.tablecomment);
+            sqlbuf = zstringbufCat(sqlbuf, "\n%s) COMMENT '%s'\n", indents, sqlstmt->create.tablecomment);
         } else {
-            fprintf(fout, "\n  )\n");
+            sqlbuf = zstringbufCat(sqlbuf, "\n%s)\n", indents);
         }
+        stmt = sqlstmt->stmt;
         break;
 
     case RDBSQL_DROP_TABLE:
-        fprintf(fout, "  DROP TABLE %s.%s\n", sqlstmt->droptable.tablespace, sqlstmt->droptable.tablename);
+        sqlbuf = zstringbufCat(sqlbuf, "%sDROP TABLE %s.%s\n", indents, sqlstmt->droptable.tablespace, sqlstmt->droptable.tablename);
+        stmt = sqlstmt->stmt;
         break;
 
     case RDBSQL_DESC_TABLE:
-        fprintf(fout, "  DESC %s.%s\n", sqlstmt->desctable.tablespace, sqlstmt->desctable.tablename);
-        break;
-
-    default:
-        // TODO:
+        sqlbuf = zstringbufCat(sqlbuf, "%sDESC %s.%s\n", indents, sqlstmt->desctable.tablespace, sqlstmt->desctable.tablename);
+        stmt = sqlstmt->stmt;
         break;
     }
+
+    if (sqlbuf) {
+        *outsql = RDBZStringNew(sqlbuf->str, sqlbuf->len);
+
+        zstringbufFree(sqlbuf);
+    }
+
+    return stmt;
+}
+
+
+static int assign_fieldvalue (const char *valstr, int len, const char **ppvalout)
+{
+    if (len > 1) {
+        if (valstr[0] == 39 && valstr[len - 1] == 39) {
+            *ppvalout = &valstr[1];
+            return len - 2;
+        }
+    }
+
+    *ppvalout = valstr;
+    return len;
+}
+
+
+RDBAPI_RESULT RDBSQLStmtPrepare (RDBSQLStmt sqlstmt)
+{
+    int i, j, k;
+
+    RDBCtx ctx = sqlstmt->ctx;
+
+    if (sqlstmt->stmt == RDBSQL_SELECT) {
+        // TODO:
+
+    } else if (sqlstmt->stmt == RDBSQL_DELETE) {
+        // TODO:
+
+    } else if (sqlstmt->stmt == RDBSQL_UPSERT) {
+        zstringbuf keypattern;
+
+        RDBTableDes_t *tabledes = &sqlstmt->upsert.prepare.tabledes;
+
+        int *fields = sqlstmt->upsert.prepare.fields;
+        int *rowids = sqlstmt->upsert.prepare.rowids;
+
+        sqlstmt->upsert.prepare.attfields = 0;
+        sqlstmt->upsert.prepare.dupkey = 1;
+
+        bzero(fields, sizeof(sqlstmt->upsert.prepare.fields));
+        bzero(rowids, sizeof(sqlstmt->upsert.prepare.rowids));
+
+        bzero(&sqlstmt->upsert.prepare.tabledes, sizeof(sqlstmt->upsert.prepare.tabledes));
+
+        zstringbufFree(sqlstmt->upsert.prepare.keypattern);
+        sqlstmt->upsert.prepare.keypattern = zstringbufNew(RDB_ROWKEY_MAX_SIZE, NULL, 0);
+
+        keypattern = sqlstmt->upsert.prepare.keypattern;
+
+        if (RDBTableDescribe(ctx, sqlstmt->upsert.tablespace, sqlstmt->upsert.tablename, tabledes) != RDBAPI_SUCCESS) {
+            return RDBAPI_ERROR;
+        }
+
+        for (i = 0; i < sqlstmt->upsert.numfields; i++) {
+            j = RDBTableDesFieldIndex(tabledes, sqlstmt->upsert.fieldnames[i], sqlstmt->upsert.fieldnameslen[i]);
+            if (j == -1) {
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "field not found: '%.*s'", sqlstmt->upsert.fieldnameslen[i], sqlstmt->upsert.fieldnames[i]);
+                return RDBAPI_ERROR;
+            }
+
+            if (fields[j + 1]) {
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "duplicated field: '%.*s'", sqlstmt->upsert.fieldnameslen[i], sqlstmt->upsert.fieldnames[i]);
+                return RDBAPI_ERROR;
+            }
+
+            if (fields[0] < j + 1) {
+                fields[0] = j + 1;
+            }
+
+            k = tabledes->fielddes[j].rowkey;
+            if (k > 0) {
+                // < 0: rowkey field
+                fields[j + 1] = (i + 1) * (-1);
+
+                rowids[ k ] = i + 1;
+                if (rowids[0] < k) {
+                    rowids[0] = k;
+                }
+            } else {
+                // > 0: attribute fields
+                fields[j + 1] = i + 1;
+                sqlstmt->upsert.prepare.attfields++;
+            }
+        }
+
+        for (i = 0; i < sqlstmt->upsert.updcols; i++) {
+            j = RDBTableDesFieldIndex(tabledes, sqlstmt->upsert.updcolnames[i], sqlstmt->upsert.updcolnameslen[i]);
+            if (j == -1) {
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "field for update not found: '%.*s'", sqlstmt->upsert.updcolnameslen[i], sqlstmt->upsert.updcolnames[i]);
+                return RDBAPI_ERROR;
+            }
+            if (tabledes->fielddes[j].rowkey) {
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "cannot update rowkey field: '%.*s'", sqlstmt->upsert.updcolnameslen[i], sqlstmt->upsert.updcolnames[i]);
+                return RDBAPI_ERROR;
+            }
+        }
+
+        keypattern = zstringbufCat(keypattern, "{%s::%s", sqlstmt->upsert.tablespace, sqlstmt->upsert.tablename);
+        for (i = 1; i <= tabledes->rowkeyid[0]; i++) {
+            j = rowids[i];
+
+            if (j > 0) {
+                keypattern = zstringbufCat(keypattern, ":%.*s", sqlstmt->upsert.fieldvalueslen[j - 1], sqlstmt->upsert.fieldvalues[j - 1]);
+            } else {
+                sqlstmt->upsert.prepare.dupkey = 0;
+                keypattern = zstringbufCat(keypattern, ":*");
+            }
+        }
+
+        sqlstmt->upsert.prepare.keypattern = zstringbufCat(keypattern, "}");
+
+        if (sqlstmt->upsert.selectstmt) {
+            if (RDBSQLStmtPrepare(sqlstmt->upsert.selectstmt) != RDBAPI_SUCCESS) {
+                return RDBAPI_ERROR;
+            }
+        }
+    } else if (sqlstmt->stmt == RDBSQL_CREATE) {
+        // TODO:
+
+
+    }
+
+    return RDBAPI_SUCCESS;
 }
 
 
@@ -2147,15 +2142,25 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
 {
     RDBAPI_RESULT res;
 
+    int i, j, k;
+
     int keylen;
     char keybuf[RDB_KEY_VALUE_SIZE];
 
     RDBResultMap resultmap = NULL;
 
     RDBCtx ctx = sqlstmt->ctx;
+
     const char **vtnames = (const char **) ctx->env->valtypenames;
 
     *outResultMap = NULL;
+
+    if (sqlstmt->upsert.prepare.tabledes.table_timestamp != RDBTableGetTimestamp(ctx, sqlstmt->upsert.tablespace, sqlstmt->upsert.tablename)) {
+        res = RDBSQLStmtPrepare(sqlstmt);
+        if (res != RDBAPI_SUCCESS) {
+            return res;
+        }
+    }
 
     if (sqlstmt->stmt == RDBSQL_SELECT || sqlstmt->stmt == RDBSQL_DELETE) {
         res = RDBTableScanFirst(ctx, sqlstmt, &resultmap);
@@ -2174,117 +2179,367 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
             RDBResultMapDestroy(resultmap);
         }
     } else if (sqlstmt->stmt == RDBSQL_UPSERT) {
-        /*
-        // TODO:
-        ub8 existedkeys = 0;
-        ub8 updatedkeys = 0;
+        // UPSERT INTO xsdb.connect (sid, connfd, host) VALUES(1,1, 'localhost') ON DUPLICATE KEY UPDATE port=5899;
+        // UPSERT INTO xsdb.connect (sid, connfd, host) VALUES(1,1, 'localhost') ON DUPLICATE KEY IGNORE;
+        // UPSERT INTO xsdb.connect (sid, connfd, host) VALUES(1,1, 'localhost');
+        // UPSERT INTO xsdb.connect (sid, connfd, host) SELECT * FROM xsdb.connect2 WHERE ...;
+        // UPSERT INTO xsdb.connect SELECT * FROM xsdb.connect;
 
-        int nodeindex = 0;
+        int argc = 0;
+        const char *argv[RDBAPI_ARGV_MAXNUM + 4] = {0};
+        size_t argvlen[RDBAPI_ARGV_MAXNUM + 4] = {0};
 
-        // result cursor state
-        RDBTableCursor_t *nodestates = RDBMemAlloc(sizeof(RDBTableCursor_t) * RDBEnvNumNodes(ctx->env));
+        const char *colnames[] = {"$rowkey", 0};
+        int colnameslen[] = {7, 0};
 
-        // @@@
-        //??RDBResultMapNew(ctx, NULL, sqlstmt->stmt, NULL, NULL, 0, NULL, NULL, &resultMap);
+        zstringbuf keypattern = sqlstmt->upsert.prepare.keypattern;
 
-        while (nodeindex < RDBEnvNumNodes(ctx->env)) {
-            RDBEnvNode envnode = RDBEnvGetNode(ctx->env, nodeindex);
+        if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_INSERT) {
+            if (! sqlstmt->upsert.prepare.attfields) {
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "upsert no field for key: %.*s", keypattern->len, keypattern->str);
+                return RDBAPI_ERROR;                    
+            }
 
-            // scan only on master node
-            if (RDBEnvNodeGetMaster(envnode, NULL) == RDBAPI_TRUE) {
-                redisReply *replyRows;
+            if (sqlstmt->upsert.prepare.dupkey) {
+                // HMSET keypattern fld1 val1 fld2 val2 ...
+                redisReply *replySet;
 
-                RDBCtxNode ctxnode = RDBCtxGetNode(ctx, nodeindex);
+                argc = 0;
+                argv[argc] = "HMSET";
+                argvlen[argc++] = 5;
 
-                RDBTableCursor nodestate = &nodestates[nodeindex];
-                if (nodestate->finished) {
-                    // goto next node since this current node has finished
-                    nodeindex++;
-                    continue;
+                argv[argc] = keypattern->str;
+                argvlen[argc++] = keypattern->len;
+
+                for (j = 1; j <= sqlstmt->upsert.prepare.fields[0]; j++) {
+                    i = sqlstmt->upsert.prepare.fields[j];
+
+                    if (i > 0) {
+                        argv[argc] = sqlstmt->upsert.fieldnames[i-1];
+                        argvlen[argc] = sqlstmt->upsert.fieldnameslen[i-1];
+
+                        argc++;
+                        argvlen[argc] = assign_fieldvalue(sqlstmt->upsert.fieldvalues[i-1], sqlstmt->upsert.fieldvalueslen[i-1], &argv[argc]);
+
+                        argc++;
+                    }
                 }
 
-               //?? res = RDBTableScanOnNode(ctxnode, nodestate, sqlstmt->upsert.rkpattern.str, sqlstmt->upsert.rkpattern.length, 200, &replyRows);
+                replySet = RedisExecCommandArgv(ctx, argc, argv, argvlen);
 
-                if (res == RDBAPI_SUCCESS) {
-                    // here we should add new rows
-                    size_t i = 0;
+                if (RedisCheckReplyStatus(replySet, "OK", 2)) {
+                    RDBRow row;
 
-                    for (; i != replyRows->elements; i++) {
-                        redisReply * replyUpdate = NULL;
-                        redisReply * reply = replyRows->element[i];
+                    RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, &resultmap);
+                    RDBRowNew(resultmap, keypattern->str, keypattern->len, &row);
+                    RDBCellSetString(RDBRowCell(row, 0), keypattern->str, keypattern->len);
+                    RDBResultMapInsertRow(resultmap, row);
 
-                        existedkeys++;
+                    RedisFreeReplyObject(&replySet);
 
-                        if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_UPDATE) {
+                    *outResultMap = resultmap;
+                    return RDBAPI_SUCCESS;
+                }
 
-                            // with ON DUPLICATE KEY UPDATE field1=value1, field2=value2, ...
-                            sqlstmt->upsert.argvUpd[1] = reply->str;
-                            sqlstmt->upsert.argvlenUpd[1] = reply->len;
+                // error
+                RedisFreeReplyObject(&replySet);
+            } else {
+                int nodeindex = 0;
+                int haserror = 0;
 
-                            // here we found existed key, then set its value use below command:
-                            //   "hmset key field1 value1 field2 value2"
-                            replyUpdate = RedisExecCommandArgv(ctx, sqlstmt->upsert.argcUpd, sqlstmt->upsert.argvUpd, sqlstmt->upsert.argvlenUpd);
+                // result cursor state
+                RDBTableCursor_t *nodestates = RDBMemAlloc(sizeof(RDBTableCursor_t) * RDBEnvNumNodes(ctx->env));
 
-                            if (! RedisCheckReplyStatus(replyUpdate, "OK", 2)) {
-                                printf("(%s:%d) TODO: fail to update key: %.*s - (%s) \n", __FILE__, __LINE__, (int)reply->len, reply->str, ctx->errmsg);
-                            } else {
-                                updatedkeys++;
-                            }
-                        } else if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_INSERT) {
-                            // without ON DUPLICATE KEY ...
-                            sqlstmt->upsert.argvNew[1] = reply->str;
-                            sqlstmt->upsert.argvlenNew[1] = reply->len;
+                RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, &resultmap);
 
-                            replyUpdate = RedisExecCommandArgv(ctx, sqlstmt->upsert.argcNew, sqlstmt->upsert.argvNew, sqlstmt->upsert.argvlenNew);
+                while (! haserror && nodeindex < RDBEnvNumNodes(ctx->env)) {
+                    RDBEnvNode envnode = RDBEnvGetNode(ctx->env, nodeindex);
 
-                            if (! RedisCheckReplyStatus(replyUpdate, "OK", 2)) {
-                                printf("(%s:%d) TODO: fail to update key: %.*s - (%s) \n", __FILE__, __LINE__, (int)reply->len, reply->str, ctx->errmsg);
-                            } else {
-                                updatedkeys++;
+                    // scan only on master node
+                    if (RDBEnvNodeGetMaster(envnode, NULL) == RDBAPI_TRUE) {
+                        redisReply *replyRows = NULL;
+                        RDBCtxNode ctxnode = RDBCtxGetNode(ctx, nodeindex);
+
+                        RDBTableCursor nodestate = &nodestates[nodeindex];
+                        if (nodestate->finished) {
+                            // goto next node since this current node has finished
+                            nodeindex++;
+                            continue;
+                        }
+
+                        res = RDBTableScanOnNode(ctxnode, nodestate, keypattern->str, keypattern->len, 200, &replyRows);
+                        if (res == RDBAPI_SUCCESS) {
+                            // here we should update rows
+                            for (i = 0; ! haserror && i != replyRows->elements; i++) {
+                                // get row first
+                                redisReply *replyGet;
+
+                                argc = 0;
+
+                                argv[argc] = "HMGET";
+                                argvlen[argc++] = 5;
+
+                                // rowkey
+                                argv[argc] = replyRows->element[i]->str;
+                                argvlen[argc++] = replyRows->element[i]->len;
+
+                                for (j = 1; j <= sqlstmt->upsert.prepare.fields[0]; j++) {
+                                    k = sqlstmt->upsert.prepare.fields[j];
+                                    if (k > 0) {
+                                        argv[argc] = sqlstmt->upsert.fieldnames[k-1];
+                                        argvlen[argc++] = sqlstmt->upsert.fieldnameslen[k-1];
+                                    }
+                                }
+
+                                replyGet = RedisExecCommandArgv(ctx, argc, argv, argvlen);
+
+                                if (replyGet && replyGet->type == REDIS_REPLY_ARRAY && replyGet->elements == sqlstmt->upsert.prepare.attfields) {
+                                    redisReply *replySet;
+
+                                    argc = 0;
+
+                                    argv[argc] = "HMSET";
+                                    argvlen[argc++] = 5;
+
+                                    argv[argc] = replyRows->element[i]->str;
+                                    argvlen[argc++] = replyRows->element[i]->len;
+
+                                    for (j = 1; j <= sqlstmt->upsert.prepare.fields[0]; j++) {
+                                        k = sqlstmt->upsert.prepare.fields[j];
+                                        if (k > 0) {
+                                            argv[argc] = sqlstmt->upsert.fieldnames[k - 1];
+                                            argvlen[argc] = sqlstmt->upsert.fieldnameslen[k - 1];
+
+                                            argc++;
+                                            argvlen[argc] = assign_fieldvalue(sqlstmt->upsert.fieldvalues[i-1], sqlstmt->upsert.fieldvalueslen[i-1], &argv[argc]);
+
+                                            argc++;
+                                        }
+                                    }
+
+                                    replySet = RedisExecCommandArgv(ctx, argc, argv, argvlen);
+
+                                    if (RedisCheckReplyStatus(replySet, "OK", 2)) {
+                                        RDBRow row;
+                                        RDBRowNew(resultmap, replyRows->element[i]->str, replyRows->element[i]->len, &row);
+                                        RDBCellSetString(RDBRowCell(row, 0), replyRows->element[i]->str, replyRows->element[i]->len);
+
+                                        // TODO: overflow?
+                                        RDBResultMapInsertRow(resultmap, row);
+                                    } else {
+                                        haserror = 1;
+                                    }
+
+                                    RedisFreeReplyObject(&replySet);
+                                }
+
+                                RedisFreeReplyObject(&replyGet);
                             }
                         }
 
-                        RedisFreeReplyObject(&replyUpdate);
+                        RedisFreeReplyObject(&replyRows);
+                    } else {
+                        nodeindex++;
+                    }
+                }
+
+                RDBMemFree(nodestates);
+
+                if (! haserror) {
+                    *outResultMap = resultmap;
+                    return RDBAPI_SUCCESS;
+                }
+
+                RDBResultMapDestroy(resultmap);
+            }
+        } else if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_IGNORE) {
+            if (! sqlstmt->upsert.prepare.attfields) {
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "upsert no field for key: %.*s", keypattern->len, keypattern->str);
+                return RDBAPI_ERROR;                    
+            }
+
+            if (sqlstmt->upsert.prepare.dupkey) {
+                if (RedisExistsKey(ctx, keypattern->str, keypattern->len) == 0) {
+                    // key not existed
+                    redisReply *replySet;
+
+                    argc = 0;
+                    argv[argc] = "HMSET";
+                    argvlen[argc++] = 5;
+
+                    argv[argc] = keypattern->str;
+                    argvlen[argc++] = keypattern->len;
+
+                    for (j = 1; j <= sqlstmt->upsert.prepare.fields[0]; j++) {
+                        i = sqlstmt->upsert.prepare.fields[j];
+
+                        if (i > 0) {
+                            argv[argc] = sqlstmt->upsert.fieldnames[i-1];
+                            argvlen[argc] = sqlstmt->upsert.fieldnameslen[i-1];
+
+                            argc++;
+                            argvlen[argc] = assign_fieldvalue(sqlstmt->upsert.fieldvalues[i-1], sqlstmt->upsert.fieldvalueslen[i-1], &argv[argc]);
+
+                            argc++;
+                        }
                     }
 
-                    RedisFreeReplyObject(&replyRows);
-                }
-            } else {
-                nodeindex++;
-            }
-        }
+                    replySet = RedisExecCommandArgv(ctx, argc, argv, argvlen);
 
-        RDBMemFree(nodestates);
+                    if (RedisCheckReplyStatus(replySet, "OK", 2)) {
+                        RDBRow row;
 
-        if (! existedkeys) {
-            // no matter what ON DUPLICATE KEY ...
-            if (sqlstmt->upsert.argcNew) {
-                redisReply * replyNew;
+                        RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, &resultmap);
+                        RDBRowNew(resultmap, keypattern->str, keypattern->len, &row);
+                        RDBCellSetString(RDBRowCell(row, 0), keypattern->str, keypattern->len);
+                        RDBResultMapInsertRow(resultmap, row);
 
-                // rowkey must be full patternized
-                sqlstmt->upsert.argvNew[1] = sqlstmt->upsert.rkpattern.str;
-                sqlstmt->upsert.argvlenNew[1] = sqlstmt->upsert.rkpattern.length;
+                        RedisFreeReplyObject(&replySet);
 
-                replyNew = RedisExecCommandArgv(ctx, sqlstmt->upsert.argcNew, sqlstmt->upsert.argvNew, sqlstmt->upsert.argvlenNew);
-                if (! RedisCheckReplyStatus(replyNew, "OK", 2)) {
-                    printf("(%s:%d) TODO: fail to insert key: %.*s - (%s)\n",
-                        __FILE__, __LINE__,
-                        sqlstmt->upsert.rkpattern.length, sqlstmt->upsert.rkpattern.str,
-                        ctx->errmsg);
+                        *outResultMap = resultmap;
+                        return RDBAPI_SUCCESS;
+                    }
+
+                    // error
+                    RedisFreeReplyObject(&replySet);
                 } else {
-                    printf("upsert 1 new key OK: %.*s.\n", sqlstmt->upsert.rkpattern.length, sqlstmt->upsert.rkpattern.str);
+                    snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "upsert on duplicate key ignored: %.*s", keypattern->len, keypattern->str);
+                }
+            } else {
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "not all fields of rowkey assigned: %.*s", keypattern->len, keypattern->str);
+            }
+        } else if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_UPDATE) {
+            if (! sqlstmt->upsert.prepare.attfields) {
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "upsert no field for key: %.*s", keypattern->len, keypattern->str);
+                return RDBAPI_ERROR;                    
+            }
+
+            if (sqlstmt->upsert.prepare.dupkey) {
+                // get old first
+                redisReply *replyGet = NULL;
+                redisReply *replySet = NULL;
+
+                argc = 0;
+                argv[argc] = "HMGET";
+                argvlen[argc++] = 5;
+
+                argv[argc] = keypattern->str;
+                argvlen[argc++] = keypattern->len;
+
+                for (i = 0; i < sqlstmt->upsert.updcols; i++) {
+                    argv[argc] = sqlstmt->upsert.updcolnames[i];
+                    argvlen[argc++] = sqlstmt->upsert.updcolnameslen[i];
                 }
 
-                RedisFreeReplyObject(&replyNew);
+                replyGet = RedisExecCommandArgv(ctx, argc, argv, argvlen);
+
+                if (replyGet && replyGet->type == REDIS_REPLY_ARRAY && replyGet->elements == sqlstmt->upsert.updcols) {
+                    // on duplicate key: update
+                    argc = 0;
+                    argv[argc] = "HMSET";
+                    argvlen[argc++] = 5;
+
+                    argv[argc] = keypattern->str;
+                    argvlen[argc++] = keypattern->len;
+
+                    for (i = 0; i < sqlstmt->upsert.updcols; i++) {
+                        argv[argc] = sqlstmt->upsert.updcolnames[i];
+                        argvlen[argc] = sqlstmt->upsert.updcolnameslen[i];
+
+                        argc++;
+                        argvlen[argc] = assign_fieldvalue(sqlstmt->upsert.updcolvalues[i], sqlstmt->upsert.updcolvalueslen[i], &argv[argc]);
+
+                        argc++;
+                    }
+
+                    replySet = RedisExecCommandArgv(ctx, argc, argv, argvlen);
+
+                    if (RedisCheckReplyStatus(replySet, "OK", 2)) {
+                        RDBRow row;
+
+                        RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, &resultmap);
+                        RDBRowNew(resultmap, keypattern->str, keypattern->len, &row);
+                        RDBCellSetString(RDBRowCell(row, 0), keypattern->str, keypattern->len);
+                        RDBResultMapInsertRow(resultmap, row);
+
+                        RedisFreeReplyObject(&replyGet);
+                        RedisFreeReplyObject(&replySet);
+
+                        *outResultMap = resultmap;
+                        return RDBAPI_SUCCESS;
+                    }
+                } else {
+                    // not duplicate key add new
+                    argc = 0;
+                    argv[argc] = "HMSET";
+                    argvlen[argc++] = 5;
+
+                    argv[argc] = keypattern->str;
+                    argvlen[argc++] = keypattern->len;
+
+                    for (j = 1; j <= sqlstmt->upsert.prepare.fields[0]; j++) {
+                        i = sqlstmt->upsert.prepare.fields[j];
+
+                        if (i > 0) {
+                            argv[argc] = sqlstmt->upsert.fieldnames[i-1];
+                            argvlen[argc] = sqlstmt->upsert.fieldnameslen[i-1];
+
+                            argc++;
+                            argvlen[argc] = assign_fieldvalue(sqlstmt->upsert.fieldvalues[i-1], sqlstmt->upsert.fieldvalueslen[i-1], &argv[argc]);
+
+                            argc++;
+                        }
+                    }
+
+                    replySet = RedisExecCommandArgv(ctx, argc, argv, argvlen);
+
+                    if (RedisCheckReplyStatus(replySet, "OK", 2)) {
+                        RDBRow row;
+
+                        RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, &resultmap);
+                        RDBRowNew(resultmap, keypattern->str, keypattern->len, &row);
+                        RDBCellSetString(RDBRowCell(row, 0), keypattern->str, keypattern->len);
+                        RDBResultMapInsertRow(resultmap, row);
+
+                        RedisFreeReplyObject(&replyGet);
+                        RedisFreeReplyObject(&replySet);
+
+                        *outResultMap = resultmap;
+                        return RDBAPI_SUCCESS;
+                    }
+                }
+
+                RedisFreeReplyObject(&replyGet);
+                RedisFreeReplyObject(&replySet);
             } else {
-                printf("(%s:%d) TODO: warning insert key not valid: %.*s\n", __FILE__, __LINE__, sqlstmt->upsert.rkpattern.length, sqlstmt->upsert.rkpattern.str);
+                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "not all fields of rowkey assigned: %.*s", keypattern->len, keypattern->str);
             }
-        } else {
-            printf("upsert %"PRIu64" existed keys OK.\n", updatedkeys);
-        }
+        } else if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_SELECT) {
+            printf("(%s:%d) TODO: RDBSQL_UPSERT_MODE_SELECT\n", __FILE__, __LINE__);
+
+            for (i = 0; i < sqlstmt->upsert.numfields; i++) {
+                printf("(%s)\n", sqlstmt->upsert.fieldnames[i]);
+            }
+
+
+/*
+            RDBResultMap selresultmap;
+
+            res = RDBTableScanFirst(ctx, sqlstmt->upsert.selectstmt, &selresultmap);
+            if (res == RDBAPI_SUCCESS) {
+                ub8 offset = RDBTableScanNext(selresultmap, sqlstmt->upsert.selectstmt->select.offset, sqlstmt->upsert.selectstmt->select.limit);
+
+                if (offset != RDB_ERROR_OFFSET) {
+
+                    return RDBAPI_SUCCESS;
+                }
+
+                RDBResultMapDestroy(selresultmap);
+            }
 */
-        *outResultMap = resultmap;
-        return RDBAPI_SUCCESS;
+        }
+
+        return RDBAPI_ERROR;
 
     } else if (sqlstmt->stmt == RDBSQL_CREATE) {
         // CREATE TABLE IF NOT EXISTS xsdb.test22(uid UB8 NOT NULL COMMENT 'user id', str STR(30) , ROWKEY(uid)) COMMENT 'test table';
@@ -2565,9 +2820,20 @@ RDBAPI_RESULT RDBCtxExecuteSql (RDBCtx ctx, RDBZString sqlstr, RDBResultMap *out
     }
 
     if (ctx->env->verbose) {
-        fprintf(stdout, "# VERBOSE ON\n");
-        RDBSQLStmtPrint(sqlstmt, stdout);
-        fprintf(stdout, "  ;\n");
+        int nch = 0;
+        RDBZString sqlout = NULL;
+
+        fprintf(stdout, "# VERBOSE ON (INDENT=%d);\n", RDB_PRINT_LINE_INDENT);
+
+        if (RDBSQLStmtGetSql(sqlstmt, RDB_PRINT_LINE_INDENT, &sqlout) != RDBSQL_INVALID) {
+            fprintf(stdout, "%.*s", RDBZSTRLEN(sqlout), RDBCZSTR(sqlout));
+            RDBZStringFree(sqlout);
+            while (nch++ < RDB_PRINT_LINE_INDENT) {
+                fprintf(stdout, " ");
+            }
+            fprintf(stdout, ";\n");
+        }
+
         fflush(stdout);
     }
 

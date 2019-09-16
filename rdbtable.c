@@ -41,7 +41,7 @@
  *   0-based index for fieldname in tabledes
  *   -1: not found
  */
-static int RDBTableDesFieldIndex (const RDBTableDes_t *tabledes, const char *fieldname, int fieldnamelen)
+int RDBTableDesFieldIndex (const RDBTableDes_t *tabledes, const char *fieldname, int fieldnamelen)
 {
     if (fieldnamelen == -1) {
         fieldnamelen = cstr_length(fieldname, RDB_KEY_NAME_MAXLEN + 1);
@@ -292,7 +292,7 @@ RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx, RDBSQLStmt sqlstmt, RDBResultMap *o
             }
             printf("\n");
         } else {
-            printf("$SCAN %"PRIu64" MATCH %.*s COUNT %"PRIu32"\n", sqlstmt->select.offset, filter->patternlen, filter->keypattern, sqlstmt->select.limit);
+            printf("$SCAN %"PRIu64" MATCH %.*s COUNT %"PRIu64"\n", sqlstmt->select.offset, filter->patternlen, filter->keypattern, sqlstmt->select.limit);
         }
     }
 
@@ -307,7 +307,7 @@ RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx, RDBSQLStmt sqlstmt, RDBResultMap *o
                 if (filter->sqlstmt->sqlfunc == RDBSQL_FUNC_COUNT) {
                     snprintf_chkd_V1(maptitle, sizeof(maptitle), "# SELECT COUNT(*) on '%s':", filter->table);
 
-                    if (RDBResultMapCreate(maptitle, filter->sqlstmt->select.selectfields, filter->sqlstmt->select.selectfieldslen, 1, &resultmap) == RDBAPI_SUCCESS) {
+                    if (RDBResultMapCreate(maptitle, (const char **)filter->sqlstmt->select.selectfields, filter->sqlstmt->select.selectfieldslen, 1, &resultmap) == RDBAPI_SUCCESS) {
                         RDBRow row = NULL;
                         RDBRowNew(resultmap, filter->table, -1, &row);
                         RDBCellSetInteger(RDBRowCell(row, 0), 0);
@@ -682,12 +682,13 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
     int commentlen = cstr_length(tablecomment, RDB_KEY_VALUE_SIZE - 1);
 
     char table_rowkey[RDB_KEY_NAME_MAXLEN * 3];
-    char creatdt[30] = {0};
+
+    char timestamp[22] = {0};
     char numfields[10] = {0};
 
     tpl_bin outbin = {0};
 
-    const char * fields[] = {"numfields", "fieldes", "creatdt", "comment", 0};
+    const char * fields[] = {"numfields", "fieldes", "timestamp", "comment", 0};
     const char * values[5];
 
     size_t valueslen[5];
@@ -713,17 +714,15 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
         return RDBAPI_ERROR;
     }
 
-    RDBCurrentTime(RDBAPI_TIMESPEC_SEC, creatdt);
-
     values[0] = numfields;
     values[1] = (char *) outbin.addr;
-    values[2] = creatdt;
+    values[2] = timestamp;
     values[3] = tablecomment;
     values[4] = 0;
 
     valueslen[0] = snprintf_chkd_V1(numfields, sizeof(numfields), "%d", nfields);
     valueslen[1] = outbin.sz;
-    valueslen[2] = cstr_length(creatdt, sizeof(creatdt));
+    valueslen[2] = snprintf_chkd_V1(timestamp, sizeof(timestamp), "%"PRIu64, RDBCurrentTime(RDBAPI_TIMESPEC_MSEC, NULL));
     valueslen[3] = commentlen;
     valueslen[4] = 0;
 
@@ -738,7 +737,7 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
     ub8 u8val;
     redisReply *tableReply = NULL;
 
-    const char *fldnames[] = {"numfields", "fieldes", "creatdt", "comment", 0};
+    const char *fldnames[] = {"numfields", "fieldes", "timestamp", "comment", 0};
 
     bzero(tabledes, sizeof(*tabledes));
 
@@ -747,7 +746,7 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
         return RDBAPI_ERROR;
     }
 
-    // hmget {redisdb::$tablespace:$tablename} numfields fieldes creatdt comment
+    // hmget {redisdb::$tablespace:$tablename} numfields fieldes timestamp comment
     snprintf_chkd_V1(tabledes->table_rowkey, sizeof(tabledes->table_rowkey) - 1, "{%s::%s:%s}", RDB_SYSTEM_TABLE_PREFIX, tablespace, tablename);
 
     if (RedisHMGet(ctx, tabledes->table_rowkey, fldnames, &tableReply) != RDBAPI_SUCCESS) {
@@ -771,7 +770,8 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
         return RDBAPI_ERROR;
     }
 
-    snprintf_chkd_V1(tabledes->table_datetime, sizeof(tabledes->table_datetime), "%.*s", (int)tableReply->element[2]->len, tableReply->element[2]->str);
+    cstr_to_ub8(10, tableReply->element[2]->str, (int) tableReply->element[2]->len, &tabledes->table_timestamp);
+
     snprintf_chkd_V1(tabledes->table_comment, sizeof(tabledes->table_comment), "%.*s", (int)tableReply->element[3]->len, tableReply->element[3]->str);
 
     RedisFreeReplyObject(&tableReply);

@@ -219,12 +219,6 @@ void RDBThreadCtxDestroy (RDBThreadCtx thrctx)
 }
 
 
-/**********************************************************************
- *
- * Redis helper API
- *
- *********************************************************************/
-
 ub8 RDBCurrentTime (int spec, char *timestr)
 {
 #ifdef __WINDOWS__
@@ -361,24 +355,23 @@ void RDBBinaryFree (RDBBinary bin)
  * RDBZString API
  *
  *********************************************************************/
-
 RDBZString RDBZStringNew (const char *str, ub4 len)
 {
     RDBZString_t *pzs;
 
     if (len == (ub4)(-1)) {
-        len = (ub4)cstr_length(str, RDBZSTRING_LEN_MAX);
+        len = (ub4) cstr_length(str, RDBZSTRING_LEN_MAX);
     }
 
     pzs = (RDBZString_t *) RDBMemAlloc(sizeof(*pzs) + len + 1);
     if (! pzs) {
         fprintf(stderr, "(%s:%d) out of memory.\n", __FILE__, __LINE__);
-        exit(EXIT_FAILURE);
+        exit(-1);
     }
-    pzs->len = len;
 
     if (str) {
         memcpy(pzs->str, str, len);
+        pzs->len = len;
     }
 
     return (RDBZString) pzs->str;
@@ -404,6 +397,12 @@ ub4 RDBZStringLen (RDBZString zs)
     }
 }
 
+
+/**********************************************************************
+ *
+ * Redis helper API
+ *
+ *********************************************************************/
 
 RDBAPI_BOOL RedisCheckReplyStatus (redisReply *reply, const char *status, int stlen)
 {

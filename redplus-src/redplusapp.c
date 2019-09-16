@@ -33,12 +33,14 @@
  */
 #include "redplusapp.h"
 
-RDBZString cshbuf = NULL;
+zstringbuf cshbuf = NULL;
+
 RDBZString cluster = NULL;
 RDBZString command = NULL;    
 RDBZString rdbsql  = NULL;
 RDBZString sqlfile = NULL;
 RDBZString output  = NULL;
+
 
 static void redplus_cleanup(void)
 {
@@ -47,7 +49,8 @@ static void redplus_cleanup(void)
     RDBZStringFree(rdbsql);
     RDBZStringFree(sqlfile);
     RDBZStringFree(output);
-    RDBZStringFree(cshbuf);
+
+    zstringbufFree(cshbuf);
 
     fprintf(stdout, "\n\nredplus exit.\n");
 }
@@ -85,7 +88,7 @@ int main(int argc, const char *argv[])
     RDBEnv env = NULL;
     RDBCtx ctx = NULL;
 
-    cshbuf = RDBZStringNew(NULL, CSHELL_BUFSIZE - 1);
+    cshbuf = zstringbufNew(CSHELL_BUFSIZE, NULL, 0);
 
     atexit(redplus_cleanup);
 
@@ -203,7 +206,7 @@ int main(int argc, const char *argv[])
             char *end;
             const char *line;
 
-            line = CSH_get_input(cache->offset? "+ ":"redplus> ", RDBZSTR(cshbuf), RDBZSTRLEN(cshbuf), &clen);
+            line = CSH_get_input(cache->offset? "+ ":"redplus> ", cshbuf->str, cshbuf->maxsz, &clen);
 
             if (line) {
                 if (clen) {

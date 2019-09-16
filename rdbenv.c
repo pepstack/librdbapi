@@ -485,8 +485,19 @@ RDBAPI_RESULT RDBEnvCreate (const char *cluster, int ctxtimeout, int sotimeo_ms,
 
         threadlock_init(&env->thrlock);
 
+        // set env readonly attributes
         env->verbose = (ub1)1;
         env->delimiter = RDB_TABLE_DELIMITER_CHAR;
+
+        snprintf_chkd_V1(env->_exprstr, sizeof(env->_exprstr), "%s", "=,LLIKE,RLIKE,LIKE,MATCH,!=,>,<,>=,<=");
+        do {
+            int cnt = 0;
+            char *ps = strtok(env->_exprstr, ",");
+            while (ps && cnt++ < filterexprs_count_max) {
+                env->filterexprs[cnt] = ps;
+                ps = strtok(NULL, ",");
+            }
+        } while(0);
 
         *outenv = env;
         return RDBAPI_SUCCESS;

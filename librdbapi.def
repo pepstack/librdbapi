@@ -13,6 +13,8 @@ EXPORTS
 	RDBZStringNew
 	RDBZStringFree
 	RDBZStringLen
+	RDBZStringMaxsz
+	RDBZStringCat
 
 	RDBThreadCtxCreate
 	RDBThreadCtxAttach
@@ -133,6 +135,6 @@ EXPORTS
 
 	RDBSQLStmtCreate
 	RDBSQLStmtFree
-	RDBSQLStmtPrint
-	RDBSQLStmtGetType
+	RDBSQLStmtGetSql
+	RDBSQLStmtPrepare
 	RDBSQLStmtExecute

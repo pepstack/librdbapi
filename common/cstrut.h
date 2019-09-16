@@ -57,6 +57,129 @@ extern "C"
 #define cstr_length(str, maxlen)    (str? ((maxlen)==-1? (int)strlen(str) : (int)strnlen(str, maxlen)) : 0)
 
 
+/**********************************************************************
+ * zstringbuf
+ *   Zero ended ansi String Buffer api
+ *********************************************************************/
+#define zstringbuf_err_size        ((ub4)(-1))
+#define zstringbuf_len_max         536870911
+#define zstringbuf_size_max        (zstring_length_max + 1)
+
+#define zstringbuf_blksize(len)    ((ub4) (((len + 256) / 256)  * 256))
+
+#define zstringbufGetLen(zs)        ((zs)? (zs)->len : 0)
+#define zstringbufGetMaxsz(zs)      ((zs)? (zs)->maxsz : 0)
+#define zstringbufGetStr(zs)        ((zs)? (zs)->str : NULL)
+
+#define zstringbufPrint(zs)  printf("%.*s", zs->len, zs->str)
+
+
+typedef struct _zstringbuf_t
+{
+    ub4 maxsz;
+    ub4 len;
+    char str[0];
+} zstringbuf_t, *zstringbuf;
+
+
+static zstringbuf zstringbufNew (ub4 maxsz, const char *str, ub4 len)
+{
+    zstringbuf_t *pzs;
+
+    if (len == zstringbuf_err_size) {
+        len = (ub4) cstr_length(str, zstringbuf_len_max);
+    }
+
+    if (maxsz == zstringbuf_err_size || maxsz <= len) {
+        maxsz = zstringbuf_blksize(len);
+    } else {
+        maxsz = zstringbuf_blksize(maxsz);
+    }
+
+    pzs = (zstringbuf_t *) calloc(1, sizeof(*pzs) + maxsz);
+    if (! pzs) {
+        fprintf(stderr, "(%s:%d) out of memory.\n", __FILE__, __LINE__);
+        exit(-1);
+    }
+
+    if (str) {
+        memcpy(pzs->str, str, len);
+        pzs->len = len;
+    }
+
+    pzs->maxsz = maxsz;
+    return pzs;
+}
+
+
+static void zstringbufFree (zstringbuf zs)
+{
+    if (zs) {
+        free(zs);
+    }
+}
+
+
+static zstringbuf zstringbufCat (zstringbuf zs, const char *fmt, ...)
+{
+    int len;
+    zstringbuf_t *pzs;
+
+    if (! zs) {
+        zs = zstringbufNew(zstringbuf_blksize(0), NULL, 0);
+    }
+
+    do {
+        va_list args;
+        va_start(args, fmt);
+        len = vsnprintf(&zs->str[zs->len], zs->maxsz - zs->len, fmt, args);
+        va_end(args);
+    } while(0);
+
+    if (len < 0) {
+        zs->str[zs->len] = 0;
+        return zs;
+    }
+
+    if (zs->maxsz > len + zs->len) {
+        zs->len += len;
+        return zs;
+    } else {
+        ub4 newmaxsz = zstringbuf_blksize(len + zs->len);
+
+        zstringbuf_t *newzs = (zstringbuf_t *) realloc(zs, newmaxsz);
+
+        if (! newzs) {
+            fprintf(stderr, "(%s:%d) out of memory.\n", __FILE__, __LINE__);
+            exit(-1);
+        }
+
+        do {
+            va_list args;
+            va_start(args, fmt);
+            len = vsnprintf(&newzs->str[newzs->len], newmaxsz - newzs->len, fmt, args);
+            va_end(args);
+        } while(0);
+
+        if (len < 0) {
+            newzs->maxsz = newmaxsz;
+            newzs->str[newzs->len] = 0;
+            return newzs;
+        }
+
+        if (newmaxsz > len + newzs->len) {
+            newzs->len += len;
+            newzs->maxsz = newmaxsz;
+            return newzs;
+        }
+
+        fprintf(stderr, "(%s:%d) SHOULD NEVER RUN TO THIS!", __FILE__, __LINE__);
+        free(newzs);
+        return NULL;
+    }
+}
+
+
 static void cstr_varray_free (char ** varr, int maxnum)
 {
     char *p;

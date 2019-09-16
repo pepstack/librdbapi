@@ -674,7 +674,8 @@ extern void RDBCellPrint (RDBCell cell, FILE *fout, int colwidth)
             break;
 
         case RDB_CELLTYPE_INTEGER:
-            fprintf(fout, "%"PRId64, cell->integer);
+            vlen = snprintf_chkd_V1(valbuf, sizeof(valbuf), "%"PRId64, cell->integer);
+            fprintf(fout, format, vlen, valbuf);
             break;
 
         case RDB_CELLTYPE_DOUBLE:

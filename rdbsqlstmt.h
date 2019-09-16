@@ -146,7 +146,21 @@ typedef struct _RDBSQLStmt_t
             // RDBSQL_UPSERT_MODE_SELECT
             int upsertmode;
 
+            int fields_by_select;
+
             RDBSQLStmt selectstmt;
+
+            struct UPSERT_PREPARE {
+                RDBTableDes_t tabledes;
+
+                zstringbuf keypattern;
+
+                int attfields;
+                int dupkey;
+
+                int fields[RDBAPI_ARGV_MAXNUM + 1];
+                int rowids[RDBAPI_KEYS_MAXNUM + 1];               
+            } prepare;
         } upsert;
 
         struct CREATE_TABLE {

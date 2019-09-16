@@ -78,6 +78,11 @@ extern "C"
 # define RDB_TABLE_LIMIT_MIN       10
 #endif
 
+#ifndef RDB_PRINT_LINE_INDENT
+# define RDB_PRINT_LINE_INDENT     2
+#endif
+
+
 /**********************************************************************
  *
  * RDB API Result Types
@@ -139,6 +144,7 @@ typedef int RDBAPI_BOOL;
  *
  *********************************************************************/
 #define RDBZSTRING_LEN_MAX         536870911
+#define RDBZSTRING_SIZE_MAX        (RDBZSTRING_LEN_MAX + 1)
 
 #define RDBAPI_ARGV_MAXNUM         252
 #define RDBAPI_KEYS_MAXNUM         10
@@ -193,9 +199,10 @@ typedef int RDBAPI_BOOL;
  * RDB Objects
  *
  *********************************************************************/
-#define RDBZSTR(zstr)     ((char *)(zstr))
-#define RDBCZSTR(zstr)    ((const char *)(zstr))
-#define RDBZSTRLEN(zstr)  ((int)RDBZStringLen(zstr))
+#define RDBZSTR(zstr)               ((char *)(zstr))
+#define RDBCZSTR(zstr)              ((const char *)(zstr))
+#define RDBZSTRLEN(zstr)            ((int)RDBZStringLen(zstr))
+
 
 typedef void * RDBZString;
 
@@ -241,6 +248,7 @@ typedef enum
     ,RDBFIL_LESS_THAN   = 8    // a < b
     ,RDBFIL_GREAT_EQUAL = 9    // a >= b
     ,RDBFIL_LESS_EQUAL  = 10   // a <= b
+    ,filterexprs_count_max = 11
 } RDBFilterExpr;
 
 
@@ -348,8 +356,8 @@ typedef struct _RDBTableDes_t
 {
     char table_rowkey[256];
 
-    ub8 table_timestamp; //DEL??
-    char table_datetime[20];
+    ub8 table_timestamp;
+
     char table_comment[RDB_KEY_VALUE_SIZE];
 
     /**
@@ -396,18 +404,17 @@ typedef struct _RDBBlob_t
 extern ub8 RDBCurrentTime (int spec, char *timestr);
 
 extern void * RDBMemAlloc (size_t sizeb);
-
 extern void * RDBMemRealloc (void *oldp, size_t oldsizeb, size_t newsizeb);
-
 extern void RDBMemFree (void *addr);
 
 extern RDBBinary RDBBinaryNew (const void *addr, ub4 sz);
-
 extern void RDBBinaryFree (RDBBinary bin);
 
 extern RDBZString RDBZStringNew (const char *str, ub4 len);
 extern void RDBZStringFree (RDBZString zs);
 extern ub4 RDBZStringLen (RDBZString zs);
+ub4 RDBZStringMaxsz (RDBZString zs);
+RDBZString RDBZStringCat (RDBZString zs, const char *fmt, ...);
 
 
 /**********************************************************************
@@ -597,28 +604,28 @@ extern void RedisTransDiscard (RDBCtx ctx);
 
 
 /**
- *   watch ÃüÁî»á¼àÊÓ¸ø¶¨µÄ key(s),µ± exec Ê±ºò, Èç¹û¼àÊÓµÄ key ´Óµ÷ÓÃ watch
- *     ºó·¢Éú¹ý±ä»¯£¬ÔòÕû¸öÊÂÎñ»áÊ§°Ü¡£Ò²¿ÉÒÔµ÷ÓÃ watch ¶à´Î¼àÊÓ¶à¸ö key.
- *     ÕâÑù¾Í¿ÉÒÔ¶ÔÖ¸¶¨µÄ key ¼ÓÀÖ¹ÛËø.
- *   ×¢Òâ watch µÄ key ÊÇ¶ÔÕû¸öÁ¬½ÓÓÐÐ§µÄ, ÊÂÎñÒ²Ò»Ñù. Èç¹ûÁ¬½Ó¶Ï¿ª, ¼àÊÓºÍÊÂÎñ
- *   ¶¼»á±»×Ô¶¯Çå³ý. exec, discard, unwatch ÃüÁî¶¼»áÇå³ýÁ¬½ÓÖÐµÄËùÓÐ¼àÊÓ.
+ *   watch ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó¸ï¿½ï¿½ï¿½ï¿½ï¿½ key(s),ï¿½ï¿½ exec Ê±ï¿½ï¿½, ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Óµï¿½ key ï¿½Óµï¿½ï¿½ï¿½ watch
+ *     ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ä»¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê§ï¿½Ü¡ï¿½Ò²ï¿½ï¿½ï¿½Ôµï¿½ï¿½ï¿½ watch ï¿½ï¿½Î¼ï¿½ï¿½Ó¶ï¿½ï¿½ key.
+ *     ï¿½ï¿½ï¿½ï¿½ï¿½Í¿ï¿½ï¿½Ô¶ï¿½Ö¸ï¿½ï¿½ï¿½ï¿½ key ï¿½ï¿½ï¿½Ö¹ï¿½ï¿½ï¿½.
+ *   ×¢ï¿½ï¿½ watch ï¿½ï¿½ key ï¿½Ç¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð§ï¿½ï¿½, ï¿½ï¿½ï¿½ï¿½Ò²Ò»ï¿½ï¿½. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó¶Ï¿ï¿½, ï¿½ï¿½ï¿½Óºï¿½ï¿½ï¿½ï¿½ï¿½
+ *   ï¿½ï¿½ï¿½á±»ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½. exec, discard, unwatch ï¿½ï¿½ï¿½î¶¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ðµï¿½ï¿½ï¿½ï¿½Ð¼ï¿½ï¿½ï¿½.
  *
  *  [thread]> command        # result
  *  [1]> set uuid 100      # uuid=100
- *  [2]> watch uuid        # ÉèÖÃ¿ìÕÕµã
+ *  [2]> watch uuid        # ï¿½ï¿½ï¿½Ã¿ï¿½ï¿½Õµï¿½
  *  [2]> get uuid          # 100 stored in val
  *  [1]> set uuid 200      # uuid=200
- *  [2]> multi             # ÊÂÎñ¿ªÊ¼
- *  [2]> set uuid $val + 500   # QUEUED  [2] ÆÚÍû´ËÊ± uuid=600
- *  [2]> exec              # Ìá½»ÊÂÎñ, Ê§°Ü! ÒòÎªÉèÖÃ¿ìÕÕµãÖ®ºó, uuid ±»ÆäËûÏß³Ì¸Ä±äÁË
+ *  [2]> multi             # ï¿½ï¿½ï¿½ï¿½Ê¼
+ *  [2]> set uuid $val + 500   # QUEUED  [2] ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê± uuid=600
+ *  [2]> exec              # ï¿½á½»ï¿½ï¿½ï¿½ï¿½, Ê§ï¿½ï¿½! ï¿½ï¿½Îªï¿½ï¿½ï¿½Ã¿ï¿½ï¿½Õµï¿½Ö®ï¿½ï¿½, uuid ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ß³Ì¸Ä±ï¿½ï¿½ï¿½
  *
- * ÊÂÎñ²»Ö§³Ö¿ç slot:
+ * ï¿½ï¿½ï¿½ï¿½Ö§ï¿½Ö¿ï¿½ slot:
  *   set shang 100
  *   set hai 200
  *   watch shang hai
  *    (error) CROSSSLOT Keys in request don't hash to the same slot
  *
- * Ç¿ÖÆ¶à¸ö key ´æ´¢ÔÚÍ¬Ò»¸ö slot ÖÐ {...}:
+ * Ç¿ï¿½Æ¶ï¿½ï¿½ key ï¿½æ´¢ï¿½ï¿½Í¬Ò»ï¿½ï¿½ slot ï¿½ï¿½ {...}:
  *   set {db}shang 100
  *   set {db}hai 200
  *   watch {db}shang {db}hai
@@ -630,9 +637,9 @@ extern RDBAPI_RESULT RedisWatchKeys (RDBCtx ctx, const char *keys[], int numkeys
 extern void RedisUnwatch (RDBCtx ctx);
 
 
-// Éú³ÉÎ¨Ò» ID. ¿ÉÒÔÒ»´ÎÉú³É¶à¸ö (count > 1), genid ·µ»ØÉú³ÉµÄ(×î´óµÄÄÇ¸ö)id.
-// reset = 1, ±íÊ¾µ± genid ´ïµ½ÏµÍ³×î´óÖµ (=9223372036854775807) ºó£¬ÊÇ·ñ´Ó 1 ¿ªÊ¼.
-// genid µÄ·¶Î§: [1, 9223372036854775807]
+// ï¿½ï¿½ï¿½ï¿½Î¨Ò» ID. ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½É¶ï¿½ï¿½ (count > 1), genid ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Éµï¿½(ï¿½ï¿½ï¿½ï¿½ï¿½Ç¸ï¿½)id.
+// reset = 1, ï¿½ï¿½Ê¾ï¿½ï¿½ genid ï¿½ïµ½ÏµÍ³ï¿½ï¿½ï¿½Öµ (=9223372036854775807) ï¿½ï¿½ï¿½Ç·ï¿½ï¿½ 1 ï¿½ï¿½Ê¼.
+// genid ï¿½Ä·ï¿½Î§: [1, 9223372036854775807]
 //
 extern RDBAPI_RESULT RedisGenerateId (RDBCtx ctx, const char *generator, int count, sb8 *genid, int reset);
 
@@ -667,9 +674,9 @@ extern RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const
 
 extern RDBAPI_RESULT RDBSQLStmtCreate (RDBCtx ctx, const char *sql_block, size_t sql_len, RDBSQLStmt *outsqlstmt);
 extern void RDBSQLStmtFree (RDBSQLStmt sqlstmt);
-extern void RDBSQLStmtPrint (RDBSQLStmt sqlstmt, FILE *fout);
-extern RDBSQLStmtType RDBSQLStmtGetType (RDBSQLStmt sqlstmt, char **parsedClause, int pretty);
+extern RDBSQLStmtType RDBSQLStmtGetSql (RDBSQLStmt sqlstmt, int indent, RDBZString *outsql);
 extern RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap);
+
 extern RDBAPI_RESULT RDBCtxExecuteSql (RDBCtx ctx, RDBZString sqlstr, RDBResultMap *outResultMap);
 extern RDBAPI_RESULT RDBCtxExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResultMap *outResultMap);
 

@@ -142,6 +142,9 @@ typedef struct _RDBEnv_t
     char *valtypenames[256];
     char _valtypenamebuf[256];
 
+    char _exprstr[128];
+    char *filterexprs[filterexprs_count_max];
+
     // 0: OFF; 1: ON (default)
     ub1 verbose;
 
@@ -252,6 +255,8 @@ int RDBFieldDesUnpack (const void *addrin, ub4 sizein, RDBFieldDes_t * outfielde
 int RDBFieldDesCheckSet (const char valtypetable[256], const RDBFieldDes_t * fielddes, int nfields, int rowkeyid[RDBAPI_KEYS_MAXNUM + 1], char *errmsg, size_t msgsz);
 
 int RDBNodeInfoQuery (RDBCtxNode ctxnode, RDBNodeInfoSection section, const char *propname, char propvalue[RDBAPI_PROP_MAXSIZE]);
+
+int RDBTableDesFieldIndex (const RDBTableDes_t *tabledes, const char *fieldname, int fieldnamelen);
 
 RDBAPI_RESULT RDBTableScanOnNode (RDBCtxNode ctxnode, RDBTableCursor nodestate, const char *pattern, size_t patternlen, ub8 maxlimit, redisReply **outReply);
 
