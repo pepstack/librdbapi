@@ -307,7 +307,7 @@ RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx, RDBSQLStmt sqlstmt, RDBResultMap *o
                 if (filter->sqlstmt->sqlfunc == RDBSQL_FUNC_COUNT) {
                     snprintf_chkd_V1(maptitle, sizeof(maptitle), "# SELECT COUNT(*) on '%s':", filter->table);
 
-                    if (RDBResultMapCreate(maptitle, (const char **)filter->sqlstmt->select.selectfields, filter->sqlstmt->select.selectfieldslen, 1, &resultmap) == RDBAPI_SUCCESS) {
+                    if (RDBResultMapCreate(maptitle, (const char **)filter->sqlstmt->select.selectfields, filter->sqlstmt->select.selectfieldslen, 1, 0, &resultmap) == RDBAPI_SUCCESS) {
                         RDBRow row = NULL;
                         RDBRowNew(resultmap, filter->table, -1, &row);
                         RDBCellSetInteger(RDBRowCell(row, 0), 0);
@@ -325,7 +325,7 @@ RDBAPI_RESULT RDBTableScanFirst (RDBCtx ctx, RDBSQLStmt sqlstmt, RDBResultMap *o
         }
 
         if (! resultmap) {
-            if (RDBResultMapCreate(maptitle, colnames, colnameslen, colindex, &resultmap) != RDBAPI_SUCCESS) {
+            if (RDBResultMapCreate(maptitle, colnames, colnameslen, colindex, filter->rowkeyids[0], &resultmap) != RDBAPI_SUCCESS) {
                 snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "(%s:%d) SHOULD NEVER RUN TO THIS!", __FILE__, __LINE__);
                 return RDBAPI_ERROR;
             }

@@ -123,13 +123,13 @@ static RDBResultMap ResultMapBuildDescTable (const char *tablespace, const char 
     int fldnameslen[] = {9, 9, 6, 5, 6, 8, 7, 0};
 
     snprintf_chkd_V1(buf, sizeof(buf), "{%s::%s}", tablespace, tablename);
-    res = RDBResultMapCreate(buf, tblnames, tblnameslen, 5, &tablemap);
+    res = RDBResultMapCreate(buf, tblnames, tblnameslen, 5, 0, &tablemap);
     if (res != RDBAPI_SUCCESS) {
         fprintf(stderr, "(%s:%d) RDBResultMapCreate('%s') failed", __FILE__, __LINE__, buf);
         exit(EXIT_FAILURE);
     }
 
-    res = RDBResultMapCreate("=>fields", fldnames, fldnameslen, 7, &fieldsmap);
+    res = RDBResultMapCreate("=>fields", fldnames, fldnameslen, 7, 0, &fieldsmap);
     if (res != RDBAPI_SUCCESS) {
         fprintf(stderr, "(%s:%d) RDBResultMapCreate('=>fields') failed", __FILE__, __LINE__);
         exit(EXIT_FAILURE);
@@ -2234,7 +2234,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                 if (RedisCheckReplyStatus(replySet, "OK", 2)) {
                     RDBRow row;
 
-                    RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, &resultmap);
+                    RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, 0, &resultmap);
                     RDBRowNew(resultmap, keypattern->str, keypattern->len, &row);
                     RDBCellSetString(RDBRowCell(row, 0), keypattern->str, keypattern->len);
                     RDBResultMapInsertRow(resultmap, row);
@@ -2254,7 +2254,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                 // result cursor state
                 RDBTableCursor_t *nodestates = RDBMemAlloc(sizeof(RDBTableCursor_t) * RDBEnvNumNodes(ctx->env));
 
-                RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, &resultmap);
+                RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, 0, &resultmap);
 
                 while (! haserror && nodeindex < RDBEnvNumNodes(ctx->env)) {
                     RDBEnvNode envnode = RDBEnvGetNode(ctx->env, nodeindex);
@@ -2393,7 +2393,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                     if (RedisCheckReplyStatus(replySet, "OK", 2)) {
                         RDBRow row;
 
-                        RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, &resultmap);
+                        RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, 0, &resultmap);
                         RDBRowNew(resultmap, keypattern->str, keypattern->len, &row);
                         RDBCellSetString(RDBRowCell(row, 0), keypattern->str, keypattern->len);
                         RDBResultMapInsertRow(resultmap, row);
@@ -2461,7 +2461,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                     if (RedisCheckReplyStatus(replySet, "OK", 2)) {
                         RDBRow row;
 
-                        RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, &resultmap);
+                        RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, 0, &resultmap);
                         RDBRowNew(resultmap, keypattern->str, keypattern->len, &row);
                         RDBCellSetString(RDBRowCell(row, 0), keypattern->str, keypattern->len);
                         RDBResultMapInsertRow(resultmap, row);
@@ -2500,7 +2500,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                     if (RedisCheckReplyStatus(replySet, "OK", 2)) {
                         RDBRow row;
 
-                        RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, &resultmap);
+                        RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, 0, &resultmap);
                         RDBRowNew(resultmap, keypattern->str, keypattern->len, &row);
                         RDBCellSetString(RDBRowCell(row, 0), keypattern->str, keypattern->len);
                         RDBResultMapInsertRow(resultmap, row);
@@ -2585,7 +2585,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
             snprintf_chkd_V1(keybuf, sizeof(keybuf), "FAILED: table '%s.%s' not found !", sqlstmt->droptable.tablespace, sqlstmt->droptable.tablename);
         }
 
-        RDBResultMapCreate(keybuf, NULL, NULL, 0, &resultmap);
+        RDBResultMapCreate(keybuf, NULL, NULL, 0, 0, &resultmap);
 
         *outResultMap = resultmap;
         return RDBAPI_SUCCESS;
@@ -2614,7 +2614,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                 nposInfoSecs = MAX_NODEINFO_SECTIONS;
             }
 
-            RDBResultMapCreate("SUCCESS:", names, nameslen, 5, &resultmap);
+            RDBResultMapCreate("SUCCESS:", names, nameslen, 5, 0, &resultmap);
 
             threadlock_lock(&ctx->env->thrlock);
 
@@ -2677,7 +2677,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         pattern.str = RDBMemAlloc(pattern.maxsz);
         pattern.length = snprintf_chkd_V1(pattern.str, pattern.maxsz, "{%s::*:*}", RDB_SYSTEM_TABLE_PREFIX);
 
-        RDBResultMapCreate("DATABASES:", names, NULL, 1, &resultmap);
+        RDBResultMapCreate("DATABASES:", names, NULL, 1, 0, &resultmap);
 
         while (nodeindex < RDBEnvNumNodes(ctx->env)) {
             RDBEnvNode envnode = RDBEnvGetNode(ctx->env, nodeindex);
@@ -2750,7 +2750,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         pattern.str = RDBMemAlloc(pattern.maxsz);
         pattern.length = snprintf_chkd_V1(pattern.str, pattern.maxsz, "{%s::%.*s:*}", RDB_SYSTEM_TABLE_PREFIX, dbnlen, sqlstmt->showtables.tablespace);
 
-        RDBResultMapCreate("TABLES:", names, NULL, 1, &resultmap);
+        RDBResultMapCreate("TABLES:", names, NULL, 1, 0, &resultmap);
 
         while (nodeindex < RDBEnvNumNodes(ctx->env)) {
             RDBEnvNode envnode = RDBEnvGetNode(ctx->env, nodeindex);
@@ -2874,7 +2874,7 @@ RDBAPI_RESULT RDBCtxExecuteFile (RDBCtx ctx, const char *scriptfile, RDBResultMa
         RDBResultMap hResultMap = NULL;
         const char *colnames[] = {"results", 0};
 
-        RDBResultMapCreate(scriptfile, colnames, NULL, 1, &hResultMap);
+        RDBResultMapCreate(scriptfile, colnames, NULL, 1, 0, &hResultMap);
 
         RDBBlob_t sqlblob;
         sqlblob.maxsz = sizeof(line) * 2;

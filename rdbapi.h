@@ -686,7 +686,7 @@ extern RDBAPI_RESULT RDBCtxExecuteFile (RDBCtx ctx, const char *sqlfile, RDBResu
  * RDBResultMap API
  *
  *********************************************************************/
-extern RDBAPI_RESULT RDBResultMapCreate (const char *title, const char *names[], const int *namelen, size_t numcols, RDBResultMap *outresultmap);
+extern RDBAPI_RESULT RDBResultMapCreate (const char *title, const char *names[], const int *namelen, size_t numcols, int numrowidcols, RDBResultMap *outresultmap);
 extern void RDBResultMapDestroy (RDBResultMap resultmap);
 extern RDBAPI_RESULT RDBResultMapInsertRow (RDBResultMap resultmap, RDBRow row);
 extern RDBRow RDBResultMapFindRow (RDBResultMap resultmap, const char *rowkey, int keylen);

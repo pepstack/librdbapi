@@ -109,6 +109,9 @@ typedef struct _RDBResultMap_t
     /* result rows saved in hashmap */
     RDBRowsHashMap rowsmap;
 
+    /* number of rowid columns */
+    int numrowidcols;
+
     /* number of columns and names for column headers */
     int colheads;
     RDBZString colheadnames[0];

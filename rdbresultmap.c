@@ -42,7 +42,7 @@
  *
  **************************************/
 
-RDBAPI_RESULT RDBResultMapCreate (const char *title, const char *colheadnames[], const int *nameslen, size_t numcolheads, RDBResultMap *outresultmap)
+RDBAPI_RESULT RDBResultMapCreate (const char *title, const char *colheadnames[], const int *nameslen, size_t numcolheads, int numrowidcols, RDBResultMap *outresultmap)
 {
     if (numcolheads == -1) {
         int num = 0;
@@ -82,6 +82,7 @@ RDBAPI_RESULT RDBResultMapCreate (const char *title, const char *colheadnames[],
             }
 
             resultmap->colheads = (int) col;
+            resultmap->numrowidcols = numrowidcols;
 
             *outresultmap = resultmap;
             return RDBAPI_SUCCESS;
@@ -240,14 +241,14 @@ ub4 RDBResultMapRows (RDBResultMap resultmap)
 }
 
 
-static void ResultMapPrintHeadLine (RDBResultMap resultmap, FILE *fout, int numcols, int numrkcols)
+static void ResultMapPrintHeadLine (RDBResultMap resultmap, FILE *fout, int numcols)
 {
     int len, col = 0;
 
     for (; col < numcols; col++) {
         len = RDBZSTRLEN(RDBResultMapColHeadName(resultmap, col));
 
-        if (col < numrkcols) {
+        if (col < resultmap->numrowidcols) {
             if (col == 0) {
                 fprintf(fout, "---");            
                 while (len-- > 0) fprintf(fout, "-");
@@ -277,16 +278,15 @@ static void ResultMapPrintTableHead (RDBResultMap resultmap, FILE *fout)
     int len, col = 0;
 
     int numcols = RDBResultMapColHeads(resultmap);
-    int numrkcols = resultmap->filter? resultmap->filter->rowkeyids[0] : 0;
 
-    ResultMapPrintHeadLine(resultmap, fout, numcols, numrkcols);
+    ResultMapPrintHeadLine(resultmap, fout, numcols);
 
     for (col = 0; col < numcols; col++) {
         RDBZString zstr = RDBResultMapColHeadName(resultmap, col);
         len = RDBZSTRLEN(zstr);
 
         if (col == 0) {
-            if (col < numrkcols) {
+            if (col < resultmap->numrowidcols) {
                 fprintf(fout, "[ .%.*s", len, RDBCZSTR(zstr));
                 len += len + 2;
             } else {
@@ -294,7 +294,7 @@ static void ResultMapPrintTableHead (RDBResultMap resultmap, FILE *fout)
                 len += len + 2;
             }
         } else {
-            if (col < numrkcols) {
+            if (col < resultmap->numrowidcols) {
                 fprintf(fout, "  |  .%.*s", len, RDBCZSTR(zstr));
                 len += len + 3;
             } else {
@@ -308,7 +308,7 @@ static void ResultMapPrintTableHead (RDBResultMap resultmap, FILE *fout)
         fprintf(fout, " ]\n");
     }
 
-    ResultMapPrintHeadLine(resultmap, fout, numcols, numrkcols);
+    ResultMapPrintHeadLine(resultmap, fout, numcols);
 
     fflush(fout);    
 }
@@ -321,12 +321,6 @@ void RDBResultMapPrint (RDBCtx ctx, RDBResultMap resultmap, FILE *fout)
     RDBRow row;
     RDBCell cell;
     RDBRowIter rowiter;
-
-    int numrkcols = 0;
-
-    if (resultmap->filter) {
-        numrkcols = resultmap->filter->rowkeyids[0];
-    }
 
     int verbose = ctx->env->verbose;
     char delimt = ctx->env->delimiter;
@@ -349,7 +343,7 @@ void RDBResultMapPrint (RDBCtx ctx, RDBResultMap resultmap, FILE *fout)
                 fprintf(fout, "%c", delimt);
             }
 
-            if (col < numrkcols) {
+            if (col < resultmap->numrowidcols) {
                 RDBCellPrint(cell, fout, RDBZSTRLEN(resultmap->colheadnames[col]) + 1);
             } else {
                 RDBCellPrint(cell, fout, RDBZSTRLEN(resultmap->colheadnames[col]));
