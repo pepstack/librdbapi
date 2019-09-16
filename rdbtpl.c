@@ -142,35 +142,43 @@ int RDBFieldDesUnpack (const void *addrin, ub4 sizein, RDBFieldDes_t * outfielde
 
 
 // 1-success
-int RDBFieldDesCheckSet (const char valtypetable[256], const RDBFieldDes_t * fielddes, int nfields, int rowkeyid[RDBAPI_KEYS_MAXNUM + 1], char *errmsg, size_t msgsz)
+int RDBFieldDesCheckSet (const RDBZString valtypetable[256], const RDBFieldDes_t * fielddes, int nfields, int rowkeyid[RDBAPI_KEYS_MAXNUM + 1], char *errmsg, size_t msgsz)
 {
     int j = 0;
     for (; j < nfields; j++) {
         const RDBFieldDes_t *fld = &fielddes[j];
 
         if (fld->namelen < 1 || fld->namelen > RDB_KEY_NAME_MAXLEN) {
-            snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: invalid field name: %s", fld->fieldname);
+            snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: invalid field name '%s'", fld->fieldname);
             return 0;
         }
 
         if (! valtypetable[(ub1) fld->fieldtype]) {
-            snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: invalid type of field: %s", fld->fieldname);
+            snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: invalid type of field '%s'", fld->fieldname);
             return 0;
         }
 
         if (fld->rowkey < 0 || fld->rowkey > RDBAPI_KEYS_MAXNUM) {
-            snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: invalid field name: %s", fld->fieldname);
+            snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: invalid field name '%s'", fld->fieldname);
             return 0;
         }
 
         if (fld->rowkey) {
             if (rowkeyid[fld->rowkey]) {
-                snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: duplicate key field: %s", fld->fieldname);
+                snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: duplicate rowkey field '%s'", fld->fieldname);
                 return 0;
             }
 
             if (fld->nullable) {
-                snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: nullable for key field: %s", fld->fieldname);
+                snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: nullable for rowkey field '%s'", fld->fieldname);
+                return 0;
+            }
+
+            if (fld->fieldtype == RDBVT_BLOB ||
+                fld->fieldtype == RDBVT_SET ||
+                fld->fieldtype == RDBVT_DEC ||
+                fld->fieldtype == RDBVT_FLT64) {
+                snprintf_chkd_V1(errmsg, msgsz, "RDBAPI_ERROR: invalid type '%s' for rowkey field '%s'", RDBCZSTR(valtypetable[(ub1) fld->fieldtype]), fld->fieldname);
                 return 0;
             }
 

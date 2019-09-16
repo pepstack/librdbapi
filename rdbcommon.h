@@ -138,9 +138,7 @@ typedef struct _RDBEnvNode_t
 typedef struct _RDBEnv_t
 {
     // readonly check table for RDBValueType: 0 - bad; 1 - good
-    char valtype_chk_table[256];
-    char *valtypenames[256];
-    char _valtypenamebuf[256];
+    RDBZString valtypetable[256];
 
     char _exprstr[128];
     char *filterexprs[filterexprs_count_max];
@@ -252,7 +250,7 @@ int RDBFieldDesPack (RDBFieldDes_t * infieldes, int numfields, tpl_bin *outbin);
 int RDBFieldDesUnpack (const void *addrin, ub4 sizein, RDBFieldDes_t * outfieldes, int numfields);
 
 // 1-success
-int RDBFieldDesCheckSet (const char valtypetable[256], const RDBFieldDes_t * fielddes, int nfields, int rowkeyid[RDBAPI_KEYS_MAXNUM + 1], char *errmsg, size_t msgsz);
+int RDBFieldDesCheckSet (const RDBZString valtypetable[256], const RDBFieldDes_t * fielddes, int nfields, int rowkeyid[RDBAPI_KEYS_MAXNUM + 1], char *errmsg, size_t msgsz);
 
 int RDBNodeInfoQuery (RDBCtxNode ctxnode, RDBNodeInfoSection section, const char *propname, char propvalue[RDBAPI_PROP_MAXSIZE]);
 

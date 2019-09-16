@@ -702,7 +702,7 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
         return RDBAPI_ERR_BADARG;
     }
 
-    if (! RDBFieldDesCheckSet(ctx->env->valtype_chk_table, fieldes, nfields, rowkeyid, ctx->errmsg, sizeof(ctx->errmsg))) {
+    if (! RDBFieldDesCheckSet(ctx->env->valtypetable, fieldes, nfields, rowkeyid, ctx->errmsg, sizeof(ctx->errmsg))) {
         return RDBAPI_ERROR;
     }
 
@@ -776,7 +776,7 @@ RDBAPI_RESULT RDBTableDescribe (RDBCtx ctx, const char *tablespace, const char *
 
     RedisFreeReplyObject(&tableReply);
 
-    if (! RDBFieldDesCheckSet(ctx->env->valtype_chk_table, tabledes->fielddes, tabledes->nfields, tabledes->rowkeyid, ctx->errmsg, sizeof(ctx->errmsg))) {
+    if (! RDBFieldDesCheckSet(ctx->env->valtypetable, tabledes->fielddes, tabledes->nfields, tabledes->rowkeyid, ctx->errmsg, sizeof(ctx->errmsg))) {
         return RDBAPI_ERROR;
     }
 

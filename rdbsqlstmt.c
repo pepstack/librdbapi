@@ -86,7 +86,7 @@ static RDBSQLStmt RDBSQLStmtObjectNew (RDBCtx ctx, const char *sql_block, size_t
 }
 
 
-static RDBResultMap ResultMapBuildDescTable (const char *tablespace, const char *tablename, const char **vtnames, RDBTableDes_t *tabledes)
+static RDBResultMap ResultMapBuildDescTable (const char *tablespace, const char *tablename, const RDBZString valtypetable[256], RDBTableDes_t *tabledes)
 {
     RDBAPI_RESULT res;
 
@@ -158,7 +158,7 @@ static RDBResultMap ResultMapBuildDescTable (const char *tablespace, const char 
         RDBRowNew(fieldsmap, buf, len, &fieldrow);
 
         RDBCellSetString(RDBRowCell(fieldrow, 0), fldes->fieldname, fldes->namelen);
-        RDBCellSetString(RDBRowCell(fieldrow, 1), vtnames[fldes->fieldtype], -1);
+        RDBCellSetString(RDBRowCell(fieldrow, 1), RDBCZSTR(valtypetable[fldes->fieldtype]), RDBZSTRLEN(valtypetable[fldes->fieldtype]));
 
         len = snprintf_chkd_V1(buf, sizeof(buf), "%d", fldes->length);
         RDBCellSetString(RDBRowCell(fieldrow, 2), buf, len);
@@ -663,7 +663,7 @@ static int parse_where (char *wheres,
 // CREATE TABLE IF NOT EXISTS mine.test ( sid UB4 NOT NULL, connfd UB4 NOT NULL COMMENT 'socket fd', host STR( 30 ), port UB4, port2 UB4 NOT NULL, maddr STR COMMENT 'hardware address', price FLT64 (14,4)  COMMENT 'property (ver1.2, build=3) ok, price', ROWKEY(sid , connfd) ) COMMENT 'file entry';
 //
 static char * parse_create_field (const char *sqlblockaddr,
-    char *sql, int sqlen, const char **vtnames,
+    char *sql, int sqlen, const RDBZString valtypetable[256],
     RDBFieldDes_t *fieldes, char **rowkeys,
     char *tblcomment, size_t tblcommsz,
     char *buf, size_t bufsz)
@@ -759,10 +759,10 @@ static char * parse_create_field (const char *sqlblockaddr,
         return NULL;
     }
 
-    snprintf_chkd_V1(buf, bufsz, "%.*s", np, sqlc);
+    len = snprintf_chkd_V1(buf, bufsz, "%.*s", np, sqlc);
 
     for (j = 0; j < 256; j++) {
-        if (vtnames[j] && ! strcmp(buf, vtnames[j])) {
+        if (valtypetable[j] && ! RDBZStringCmp(valtypetable[j], buf, len)) {
             break;
         }
     }
@@ -1431,7 +1431,7 @@ void SQLStmtParseCreate (RDBCtx ctx, RDBSQLStmt sqlstmt)
     nextlen = cstr_length(sqlnext, -1);
     do {
         sqlnext = parse_create_field(sqlstmt->sqlblock,
-            sqlnext, nextlen, (const char **) ctx->env->valtypenames,
+            sqlnext, nextlen, ctx->env->valtypetable,
             &sqlstmt->create.fielddefs[sqlstmt->create.numfields++], rowkeys,
             sqlstmt->create.tablecomment, sizeof(sqlstmt->create.tablecomment),
             ctx->errmsg, sizeof(ctx->errmsg));
@@ -1953,7 +1953,8 @@ RDBSQLStmtType RDBSQLStmtGetSql (RDBSQLStmt sqlstmt, int indent, RDBZString *out
                 rowids[0] += 1;
             }
 
-            sqlbuf = zstringbufCat(sqlbuf, "%s%s%-20.*s %s", indents, indents, fdes->namelen, fdes->fieldname, env->valtypenames[fdes->fieldtype]);
+            sqlbuf = zstringbufCat(sqlbuf, "%s%s%-20.*s %s", indents, indents, fdes->namelen, fdes->fieldname,
+                RDBCZSTR(env->valtypetable[(ub1)fdes->fieldtype]));
 
             if (fdes->length) {
                 sqlbuf = zstringbufCat(sqlbuf, "(%d", fdes->length);
@@ -2154,8 +2155,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
     RDBResultMap resultmap = NULL;
 
     RDBCtx ctx = sqlstmt->ctx;
-
-    const char **vtnames = (const char **) ctx->env->valtypenames;
+    RDBEnv env = ctx->env;
 
     *outResultMap = NULL;
 
@@ -2561,7 +2561,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
 
             res = RDBTableDescribe(ctx, sqlstmt->create.tablespace, sqlstmt->create.tablename, &tabledes);
             if (res == RDBAPI_SUCCESS && tabledes.nfields == sqlstmt->create.numfields) {
-                resultmap = ResultMapBuildDescTable(sqlstmt->create.tablespace, sqlstmt->create.tablename, vtnames, &tabledes);
+                resultmap = ResultMapBuildDescTable(sqlstmt->create.tablespace, sqlstmt->create.tablename, env->valtypetable, &tabledes);
 
                 *outResultMap = resultmap;
                 return RDBAPI_SUCCESS;
@@ -2573,7 +2573,7 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
             return RDBAPI_ERROR;
         }
 
-        resultmap = ResultMapBuildDescTable(sqlstmt->desctable.tablespace, sqlstmt->desctable.tablename, vtnames, &tabledes);
+        resultmap = ResultMapBuildDescTable(sqlstmt->desctable.tablespace, sqlstmt->desctable.tablename, env->valtypetable, &tabledes);
         *outResultMap = resultmap;
         return RDBAPI_SUCCESS;
     } else if (sqlstmt->stmt == RDBSQL_DROP_TABLE) {

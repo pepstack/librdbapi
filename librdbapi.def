@@ -13,6 +13,7 @@ EXPORTS
 	RDBZStringNew
 	RDBZStringFree
 	RDBZStringLen
+	RDBZStringCmp
 
 	RDBThreadCtxCreate
 	RDBThreadCtxAttach

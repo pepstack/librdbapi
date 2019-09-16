@@ -270,6 +270,7 @@ typedef enum
     ,RDBVT_FLT64 = 'f'        // 64-bit double precision: FLT64
     ,RDBVT_BLOB  = 'B'        // binary with variable size: BLOB
     ,RDBVT_DEC   = 'D'        // decimal(precision, scale): DEC
+    ,RDBVT_SET   = 'S'        // redis set (sadd, smembers)
 } RDBValueType;
 
 
@@ -413,8 +414,7 @@ extern void RDBBinaryFree (RDBBinary bin);
 extern RDBZString RDBZStringNew (const char *str, ub4 len);
 extern void RDBZStringFree (RDBZString zs);
 extern ub4 RDBZStringLen (RDBZString zs);
-ub4 RDBZStringMaxsz (RDBZString zs);
-RDBZString RDBZStringCat (RDBZString zs, const char *fmt, ...);
+extern int RDBZStringCmp (RDBZString zs, const char *str, ub4 len);
 
 
 /**********************************************************************

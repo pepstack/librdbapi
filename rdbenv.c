@@ -278,72 +278,21 @@ static void RDBEnvInitInternal (RDBEnv env, RDBNodeCfg nodecfgs[])
 
     // initialize global readonly config
     //
-    env->valtype_chk_table[RDBVT_SB2] = 1;
-    env->valtype_chk_table[RDBVT_UB2] = 1;
-    env->valtype_chk_table[RDBVT_SB4] = 1;
-    env->valtype_chk_table[RDBVT_UB4] = 1;
-    env->valtype_chk_table[RDBVT_UB4X] = 1;
-    env->valtype_chk_table[RDBVT_SB8] = 1;
-    env->valtype_chk_table[RDBVT_UB8] = 1;
-    env->valtype_chk_table[RDBVT_UB8X] = 1;
-    env->valtype_chk_table[RDBVT_CHAR] = 1;
-    env->valtype_chk_table[RDBVT_BYTE] = 1;
-    env->valtype_chk_table[RDBVT_STR] = 1;
-    env->valtype_chk_table[RDBVT_FLT64] = 1;
-    env->valtype_chk_table[RDBVT_BLOB] = 1;
-    env->valtype_chk_table[RDBVT_DEC] = 1;
-
-    i = 0;
-    snprintf_V1(env->_valtypenamebuf + i, 6, "SB2");
-    env->valtypenames[RDBVT_SB2] = &env->_valtypenamebuf[i];
-
-    i += 8;
-    snprintf_V1(env->_valtypenamebuf + i, 6, "UB2");
-    env->valtypenames[RDBVT_UB2] = &env->_valtypenamebuf[i];
-
-    i += 8;
-    snprintf_V1(env->_valtypenamebuf + i, 6, "UB4");
-    env->valtypenames[RDBVT_UB4] = &env->_valtypenamebuf[i];
-
-    i += 8;
-    snprintf_V1(env->_valtypenamebuf + i, 6, "UB4X");
-    env->valtypenames[RDBVT_UB4X] = &env->_valtypenamebuf[i];
-
-    i += 8;
-    snprintf_V1(env->_valtypenamebuf + i, 6, "SB8");
-    env->valtypenames[RDBVT_SB8] = &env->_valtypenamebuf[i];
-
-    i += 8;
-    snprintf_V1(env->_valtypenamebuf + i, 6, "UB8");
-    env->valtypenames[RDBVT_UB8] = &env->_valtypenamebuf[i];
-
-    i += 8;
-    snprintf_V1(env->_valtypenamebuf + i, 6, "UB8X");
-    env->valtypenames[RDBVT_UB8X] = &env->_valtypenamebuf[i];
-
-    i += 8;
-    snprintf_V1(env->_valtypenamebuf + i, 6, "CHAR");
-    env->valtypenames[RDBVT_CHAR] = &env->_valtypenamebuf[i];
-
-    i += 8;
-    snprintf_V1(env->_valtypenamebuf + i, 6, "BYTE");
-    env->valtypenames[RDBVT_BYTE] = &env->_valtypenamebuf[i];
-
-    i += 8;
-    snprintf_V1(env->_valtypenamebuf + i, 6, "STR");
-    env->valtypenames[RDBVT_STR] = &env->_valtypenamebuf[i];
-
-    i += 8;
-    snprintf_V1(env->_valtypenamebuf + i, 6, "FLT64");
-    env->valtypenames[RDBVT_FLT64] = &env->_valtypenamebuf[i];
-
-    i += 8;
-    snprintf_V1(env->_valtypenamebuf + i, 6, "BLOB");
-    env->valtypenames[RDBVT_BLOB] = &env->_valtypenamebuf[i];
-
-    i += 8;
-    snprintf_V1(env->_valtypenamebuf + i, 6, "DEC");
-    env->valtypenames[RDBVT_DEC] = &env->_valtypenamebuf[i];
+    env->valtypetable[RDBVT_SB2]   = RDBZStringNew("SB2", 3);
+    env->valtypetable[RDBVT_UB2]   = RDBZStringNew("UB2", 3);
+    env->valtypetable[RDBVT_SB4]   = RDBZStringNew("SB4", 3);
+    env->valtypetable[RDBVT_UB4]   = RDBZStringNew("UB4", 3);
+    env->valtypetable[RDBVT_UB4X]  = RDBZStringNew("UB4X", 4);
+    env->valtypetable[RDBVT_SB8]   = RDBZStringNew("SB8", 3);
+    env->valtypetable[RDBVT_UB8]   = RDBZStringNew("UB8", 3);
+    env->valtypetable[RDBVT_UB8X]  = RDBZStringNew("UB8X", 4);
+    env->valtypetable[RDBVT_CHAR]  = RDBZStringNew("CHAR", 4);
+    env->valtypetable[RDBVT_BYTE]  = RDBZStringNew("BYTE", 4);
+    env->valtypetable[RDBVT_STR]   = RDBZStringNew("STR", 3);
+    env->valtypetable[RDBVT_FLT64] = RDBZStringNew("FLT64", 5);
+    env->valtypetable[RDBVT_BLOB]  = RDBZStringNew("BLOB", 4);
+    env->valtypetable[RDBVT_DEC]   = RDBZStringNew("DEC", 3);
+    env->valtypetable[RDBVT_SET]   = RDBZStringNew("SET", 3);
 }
 
 
@@ -507,23 +456,26 @@ RDBAPI_RESULT RDBEnvCreate (const char *cluster, int ctxtimeout, int sotimeo_ms,
 
 void RDBEnvDestroy (RDBEnv env)
 {
-    int section;
-    int nodeindex;
+    int i, s;
 
     threadlock_lock(&env->thrlock);
 
-    for (nodeindex = 0; nodeindex < env->clusternodes; nodeindex++) {
-        RDBEnvNode envnode = RDBEnvGetNode(env, nodeindex);
+    for (i = 0; i < env->clusternodes; i++) {
+        RDBEnvNode envnode = RDBEnvGetNode(env, i);
 
-        for (section = (int) NODEINFO_SERVER; section != (int) MAX_NODEINFO_SECTIONS; section++) {
-            RDBPropMap propmap = envnode->nodeinfo[section];
-            envnode->nodeinfo[section] = NULL;
+        for (s = (int) NODEINFO_SERVER; s != (int) MAX_NODEINFO_SECTIONS; s++) {
+            RDBPropMap propmap = envnode->nodeinfo[s];
+            envnode->nodeinfo[s] = NULL;
 
             RDBPropMapFree(propmap);
         }
     }
 
     HASH_CLEAR(hh, env->nodemap);
+
+    for (i = 0; i < sizeof(env->valtypetable)/sizeof(env->valtypetable[0]); i++) {
+        RDBZStringFree(env->valtypetable[i]);
+    }
 
     threadlock_destroy(&env->thrlock);
 

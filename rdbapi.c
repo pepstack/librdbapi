@@ -398,6 +398,12 @@ ub4 RDBZStringLen (RDBZString zs)
 }
 
 
+int RDBZStringCmp (RDBZString zs, const char *str, ub4 len)
+{
+    return cstr_compare_len(RDBCZSTR(zs), RDBZSTRLEN(zs), str, (int)len); 
+}
+
+
 /**********************************************************************
  *
  * Redis helper API

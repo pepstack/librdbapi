@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS xsdb.sessionid (
     connfd           UB4,
     uid              UB8,
     parent_sessionid UB8X,
+	child_sessionids SET,
     session_token    UB8X,
     entryid          UB8X,
     ROWKEY(sessionid)
