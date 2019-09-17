@@ -82,3 +82,6 @@ local-pkgs/
 .libs/
 autom4te.cache/
 logs/
+
+# ignore log files 
+librdbapi.log.*
