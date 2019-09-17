@@ -25,6 +25,7 @@
     <ClCompile Include="..\..\..\rdbtable.c" />
     <ClCompile Include="..\..\..\rdbtablefilter.c" />
     <ClCompile Include="..\..\..\rdbtpl.c" />
+    <ClCompile Include="..\..\liblog4c\src\log4c_logger.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\common\cstrut.h" />

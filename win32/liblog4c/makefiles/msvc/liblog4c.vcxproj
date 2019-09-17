@@ -155,7 +155,6 @@
     <ClInclude Include="..\..\src\xplatform\platform-win32.h" />
     <ClInclude Include="..\..\src\xplatform\platform-wince.h" />
     <ClInclude Include="..\..\src\log4c-api.h" />
-    <ClInclude Include="..\..\src\log4c-wrapper.h" />
     <ClInclude Include="..\..\src\xplatform\xplatform.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>

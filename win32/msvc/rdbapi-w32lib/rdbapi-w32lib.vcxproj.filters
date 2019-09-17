@@ -63,6 +63,9 @@
     <ClCompile Include="..\..\..\rdbtablefilter.c">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\liblog4c\src\log4c_logger.c">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\rdbapi.h">
