@@ -419,6 +419,15 @@ extern int RDBZStringCmp (RDBZString zs, const char *str, ub4 len);
 
 /**********************************************************************
  *
+ * initialize and uninitialize
+ *
+ *********************************************************************/
+extern RDBAPI_RESULT RDBAPI_Initialize ();
+extern void RDBAPI_Uninitialize ();
+
+
+/**********************************************************************
+ *
  * RDBThreadCtx API
  *
  *********************************************************************/

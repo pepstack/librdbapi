@@ -1,7 +1,10 @@
-;librdbapi-w32.lib : export dll functions
+﻿;librdbapi-w32.lib : export dll functions
 
 LIBRARY librdbapi-w32
 EXPORTS
+	RDBAPI_Initialize
+	RDBAPI_Uninitialize
+
 	RDBCurrentTime
 	RDBMemAlloc
 	RDBMemRealloc

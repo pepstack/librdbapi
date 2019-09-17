@@ -1,4 +1,4 @@
-
+﻿
 #ifndef _platform_win32_h
 #define _platform_win32_h
 
@@ -14,26 +14,23 @@
 #undef FILE_SEP
 #define FILE_SEP "\\"
 
-#define strncasecmp		strnicmp
-#define strcasecmp		stricmp
-
-
-#define snprintf		_snprintf		
-#define unlink			_unlink
-#define stricmp			_stricmp
-#define strnicmp		_strnicmp
-#define strdup			_strdup
-#define alloca			_alloca
-
-
 #if (_MSC_VER < 1500)
 # define vsnprintf		_vsnprintf
 #endif 
 
+#if !defined(WIN32_INTEROP_APIS_H)
+#   define strncasecmp		strnicmp
+#   define strcasecmp	stricmp
 
-#define _access(f,num)	0
-
-#define sleep(x)		Sleep(x*1000)
+#   define snprintf		_snprintf		
+#   define unlink			_unlink
+#   define stricmp			_stricmp
+#   define strnicmp		_strnicmp
+#   define strdup			_strdup
+#   define alloca			_alloca
+#   define sleep(x)		Sleep(x*1000)
+#   define _access(f,num)	0
+#endif // WIN32_INTEROP_APIS_H
 
 #endif //ENABLE_PLATFORM_WIN32
 

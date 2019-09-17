@@ -1,4 +1,4 @@
-/* $Id$
+﻿/* $Id$
  *
  * log4c.h
  *
@@ -9,6 +9,7 @@
 
 #ifndef log4c_log4c_h
 #define log4c_log4c_h
+
 #include <log4c/version.h>
 #include <log4c/init.h>
 #include <log4c/rc.h>

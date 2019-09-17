@@ -76,6 +76,10 @@
       <SubSystem>Windows</SubSystem>
       <TargetMachine>MachineX64</TargetMachine>
     </Link>
+    <PostBuildEvent>
+      <Command>copy  $(ProjectDir)target\$(Platform)\$(Configuration)\liblog4c.dll $(ProjectDir)..\..\..\msvc\redplus\target\$(Platform)\$(Configuration)</Command>
+      <Message>copy liblog4c.dll to redplus target</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Midl>
@@ -102,6 +106,12 @@
       </EnableCOMDATFolding>
       <TargetMachine>MachineX64</TargetMachine>
     </Link>
+    <PostBuildEvent>
+      <Command>copy  $(ProjectDir)target\$(Platform)\$(Configuration)\liblog4c.dll $(ProjectDir)..\..\..\msvc\redplus\target\$(Platform)\$(Configuration)</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>copy liblog4c.dll to redplus target</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\log4c\appender.h" />

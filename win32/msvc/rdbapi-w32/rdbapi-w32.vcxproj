@@ -40,6 +40,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\librdbapi.def" />
+    <None Include="..\..\..\log4crc" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{8F34729F-FDF6-42DB-BBC3-624F505CC4F6}</ProjectGuid>
@@ -74,14 +75,14 @@
     <OutDir>$(ProjectDir)target\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(ProjectDir)build\$(Platform)\$(Configuration)\</IntDir>
     <TargetName>$(ProjectName)</TargetName>
-    <IncludePath>$(ProjectDir)..\..\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)..\..\liblog4c\src;$(ProjectDir)..\..\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(ProjectDir)..\..\lib64\$(Configuration);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(ProjectDir)target\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(ProjectDir)build\$(Platform)\$(Configuration)\</IntDir>
     <LibraryPath>$(ProjectDir)..\..\lib64\$(Configuration);$(LibraryPath)</LibraryPath>
-    <IncludePath>$(ProjectDir)..\..\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)..\..\liblog4c\src;$(ProjectDir)..\..\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>

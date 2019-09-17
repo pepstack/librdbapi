@@ -46,6 +46,15 @@ extern "C"
 #if defined(__WINDOWS__)
 # define NO_QFORKIMPL
 # include <Win32_Interop/win32fixes.h>
+
+# define LOG4C_ENABLED  1
+# include "../../win32/liblog4c/src/log4c-wrapper.h"
+
+# ifdef _DEBUG
+#   pragma comment(lib, "../../../win32/liblog4c/makefiles/msvc/target/x64/Debug/liblog4c.lib")
+# else
+#   pragma comment(lib, "../../../win32/liblog4c/makefiles/msvc/target/x64/Release/liblog4c.lib")
+# endif
 #endif
 
 #include "common/memapi.h"

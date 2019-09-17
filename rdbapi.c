@@ -129,6 +129,46 @@ double wstrtod(const char *nptr, char **eptr)
 
 /**********************************************************************
  *
+ * initialize and uninitialize
+ *
+ *********************************************************************/
+RDBAPI_RESULT RDBAPI_Initialize ()
+{
+    int ret;
+    char *envpath;
+    char log4crc_path[MAX_PATH];
+
+    snprintf_chkd_V1(log4crc_path, sizeof(log4crc_path), "LOG4C_RCPATH=%s", "");
+
+    ret = putenv(log4crc_path);
+    if (ret != 0) {
+        fprintf(stderr, "");
+        return RDBAPI_ERROR;
+    }
+
+    envpath = getenv("LOG4C_RCPATH");
+    if (! envpath) {
+        fprintf(stderr, "");
+        return RDBAPI_ERROR;
+    }
+
+    LOG4C_INIT(envpath);
+
+    LOG4C_TRACE0();
+
+    return RDBAPI_SUCCESS;
+}
+
+
+void RDBAPI_Uninitialize ()
+{
+    LOG4C_INFO("RDBAPI_Uninitialize.");
+    LOG4C_FINI();
+}
+
+
+/**********************************************************************
+ *
  * RDBThreadCtx API
  *
  *********************************************************************/
