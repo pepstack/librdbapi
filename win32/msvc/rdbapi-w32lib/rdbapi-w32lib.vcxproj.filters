@@ -99,7 +99,4 @@
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
-  <ItemGroup>
-    <None Include="..\..\..\log4crc" />
-  </ItemGroup>
 </Project>

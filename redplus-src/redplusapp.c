@@ -50,7 +50,7 @@ static void redplus_cleanup(void)
     RDBZStringFree(sqlfile);
     RDBZStringFree(output);
 
-    zstringbufFree(cshbuf);
+    zstringbufFree(&cshbuf);
 
     fprintf(stdout, "\n\nredplus exit.\n");
 }
@@ -101,6 +101,11 @@ int main(int argc, const char *argv[])
     if (clen == -1) {
         exit(EXIT_FAILURE);
     }
+
+    if (RDBAPI_Initialize(appcfg + 7) != RDBAPI_SUCCESS) {
+        exit(EXIT_FAILURE);
+    }
+
     snprintf_chkd_V1(appcfg+7+clen, strlen(APPNAME) + 6, "%c%s.cfg", PATH_SEPARATOR_CHAR, APPNAME);
 
     while ((clen = getopt_long_only(argc, (char *const *) argv, "hVIR:C:S:O:F:", lopts, &optindex)) != -1) {
@@ -278,6 +283,9 @@ int main(int argc, const char *argv[])
     if (env) {
         RDBEnvDestroy(env);
     }
+
+    RDBAPI_Uninitialize();
+
  	exit(0);
 }
 

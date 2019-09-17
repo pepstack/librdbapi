@@ -48,6 +48,7 @@ extern "C"
 # include <Win32_Interop/win32fixes.h>
 
 # define LOG4C_ENABLED  1
+# define LOG4C_CATEGORY_NAME_DEFAULT  "librdbapi"
 # include "../../win32/liblog4c/src/log4c-wrapper.h"
 
 # ifdef _DEBUG
@@ -55,7 +56,21 @@ extern "C"
 # else
 #   pragma comment(lib, "../../../win32/liblog4c/makefiles/msvc/target/x64/Release/liblog4c.lib")
 # endif
+
+#else
+
+/* log4c for linux */
+# define LOG4C_ENABLED  1
+# define LOG4C_CATEGORY_NAME_DEFAULT  "librdbapi"
+# include <common/log4c_logger.h>
+
 #endif
+
+/**
+ * global variable
+ */
+void * librdbapi_log4crc;
+
 
 #include "common/memapi.h"
 #include "common/cstrut.h"

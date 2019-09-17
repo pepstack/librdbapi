@@ -98,6 +98,5 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\librdbapi.def" />
-    <None Include="..\..\..\log4crc" />
   </ItemGroup>
 </Project>

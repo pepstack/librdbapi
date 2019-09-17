@@ -1,4 +1,4 @@
-static const char version[] = "$Id$";
+﻿static const char version[] = "$Id$";
 
 /*
  * init.c
@@ -152,11 +152,10 @@ extern int log4c_init(const char * log4crc_path)
         }
 #endif
 
-        sd_debug("looking for conf files...");
-        if(strlen(lpszRCPATH) > 0)
+        sd_debug("looking for log4crc files...");
+        if(lpszRCPATH && strlen(lpszRCPATH) > 0)
         {
-            snprintf(rcfiles[1].name, sizeof(rcfiles[1].name) - 1, "%s/log4crc",
-                getenv("LOG4C_RCPATH") ? getenv("LOG4C_RCPATH") : lpszRCPATH);
+            snprintf(rcfiles[1].name, sizeof(rcfiles[1].name) - 1, "%s/log4crc", getenv("LOG4C_RCPATH") ? getenv("LOG4C_RCPATH") : lpszRCPATH);
         }
         if(strlen(lpszHOME) > 0)
         {

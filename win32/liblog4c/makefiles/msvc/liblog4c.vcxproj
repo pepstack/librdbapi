@@ -154,9 +154,9 @@
     <ClInclude Include="..\..\src\xml-parser\domnode.h" />
     <ClInclude Include="..\..\src\xplatform\platform-win32.h" />
     <ClInclude Include="..\..\src\xplatform\platform-wince.h" />
-    <ClInclude Include="..\..\src\xplatform\xplatform.h" />
     <ClInclude Include="..\..\src\log4c-api.h" />
     <ClInclude Include="..\..\src\log4c-wrapper.h" />
+    <ClInclude Include="..\..\src\xplatform\xplatform.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
@@ -192,12 +192,7 @@
     <ClCompile Include="..\..\src\xml-parser\domnode.c" />
     <ClCompile Include="..\..\src\xplatform\platform-win32.c" />
     <ClCompile Include="..\..\src\xplatform\platform-wince.c" />
-    <ClCompile Include="..\..\src\xplatform\xplatform.c">
-      <ObjectFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(IntDir)%(Filename)1.obj</ObjectFileName>
-      <XMLDocumentationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(IntDir)%(Filename)1.xdc</XMLDocumentationFileName>
-      <ObjectFileName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(IntDir)%(Filename)1.obj</ObjectFileName>
-      <XMLDocumentationFileName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(IntDir)%(Filename)1.xdc</XMLDocumentationFileName>
-    </ClCompile>
+    <ClCompile Include="..\..\src\xplatform\xplatform.c" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="liblog4c.rc" />

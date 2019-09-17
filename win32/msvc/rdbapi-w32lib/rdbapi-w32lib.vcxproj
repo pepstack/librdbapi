@@ -39,9 +39,6 @@
     <ClInclude Include="..\..\..\rdbsqlstmt.h" />
     <ClInclude Include="..\..\..\unitypes.h" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="..\..\..\log4crc" />
-  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{11F8D15E-25D1-4E24-A1B0-67C6FEE50A2D}</ProjectGuid>
     <RootNamespace>rdbapiw32lib</RootNamespace>

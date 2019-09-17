@@ -1,4 +1,4 @@
-
+﻿
 /*
  * sd_xplatform.c
  *
@@ -90,7 +90,9 @@
  */
 #ifdef _WIN32
 int sd_stat_ctime(const char* path, time_t* time)
-{ return -1; }
+{
+    return -1;
+}
 #else
 #include <sys/stat.h>
 int sd_stat_ctime(const char* path, time_t* time)

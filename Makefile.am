@@ -15,7 +15,8 @@ librdbapi_a_SOURCES = common/tiny-regex-c/re.c \
     rdbapi.c
 
 # static link to hiredis
-librdbapi_a_LIBADD = $(top_srcdir)/libs/lib/libhiredis.a
+librdbapi_a_LIBADD = $(top_srcdir)/libs/lib/libhiredis.a \
+    $(top_srcdir)/libs/lib/liblog4c.a
 
 
 DEFS += -D_GNU_SOURCE

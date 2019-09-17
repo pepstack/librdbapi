@@ -422,7 +422,7 @@ extern int RDBZStringCmp (RDBZString zs, const char *str, ub4 len);
  * initialize and uninitialize
  *
  *********************************************************************/
-extern RDBAPI_RESULT RDBAPI_Initialize ();
+extern RDBAPI_RESULT RDBAPI_Initialize (const char *log4cpath);
 extern void RDBAPI_Uninitialize ();
 
 

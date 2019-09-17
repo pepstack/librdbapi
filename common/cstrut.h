@@ -112,10 +112,14 @@ static zstringbuf zstringbufNew (ub4 maxsz, const char *str, ub4 len)
 }
 
 
-static void zstringbufFree (zstringbuf zs)
+static void zstringbufFree (zstringbuf *pzstr)
 {
-    if (zs) {
-        free(zs);
+    if (pzstr) {
+        zstringbuf zstr = *pzstr;
+        if (zstr) {
+            *pzstr = NULL;
+            free(zstr);
+        }
     }
 }
 

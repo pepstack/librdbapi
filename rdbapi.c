@@ -132,29 +132,41 @@ double wstrtod(const char *nptr, char **eptr)
  * initialize and uninitialize
  *
  *********************************************************************/
-RDBAPI_RESULT RDBAPI_Initialize ()
+extern void* librdbapi_log4crc;
+
+RDBAPI_RESULT RDBAPI_Initialize (const char *log4cpath)
 {
-    int ret;
-    char *envpath;
-    char log4crc_path[MAX_PATH];
+    librdbapi_log4crc = zstringbufNew(1024, NULL, 0);
+    zstringbuf log4crc = (zstringbuf) librdbapi_log4crc;
 
-    snprintf_chkd_V1(log4crc_path, sizeof(log4crc_path), "LOG4C_RCPATH=%s", "");
+    if (log4cpath) {
+#if defined(__WINDOWS__)
+        int ret;
+        char *envpath;
 
-    ret = putenv(log4crc_path);
-    if (ret != 0) {
-        fprintf(stderr, "");
-        return RDBAPI_ERROR;
+        zstringbufCat(log4crc, "LOG4C_RCPATH=%s", log4cpath);
+
+        cstr_replace_chr(log4crc->str, '\\', '/');
+
+        ret = putenv(log4crc->str);
+        if (ret != 0) {
+            fprintf(stderr, "putenv failed: %s", strerror(errno));
+            zstringbufFree((zstringbuf*) &librdbapi_log4crc);
+            return RDBAPI_ERROR;
+        }
+
+        envpath = getenv("LOG4C_RCPATH");
+        if (! envpath) {
+            fprintf(stderr, "getenv failed: %s", strerror(errno));
+            zstringbufFree((zstringbuf*) &librdbapi_log4crc);
+            return RDBAPI_ERROR;
+        }
+
+        LOG4C_INIT(envpath);
+
+        LOG4C_INFO("RDBAPI_Initialize success.");
+#endif
     }
-
-    envpath = getenv("LOG4C_RCPATH");
-    if (! envpath) {
-        fprintf(stderr, "");
-        return RDBAPI_ERROR;
-    }
-
-    LOG4C_INIT(envpath);
-
-    LOG4C_TRACE0();
 
     return RDBAPI_SUCCESS;
 }
@@ -163,6 +175,9 @@ RDBAPI_RESULT RDBAPI_Initialize ()
 void RDBAPI_Uninitialize ()
 {
     LOG4C_INFO("RDBAPI_Uninitialize.");
+
+    zstringbufFree((zstringbuf*) &librdbapi_log4crc);
+
     LOG4C_FINI();
 }
 

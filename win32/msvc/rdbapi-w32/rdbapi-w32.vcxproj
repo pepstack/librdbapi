@@ -40,7 +40,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\librdbapi.def" />
-    <None Include="..\..\..\log4crc" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{8F34729F-FDF6-42DB-BBC3-624F505CC4F6}</ProjectGuid>
@@ -97,6 +96,12 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ModuleDefinitionFile>../../../librdbapi.def</ModuleDefinitionFile>
     </Link>
+    <PostBuildEvent>
+      <Command>copy  $(ProjectDir)..\..\..\log4crc $(ProjectDir)..\redplus\target\$(Platform)\$(Configuration)</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>copy logrc4c to redplus target</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -114,6 +119,10 @@
       <OptimizeReferences>true</OptimizeReferences>
       <ModuleDefinitionFile>../../../librdbapi.def</ModuleDefinitionFile>
     </Link>
+    <PostBuildEvent>
+      <Command>copy  $(ProjectDir)..\..\..\log4crc $(ProjectDir)..\redplus\target\$(Platform)\$(Configuration)</Command>
+      <Message>copy logrc4c to redplus target</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

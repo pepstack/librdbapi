@@ -1809,7 +1809,7 @@ void RDBSQLStmtFree (RDBSQLStmt sqlstmt)
 
         RDBSQLStmtFree(sqlstmt->upsert.selectstmt);
 
-        zstringbufFree(sqlstmt->upsert.prepare.keypattern);
+        zstringbufFree(&sqlstmt->upsert.prepare.keypattern);
     } else if (sqlstmt->stmt == RDBSQL_CREATE) {
         // TODO:
     }
@@ -2011,7 +2011,7 @@ RDBSQLStmtType RDBSQLStmtGetSql (RDBSQLStmt sqlstmt, int indent, RDBZString *out
     if (sqlbuf) {
         *outsql = RDBZStringNew(sqlbuf->str, sqlbuf->len);
 
-        zstringbufFree(sqlbuf);
+        zstringbufFree(&sqlbuf);
     }
 
     return stmt;
@@ -2060,7 +2060,7 @@ RDBAPI_RESULT RDBSQLStmtPrepare (RDBSQLStmt sqlstmt)
 
         bzero(&sqlstmt->upsert.prepare.tabledes, sizeof(sqlstmt->upsert.prepare.tabledes));
 
-        zstringbufFree(sqlstmt->upsert.prepare.keypattern);
+        zstringbufFree(&sqlstmt->upsert.prepare.keypattern);
         sqlstmt->upsert.prepare.keypattern = zstringbufNew(RDB_ROWKEY_MAX_SIZE, NULL, 0);
 
         keypattern = sqlstmt->upsert.prepare.keypattern;
