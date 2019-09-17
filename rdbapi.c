@@ -162,9 +162,9 @@ RDBAPI_RESULT RDBAPI_Initialize (const char *log4cpath)
             return RDBAPI_ERROR;
         }
 
-        LOG4C_INIT(envpath);
+        LOGGER_INIT(envpath);
 
-        LOG4C_INFO("RDBAPI_Initialize success.");
+        LOGGER_INFO("RDBAPI_Initialize success.");
 #endif
     }
 
@@ -174,11 +174,11 @@ RDBAPI_RESULT RDBAPI_Initialize (const char *log4cpath)
 
 void RDBAPI_Uninitialize ()
 {
-    LOG4C_INFO("RDBAPI_Uninitialize.");
+    LOGGER_INFO("RDBAPI_Uninitialize.");
 
     zstringbufFree((zstringbuf*) &librdbapi_log4crc);
 
-    LOG4C_FINI();
+    LOGGER_FINI();
 }
 
 
