@@ -44,6 +44,7 @@ extern "C"
 #include "rdbapi.h"
 
 #if defined(__WINDOWS__)
+
 # define NO_QFORKIMPL
 # include <Win32_Interop/win32fixes.h>
 
@@ -56,6 +57,7 @@ extern "C"
 #   pragma comment(lib, "../../../win32/liblog4c/makefiles/msvc/target/x64/Debug/liblog4c.lib")
 # else
 #   pragma comment(lib, "../../../win32/liblog4c/makefiles/msvc/target/x64/Release/liblog4c.lib")
+
 # endif
 
 #else
