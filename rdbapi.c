@@ -164,7 +164,7 @@ RDBAPI_RESULT RDBAPI_Initialize (const char *log4cpath)
 
         LOGGER_INIT(envpath);
 
-        LOGGER_INFO("RDBAPI_Initialize success.");
+        LOGGER_INFO("RDBAPI_Initialize success: %.*s", log4crc->len, log4crc->str);
 #endif
     }
 

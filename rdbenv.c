@@ -322,10 +322,9 @@ static size_t RDBEnvLoadCfgfile (const char *cfgfile, char **outCluster, int *io
 
         numnodes = 0;
 
-        cstr_readline(fp, rdbuf, 127);
-        line = cstr_trim_chr(rdbuf, 32);
+        cstr_readline(fp, rdbuf, 127, 1);
 
-        n = cstr_slpit_chr(line, (int) strnlen(line, 127), ',', cols, 3);
+        n = cstr_slpit_chr(rdbuf, cstr_length(rdbuf, 127), ',', cols, 3);
 
         if (n != 3) {
             printf("RDBAPI_ERROR: (%s:%d) fail on read config: %s\n", __FILE__, __LINE__, cfgfile);
@@ -342,7 +341,7 @@ static size_t RDBEnvLoadCfgfile (const char *cfgfile, char **outCluster, int *io
         free(cols[2]);
 
         for (n = 0; n < numnodes; n++) {
-            cstr_readline(fp, rdbuf, 127);
+            cstr_readline(fp, rdbuf, 127, 1);
 
             // test@192.168.39.111:7009
             line = cstr_trim_chr(rdbuf, 32);

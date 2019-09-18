@@ -2880,7 +2880,7 @@ RDBAPI_RESULT RDBCtxExecuteFile (RDBCtx ctx, const char *scriptfile, RDBResultMa
         sqlblob.length = 0;
         sqlblob.str = RDBMemAlloc(sqlblob.maxsz);
 
-        while ((len = cstr_readline(fp, line, sizeof(line) - 1)) != -1) {
+        while ((len = cstr_readline(fp, line, sizeof(line) - 1, 0)) != -1) {
             if (len > 0 && line[0] != '#') {
                 char *endp = strrchr(line, ';');
                 if (endp) {

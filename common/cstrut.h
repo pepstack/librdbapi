@@ -1,4 +1,4 @@
-/***********************************************************************
+﻿/***********************************************************************
 * Copyright (c) 2008-2080 syna-tech.com, pepstack.com, 350137278@qq.comcstr_replace_new
 *
 * ALL RIGHTS RESERVED.
@@ -818,17 +818,24 @@ static int cstr_findstr_in (const char *str, int count, const char *dests[], int
 }
 
 
-static int cstr_readline (FILE *fp, char line[], size_t maxlen)
+static int cstr_readline (FILE *fp, char line[], size_t maxlen, int ignore_whitespace)
 {
     int ch, len = 0;
-    int whitespace = 1;
+
+    if (ftell(fp) == 0) {
+        int bomhead[3] = {fgetc(fp), fgetc(fp), fgetc(fp)};
+        if (bomhead[0] == 0xEF && bomhead[1] == 0xBB && bomhead[2] == 0xBF) {
+            fseek(fp, 3, SEEK_SET);
+        } else {
+            fseek(fp, 0, SEEK_SET);
+        }
+    }
 
     while ((ch = fgetc(fp)) != EOF) {
         if (len < maxlen) {
             if (ch != '\r' && ch != '\n' && ch != '\\') {
-                line[len++] = ch;
-                if (ch != 32) {
-                    whitespace = 0;
+                if (! ignore_whitespace || ! isspace(ch)) {
+                    line[len++] = ch;
                 }
             }
         }
@@ -844,8 +851,7 @@ static int cstr_readline (FILE *fp, char line[], size_t maxlen)
     }
 
     line[len] = 0;
-
-    return (whitespace? 0 : len);
+    return len;
 }
 
 
