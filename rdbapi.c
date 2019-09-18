@@ -140,7 +140,6 @@ RDBAPI_RESULT RDBAPI_Initialize (const char *log4cpath)
     zstringbuf log4crc = (zstringbuf) librdbapi_log4crc;
 
     if (log4cpath) {
-#if defined(__WINDOWS__)
         int ret;
         char *envpath;
 
@@ -165,7 +164,6 @@ RDBAPI_RESULT RDBAPI_Initialize (const char *log4cpath)
         LOGGER_INIT(envpath);
 
         LOGGER_INFO("RDBAPI_Initialize success: %.*s", log4crc->len, log4crc->str);
-#endif
     }
 
     return RDBAPI_SUCCESS;

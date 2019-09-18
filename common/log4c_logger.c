@@ -29,3 +29,4 @@
 #include "log4c_logger.h"
 
 log4c_category_t * __logger_cat_global = 0;
+
