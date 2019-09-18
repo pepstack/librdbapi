@@ -47,9 +47,9 @@ extern "C"
 # define NO_QFORKIMPL
 # include <Win32_Interop/win32fixes.h>
 
+/* log4c for Windows */
 # define LOG4C_ENABLED  1
 # define LOGGER_CATEGORY_NAME  "librdbapi"
-//# include "../../win32/liblog4c/src/log4c-wrapper.h"
 # include "../../win32/liblog4c/src/log4c_logger.h"
 
 # ifdef _DEBUG
@@ -60,9 +60,9 @@ extern "C"
 
 #else
 
-/* log4c for linux */
+/* log4c for Linux */
 # define LOG4C_ENABLED  1
-# define LOG4C_CATEGORY_NAME_DEFAULT  "librdbapi"
+# define LOGGER_CATEGORY_NAME  "librdbapi"
 # include <common/log4c_logger.h>
 
 #endif
