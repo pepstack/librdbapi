@@ -234,6 +234,34 @@ typedef struct _RDBBinary_t
 } RDBBinary_t, *RDBBinary;
 
 
+typedef struct _RDBDate_t
+{
+    /* 2019-12-22 */
+    char val[11];
+} RDBDate_t, *RDBDate;
+
+
+typedef struct _RDBTime_t
+{
+    /* 2019-12-22 17:49:53 */
+    char val[20];
+} RDBTime_t, *RDBTime;
+
+
+typedef struct _RDBStamp_t
+{
+    /* milliseconds */
+    ub8 val;
+} RDBStamp_t, *RDBStamp;
+
+
+typedef struct _RDBSet_t
+{
+    /* milliseconds */
+    char val[256];
+} RDBSet_t, *RDBSet;
+
+
 typedef enum
 {
     // DO NOT CHANGE !
@@ -255,22 +283,25 @@ typedef enum
 typedef enum
 {
     // DO NOT CHANGE !
-    RDBVT_ERROR = 0           // type is error
-    ,RDBVT_SB2   = 'j'        // 16-bit signed int: SB2
-    ,RDBVT_UB2   = 'v'        // 16-bit unsigned int: UB2
-    ,RDBVT_SB4   = 'i'        // 32-bit signed int: SB4
-    ,RDBVT_UB4   = 'u'        // 32-bit unsigned int: UB4
-    ,RDBVT_UB4X  = 'x'        // 32-bit unsigned int (hex encoded): UB4X
-    ,RDBVT_SB8   = 'I'        // 64-bit signed int: SB8
-    ,RDBVT_UB8   = 'U'        // 64-bit unsigned int: UB8
-    ,RDBVT_UB8X  = 'X'        // 64-bit unsigned int (hex encoded): UB8X
-    ,RDBVT_CHAR  = 'c'        // character (signed char): CHAR
-    ,RDBVT_BYTE  = 'b'        // byte (unsigned char): BYTE
-    ,RDBVT_STR   = 's'        // utf8 encoded ascii string: STR
-    ,RDBVT_FLT64 = 'f'        // 64-bit double precision: FLT64
-    ,RDBVT_BLOB  = 'B'        // binary with variable size: BLOB
-    ,RDBVT_DEC   = 'D'        // decimal(precision, scale): DEC
-    ,RDBVT_SET   = 'S'        // redis set (sadd, smembers)
+    RDBVT_ERROR     =  0       // type is error
+    ,RDBVT_SB2      = 'j'      // 16-bit signed int: SB2
+    ,RDBVT_UB2      = 'v'      // 16-bit unsigned int: UB2
+    ,RDBVT_SB4      = 'i'      // 32-bit signed int: SB4
+    ,RDBVT_UB4      = 'u'      // 32-bit unsigned int: UB4
+    ,RDBVT_UB4X     = 'x'      // 32-bit unsigned int (hex encoded): UB4X
+    ,RDBVT_SB8      = 'I'      // 64-bit signed int: SB8
+    ,RDBVT_UB8      = 'U'      // 64-bit unsigned int: UB8
+    ,RDBVT_UB8X     = 'X'      // 64-bit unsigned int (hex encoded): UB8X
+    ,RDBVT_CHAR     = 'c'      // character (signed char): CHAR
+    ,RDBVT_BYTE     = 'b'      // byte (unsigned char): BYTE
+    ,RDBVT_STR      = 's'      // utf8 encoded ascii string: STR
+    ,RDBVT_FLT64    = 'f'      // 64-bit double precision: FLT64
+    ,RDBVT_BLOB     = 'B'      // binary with variable size: BLOB
+    ,RDBVT_DEC      = 'D'      // decimal(precision, scale): DEC
+    ,RDBVT_DATE     = 'd'      // date 'YYYY-MM-DD'
+    ,RDBVT_TIME     = 't'      // datetime 'YYYY-MM-DD hh:mm:dd'
+    ,RDBVT_STAMP    = 'm'      // timestamp in milliseconds
+    ,RDBVT_SET      = 'S'      // redis set (sadd, smembers)
 } RDBValueType;
 
 

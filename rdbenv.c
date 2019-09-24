@@ -292,6 +292,11 @@ static void RDBEnvInitInternal (RDBEnv env, RDBNodeCfg nodecfgs[])
     env->valtypetable[RDBVT_FLT64] = RDBZStringNew("FLT64", 5);
     env->valtypetable[RDBVT_BLOB]  = RDBZStringNew("BLOB", 4);
     env->valtypetable[RDBVT_DEC]   = RDBZStringNew("DEC", 3);
+
+    env->valtypetable[RDBVT_DATE]   = RDBZStringNew("DATE", 4);
+    env->valtypetable[RDBVT_TIME]  = RDBZStringNew("TIME", 4);
+    env->valtypetable[RDBVT_STAMP]  = RDBZStringNew("STAMP", 5);
+
     env->valtypetable[RDBVT_SET]   = RDBZStringNew("SET", 3);
 }
 

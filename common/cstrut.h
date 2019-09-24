@@ -31,7 +31,7 @@
 * author: 350137278@qq.com
 *
 * create: 2017-08-28
-* update: 2019-09-09
+* update: 2019-09-18
 */
 #ifndef _CSTR_UT_H
 #define _CSTR_UT_H
