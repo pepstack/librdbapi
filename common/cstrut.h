@@ -1,4 +1,4 @@
-/***********************************************************************
+﻿/***********************************************************************
 * Copyright (c) 2008-2080 syna-tech.com, pepstack.com, 350137278@qq.comcstr_replace_new
 *
 * ALL RIGHTS RESERVED.
@@ -47,6 +47,7 @@ extern "C"
 #include <memory.h>
 #include <ctype.h>
 #include <errno.h>
+#include <time.h>
 
 #include "unitypes.h"
 
@@ -365,6 +366,14 @@ static int cstr_Rtrim_whitespace (char *str, int len)
         }
     }
     return len + 1;
+}
+
+
+static char * cstr_LRtrim_whitespace (char *str)
+{
+    char *p = cstr_Ltrim_whitespace(str);
+    cstr_Rtrim_whitespace(p, cstr_length(p, -1));
+    return p;
 }
 
 
@@ -818,6 +827,18 @@ static int cstr_findstr_in (const char *str, int count, const char *dests[], int
 }
 
 
+static int cstr_isdigit (const char *str, int len)
+{
+    while(len-- > 0) {
+        if (! isdigit(str[len])) {
+            return cstr_bool_false;
+        }
+    }
+
+    return cstr_bool_true;
+}
+
+
 static int cstr_readline (FILE *fp, char line[], size_t maxlen, int ignore_whitespace)
 {
     int ch, len = 0;
@@ -852,6 +873,229 @@ static int cstr_readline (FILE *fp, char line[], size_t maxlen, int ignore_white
 
     line[len] = 0;
     return len;
+}
+
+
+#define is_leap_year(year) \
+    ((((year) % 400 == 0) || ((year) % 4 == 0 && (year) % 100 != 0)) ? 1 : 0)
+
+
+/* 0: error; 1: ok */
+static int time_is_valid (int year, int mon, int day, int hour, int min, int sec)
+{
+    if (year < 1900 || year > 9999 || mon <= 0 || mon > 12 || day <= 0 || day > 31 || hour < 0 || hour > 24 || min < 0 || min > 59 || sec < 0 || sec > 59) {
+        return 0;
+    }
+    if (mon == 1 || mon == 3 || mon == 5 || mon == 7 || mon == 8 || mon == 10 || mon == 12) {
+        // 31 days ok
+        return 1;
+    } else if (mon == 4 || mon == 6 || mon == 9 || mon == 11) {
+        if (day < 31) {
+            return 1;
+        }
+    } else {
+        // mon=2
+        return (day > 29? 0 : (day < 29? 1: (is_leap_year(year)? 1 : 0)));
+    }
+    return 0;
+}
+
+
+static ub8 cstr_parse_timestamp (char *timestr)
+{
+    /**
+     * '2019-12-22 12:36:59.065'
+     * '2019-12-22 12:36:59'
+     * '2019-12-22'
+     */
+    ub8 stamp = 0;
+
+    char Year[5] = {'0', '0', '0', '0', '\0'};
+    char Mon[3] = {'0', '0', '\0'};
+    char Day[3] = {'0', '0', '\0'};
+
+    char hour[3] = {'0', '0', '\0'};
+    char min[3] = {'0', '0', '\0'};
+    char sec[3] = {'0', '0', '\0'};
+
+    char msec[4] = {'0', '0', '0', '\0'};
+
+    char *str = cstr_LRtrim_whitespace(timestr);
+
+    char *a = strchr(str, 39);
+    char *b = strrchr(str, 39);
+
+    char *hms;
+
+    int len = 0;
+
+    if (a && b) {
+        *a++ = 0;
+        *b-- = 0;
+        str = a;
+        len = (int)(b - a) + 1;
+    } else if (a || b) {
+        // error char
+        return (-1);
+    } else {
+        len = cstr_length(str, 30);
+    }
+
+    if (len == 10) {
+        /* 2019-12-22 */
+        a = strchr(str, '-');
+        b = strrchr(str, '-');
+
+        if (a && b && a - str == 4 && b-a == 3) {
+            *a++ = 0;
+            *b++ = 0;
+
+            snprintf(Year, sizeof(Year), "%.*s", 4, str);
+            snprintf(Mon, sizeof(Mon), "%.*s", 2, a);
+            snprintf(Day, sizeof(Day), "%.*s", 2, b);
+        } else {
+            // error date format
+            return (-1);
+        }
+    } else if (len == 19) {
+        /* 2019-12-22 12:36:59 */
+        a = strchr(str, 32);
+        if (a && a - str == 10) {
+            *a++ = 0;
+
+            hms = a;
+
+            a = strchr(str, '-');
+            b = strrchr(str, '-');
+
+            if (a && b && a - str == 4 && b-a == 3) {
+                *a++ = 0;
+                *b++ = 0;
+
+                snprintf(Year, sizeof(Year), "%.*s", 4, str);
+                snprintf(Mon, sizeof(Mon), "%.*s", 2, a);
+                snprintf(Day, sizeof(Day), "%.*s", 2, b);
+            } else {
+                // error date format
+                return (-1);
+            }
+
+            a = strchr(hms, ':');
+            b = strrchr(hms, ':');
+
+            if (a && b && a - hms == 2 && b-a == 3) {
+                *a++ = 0;
+                *b++ = 0;
+
+                snprintf(hour, sizeof(hour), "%.*s", 2, hms);
+                snprintf(min, sizeof(min), "%.*s", 2, a);
+                snprintf(sec, sizeof(sec), "%.*s", 2, b);
+            } else {
+                // error date format
+                return (-1);
+            }
+        } else {
+            // error datetime format
+            return (-1);
+        }
+    } else if (len == 23) {
+        /* 2019-12-22 12:36:59.065 */
+        a = strchr(str, 32);
+        if (a && a - str == 10) {
+            *a++ = 0;
+
+            hms = a;
+
+            a = strchr(str, '-');
+            b = strrchr(str, '-');
+
+            if (a && b && a - str == 4 && b-a == 3) {
+                *a++ = 0;
+                *b++ = 0;
+
+                snprintf(Year, sizeof(Year), "%.*s", 4, str);
+                snprintf(Mon, sizeof(Mon), "%.*s", 2, a);
+                snprintf(Day, sizeof(Day), "%.*s", 2, b);
+            } else {
+                // error date format
+                return (-1);
+            }
+
+            a = strchr(hms, ':');
+            b = strrchr(hms, ':');
+
+            if (a && b && a - hms == 2 && b-a == 3) {
+                char *dot = strchr(b, '.');
+                if (!dot || dot - b != 3) {
+                    // error stamp format
+                    return (-1);
+                }
+
+                *a++ = 0;
+                *b++ = 0;
+                *dot++ = 0;
+
+                snprintf(hour, sizeof(hour), "%.*s", 2, hms);
+                snprintf(min, sizeof(min), "%.*s", 2, a);
+                snprintf(sec, sizeof(sec), "%.*s", 2, b);
+
+                if (*dot) {
+                    msec[0] = *dot++;
+
+                    if (*dot) {
+                        msec[1] = *dot++;
+
+                        if (*dot) {
+                            msec[2] = *dot++;
+                        }
+                    }
+                }
+            } else {
+                // error date format
+                return (-1);
+            }
+        } else {
+            // error datetime format
+            return (-1);
+        }
+    } else {
+        // error format
+        return (-1);
+    }
+
+    if (cstr_isdigit(Year, 4) &&
+        cstr_isdigit(Mon, 2) &&
+        cstr_isdigit(Day, 2) &&
+        cstr_isdigit(hour, 2) &&
+        cstr_isdigit(min, 2) &&
+        cstr_isdigit(sec, 2) &&
+        cstr_isdigit(msec, 3)) {
+
+        struct tm t = {0};
+
+        t.tm_year = atoi(Year);
+        t.tm_mon = atoi(Mon);
+        t.tm_mday = atoi(Day);
+
+        t.tm_hour = atoi(hour);
+        t.tm_min = atoi(min);
+        t.tm_sec = atoi(sec);
+
+        if (! time_is_valid(t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)) {
+            // invalid time
+            return (-1);
+        }
+
+        t.tm_year -= 1900;
+        t.tm_mon  -= 1;
+
+        stamp = (ub8)(mktime(&t) * 1000 + atoi(msec));
+
+        return stamp;                
+    }
+
+    // error no digit
+    return (-1);
 }
 
 

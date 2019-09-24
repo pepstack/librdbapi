@@ -271,30 +271,34 @@ void RDBThreadCtxDestroy (RDBThreadCtx thrctx)
 }
 
 
-ub8 RDBCurrentTime (int spec, char *timestr)
+ub8 RDBGetTimestamp (char *timestr)
 {
 #ifdef __WINDOWS__
     struct timeb tb;
 
     ftime(&tb);
 
-    if (spec == RDBAPI_TIMESPEC_SEC) {
-        if (timestr) {
-            struct tm *p = localtime(&tb.time);
-            snprintf_chkd_V2(-1, timestr, 20, "%04d-%02d-%02d %02d:%02d:%02d",
-                    1900 + p->tm_year,
-                    1 + p->tm_mon,
-                    p->tm_mday,
-                    p->tm_hour,
-                    p->tm_min,
-                    p->tm_sec);
-            timestr[19] = 0;
-        }
+    if (timestr) {
+        struct tm *p = localtime(&tb.time);
+        snprintf_chkd_V2(-1, timestr, 24, "%04d-%02d-%02d %02d:%02d:%02d.%03d",
+            1900 + p->tm_year,
+            1 + p->tm_mon,
+            p->tm_mday,
+            p->tm_hour,
+            p->tm_min,
+            p->tm_sec,
+            (int) (tb.millitm));
+        timestr[23] = 0;
+    }
 
-        return tb.time;
-    } else if (spec == RDBAPI_TIMESPEC_MSEC) {
+    return tb.time*1000 + tb.millitm;
+
+ #else
+    struct timeval tv;
+
+    if (gettimeofday(&tv, NULL) == 0) {
         if (timestr) {
-            struct tm *p = localtime(&tb.time);
+            struct tm *p = localtime(&tv.tv_sec);
             snprintf_chkd_V2(-1, timestr, 24, "%04d-%02d-%02d %02d:%02d:%02d.%03d",
                 1900 + p->tm_year,
                 1 + p->tm_mon,
@@ -302,49 +306,16 @@ ub8 RDBCurrentTime (int spec, char *timestr)
                 p->tm_hour,
                 p->tm_min,
                 p->tm_sec,
-                (int) (tb.millitm));
-            timestr[23] = 0;
+                (int) (tv.tv_usec/1000));
         }
-        return tb.time*1000 + tb.millitm;
-    }
-#else
-    struct timeval tv;
 
-    if (spec == RDBAPI_TIMESPEC_SEC) {
-        if (gettimeofday(&tv, NULL) == 0) {
-            if (timestr) {
-                struct tm *p = localtime(&tv.tv_sec);
-                snprintf_chkd_V2(-1, timestr, 20, "%04d-%02d-%02d %02d:%02d:%02d",
-                    1900 + p->tm_year,
-                    1 + p->tm_mon,
-                    p->tm_mday,
-                    p->tm_hour,
-                    p->tm_min,
-                    p->tm_sec);
-            }
-            return tv.tv_sec;
-        }
-    } else if (spec == RDBAPI_TIMESPEC_MSEC) {
-        if (gettimeofday(&tv, NULL) == 0) {
-            if (timestr) {
-                struct tm *p = localtime(&tv.tv_sec);
-                snprintf_chkd_V2(-1, timestr, 24, "%04d-%02d-%02d %02d:%02d:%02d.%03d",
-                    1900 + p->tm_year,
-                    1 + p->tm_mon,
-                    p->tm_mday,
-                    p->tm_hour,
-                    p->tm_min,
-                    p->tm_sec,
-                    (int) (tv.tv_usec/1000));
-            }
-            return (tv.tv_sec * 1000 + tv.tv_usec / 1000);
-        }
+        return (tv.tv_sec * 1000 + tv.tv_usec / 1000);
     }
 
 #endif
 
     // invalid arg
-    return RDBAPI_ERROR;
+    return 0;
 }
 
 

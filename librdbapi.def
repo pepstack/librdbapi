@@ -5,7 +5,8 @@ EXPORTS
 	RDBAPI_Initialize
 	RDBAPI_Uninitialize
 
-	RDBCurrentTime
+	RDBGetTimestamp
+
 	RDBMemAlloc
 	RDBMemRealloc
 	RDBMemFree

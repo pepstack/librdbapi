@@ -1,4 +1,4 @@
-// hiredis-w32-sample.c
+﻿// hiredis-w32-sample.c
 //   hiredis client for windows x64
 //
 //   https://blog.csdn.net/xumaojun/article/details/51558128
@@ -64,7 +64,7 @@ int main(int argc, const char *argv[])
 
     char ts[24];
 
-    ub8 startTime = RDBCurrentTime(1, ts);
+    ub8 startTime = RDBGetTimestamp(ts);
 
     printf("start on: %s\n", ts);
 
@@ -92,7 +92,7 @@ int main(int argc, const char *argv[])
 
     printf("redis close success.\n");
 
-    ub8 endTime = RDBCurrentTime(1, ts);
+    ub8 endTime = RDBGetTimestamp(ts);
 
     printf("end on: %s. elapsed: %.3lf seconds.\n", ts, (endTime - startTime) * 0.001);
  	return 0;

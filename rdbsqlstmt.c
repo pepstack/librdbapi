@@ -2070,6 +2070,10 @@ RDBAPI_RESULT RDBSQLStmtPrepare (RDBSQLStmt sqlstmt)
         }
 
         for (i = 0; i < sqlstmt->upsert.numfields; i++) {
+            char *val = sqlstmt->upsert.fieldvalues[i];
+            int vlen = sqlstmt->upsert.fieldvalueslen[i];
+            int vpos;
+
             j = RDBTableDesFieldIndex(tabledes, sqlstmt->upsert.fieldnames[i], sqlstmt->upsert.fieldnameslen[i]);
             if (j == -1) {
                 snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "field not found: '%.*s'", sqlstmt->upsert.fieldnameslen[i], sqlstmt->upsert.fieldnames[i]);
@@ -2079,6 +2083,77 @@ RDBAPI_RESULT RDBSQLStmtPrepare (RDBSQLStmt sqlstmt)
             if (fields[j + 1]) {
                 snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "duplicated field: '%.*s'", sqlstmt->upsert.fieldnameslen[i], sqlstmt->upsert.fieldnames[i]);
                 return RDBAPI_ERROR;
+            }
+
+            switch (tabledes->fielddes[j].fieldtype) {
+            case RDBVT_DATE:
+                vpos = re_match("NOWDATE\\s*(\\s*)", val);
+                if (vpos == 0) {
+                    char tmbuf[24] = {0};
+                    RDBGetTimestamp(tmbuf);
+                    tmbuf[10] = 0;
+                    sqlstmt->upsert.fieldvalueslen[i] = 10;
+                    sqlstmt->upsert.fieldvalues[i] = strdup(tmbuf);
+                    free(val);
+                    break;
+                }
+                break;
+
+            case RDBVT_TIME:
+                vpos = re_match("NOWTIME\\s*(\\s*)", val);
+                if (vpos == 0) {
+                    char tmbuf[24] = {0};
+                    RDBGetTimestamp(tmbuf);
+                    tmbuf[19] = 0;
+                    sqlstmt->upsert.fieldvalueslen[i] = 19;
+                    sqlstmt->upsert.fieldvalues[i] = strdup(tmbuf);
+                    free(val);
+                    break;
+                }
+                break;
+
+            case RDBVT_STAMP:
+                vpos = re_match("NOWSTAMP\\s*(\\s*)", val);
+                if (vpos == 0) {
+                    char tsbuf[22] = {0};                    
+                    ub8 tstamp = RDBGetTimestamp(NULL);
+                    sqlstmt->upsert.fieldvalueslen[i] = snprintf_chkd_V1(tsbuf, sizeof(tsbuf), "%"PRIu64, tstamp);
+                    sqlstmt->upsert.fieldvalues[i] = strdup(tsbuf);
+                    free(val);
+                    break;
+                }
+
+                vpos = re_match("TOSTAMP\\s*(\\s*", val);
+                if (vpos == 0) {
+                    char tsbuf[22] = {0};
+                    ub8 tstamp = (ub8)(-1);
+
+                    char *p = strchr(val, 40);
+                    char *q = strrchr(val, 41);
+
+                    if (p && q && q > p) {
+                        *p++ = 0;
+                        *q-- = 0;
+
+                        tstamp = cstr_parse_timestamp(p);
+                        if (tstamp != (ub8)(-1)) {
+                            char tsbuf[22] = {0};
+                            sqlstmt->upsert.fieldvalueslen[i] = snprintf_chkd_V1(tsbuf, sizeof(tsbuf), "%"PRIu64, tstamp);
+                            sqlstmt->upsert.fieldvalues[i] = strdup(tsbuf);
+                            free(val);
+                        }
+                    }
+
+                    if (tstamp == (ub8)(-1)) {
+                        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "error stamp format: %s", val);
+                        return RDBAPI_ERROR;
+                    }
+                }
+                break;
+
+            case RDBVT_SET:
+
+                break;
             }
 
             if (fields[0] < j + 1) {

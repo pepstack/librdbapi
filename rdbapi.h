@@ -430,10 +430,7 @@ typedef struct _RDBBlob_t
  *
  *********************************************************************/
 
-#define RDBAPI_TIMESPEC_SEC    0
-#define RDBAPI_TIMESPEC_MSEC   1
-
-extern ub8 RDBCurrentTime (int spec, char *timestr);
+extern ub8 RDBGetTimestamp (char *timemsOut);
 
 extern void * RDBMemAlloc (size_t sizeb);
 extern void * RDBMemRealloc (void *oldp, size_t oldsizeb, size_t newsizeb);
