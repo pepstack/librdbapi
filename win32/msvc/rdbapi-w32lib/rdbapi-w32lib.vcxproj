@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\common\tiny-regex-c\re.c" />
+    <ClCompile Include="..\..\..\common\tinyexpr\tinyexpr.c" />
     <ClCompile Include="..\..\..\common\tpl\tpl.c" />
     <ClCompile Include="..\..\..\common\tpl\win\mmap.c" />
     <ClCompile Include="..\..\..\common\tpl\win\nonempty.c" />
@@ -31,9 +32,11 @@
     <ClInclude Include="..\..\..\common\cstrut.h" />
     <ClInclude Include="..\..\..\common\threadlock.h" />
     <ClInclude Include="..\..\..\common\tiny-regex-c\re.h" />
+    <ClInclude Include="..\..\..\common\tinyexpr\tinyexpr.h" />
     <ClInclude Include="..\..\..\common\tpl\tpl.h" />
     <ClInclude Include="..\..\..\common\tpl\win\mman.h" />
     <ClInclude Include="..\..\..\rdbapi.h" />
+    <ClInclude Include="..\..\..\rdbfuncs.h" />
     <ClInclude Include="..\..\..\rdbtablefilter.h" />
     <ClInclude Include="..\..\..\rdbresultmap.h" />
     <ClInclude Include="..\..\..\rdbcommon.h" />

@@ -257,6 +257,12 @@ static int parse_table (char *table, char tablespace[RDB_KEY_NAME_MAXLEN + 1], c
 
         // ok
         return 1;
+    } else if (! cstr_compare_len(table, len, "dual", 4)) {
+        snprintf_chkd_V1(tablespace, RDB_KEY_NAME_MAXLEN + 1, RDB_SYSTEM_TABLE_PREFIX);
+        snprintf_chkd_V1(tablename, RDB_KEY_NAME_MAXLEN + 1, "%.*s", len, table);
+
+        // ok
+        return 1;
     }
 
     // not found
@@ -280,27 +286,59 @@ static int parse_select_fields (char *fields, char *fieldnames[], int fieldnames
     p = strtok(fields, ",");
     while (p && i <= RDBAPI_ARGV_MAXNUM) {
         char *name;
-
-        snprintf_chkd_V1(namebuf, RDB_KEY_NAME_MAXLEN * 2, "%s", p);
+        namelen = snprintf_chkd_V1(namebuf, RDB_KEY_NAME_MAXLEN * 2, "%s", p);
 
         name = cstr_LRtrim_chr(namebuf, 32);
-        namelen = RDBSQLNameValidateMaxLen(name, RDB_KEY_NAME_MAXLEN);
+        namelen = RDBSQLNameValidateMaxLen(name, RDB_KEY_NAME_MAXLEN * 2);
 
         if (! namelen) {
-            namelen = cstr_length(name, RDB_KEY_NAME_MAXLEN);
+            namelen = cstr_length(name, RDB_KEY_NAME_MAXLEN * 2);
 
             if (cstr_startwith(name, namelen, "COUNT(", 6) ||
                 cstr_startwith(name, namelen, "SUM(", 4) ||
-                cstr_startwith(name, namelen, "AVG(", 4)
-            ) {
-                name = cstr_trim_whitespace(name);
-                namelen = cstr_length(name, RDB_KEY_NAME_MAXLEN);
+                cstr_startwith(name, namelen, "AVG(", 4) ||
+                cstr_startwith(name, namelen, "NOWDATE(", 8) ||
+                cstr_startwith(name, namelen, "NOWTIME(", 8) ||
+                cstr_startwith(name, namelen, "NOWSTAMP(", 9) ||
+                cstr_startwith(name, namelen, "TODATE(", 7) ||
+                cstr_startwith(name, namelen, "TOTIME(", 7) ||
+                cstr_startwith(name, namelen, "TOSTAMP(", 8) ||
+                0) {
+
+                if (! cstr_startwith(name, namelen, "TOSTAMP(", 8)) {
+                    name = cstr_trim_whitespace(name);
+                    namelen = cstr_length(name, RDB_KEY_NAME_MAXLEN * 2);
+                }
             }
 
             if (! cstr_compare_len(name, namelen, "COUNT(*)", 8) ||
-                ! cstr_compare_len(name, namelen, "COUNT(1)", 8)
-            ) {
+                ! cstr_compare_len(name, namelen, "COUNT(1)", 8) ||
+                0) {
                 fieldnames[i] = strdup("COUNT(*)");
+                fieldnameslen[i] = namelen;
+                return 1;
+            }
+
+            if (! cstr_compare_len(name, namelen, "NOWDATE()", 9)) {
+                fieldnames[i] = strdup(name);
+                fieldnameslen[i] = namelen;
+                return 1;
+            }
+
+            if (! cstr_compare_len(name, namelen, "NOWTIME()", 9)) {
+                fieldnames[i] = strdup(name);
+                fieldnameslen[i] = namelen;
+                return 1;
+            }
+
+            if (! cstr_compare_len(name, namelen, "NOWSTAMP()", 10)) {
+                fieldnames[i] = strdup(name);
+                fieldnameslen[i] = namelen;
+                return 1;
+            }
+
+            if (cstr_endwith(name, namelen, ")", 1)) {
+                fieldnames[i] = strdup(name);
                 fieldnameslen[i] = namelen;
                 return 1;
             }
@@ -2036,11 +2074,17 @@ RDBAPI_RESULT RDBSQLStmtPrepare (RDBSQLStmt sqlstmt)
 {
     int i, j, k;
 
+    ub8 tstamp = -1;
+    char tmbuf[24] = {0};
+
     RDBCtx ctx = sqlstmt->ctx;
-
+ 
     if (sqlstmt->stmt == RDBSQL_SELECT) {
-        // TODO:
-
+        if (! strcmp(sqlstmt->select.tablespace, RDB_SYSTEM_TABLE_PREFIX) &&
+            ! strcmp(sqlstmt->select.tablename, "dual") &&
+            1) {
+            sqlstmt->select.dual = 1;
+        }
     } else if (sqlstmt->stmt == RDBSQL_DELETE) {
         // TODO:
 
@@ -2089,45 +2133,104 @@ RDBAPI_RESULT RDBSQLStmtPrepare (RDBSQLStmt sqlstmt)
             case RDBVT_DATE:
                 vpos = re_match("NOWDATE\\s*(\\s*)", val);
                 if (vpos == 0) {
-                    char tmbuf[24] = {0};
-                    RDBGetTimestamp(tmbuf);
+                    if (RDBGetServerTime(ctx, tmbuf) == RDBAPI_ERROR) {
+                        return RDBAPI_ERROR;
+                    }
+
                     tmbuf[10] = 0;
                     sqlstmt->upsert.fieldvalueslen[i] = 10;
                     sqlstmt->upsert.fieldvalues[i] = strdup(tmbuf);
                     free(val);
                     break;
                 }
+
+                vpos = re_match("TODATE\\s*(\\s*", val);
+                if (vpos == 0) {
+                    char *p = strchr(val, 40);
+                    char *q = strrchr(val, 41);
+
+                    *tmbuf = 0;
+
+                    if (p && q && q > p) {
+                        *p++ = 0;
+                        *q-- = 0;
+
+                        int lll = q - p;
+
+                        if (cstr_timestamp_to_datetime(p, -1, tmbuf)) {
+                            tmbuf[10] = 0;
+                            sqlstmt->upsert.fieldvalueslen[i] = 10;
+                            sqlstmt->upsert.fieldvalues[i] = strdup(tmbuf);
+                            free(val);
+                        }
+                    }
+
+                    if (! *tmbuf) {
+                        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "error TODATE(%s)", val);
+                        return RDBAPI_ERROR;
+                    }
+                }
                 break;
 
             case RDBVT_TIME:
                 vpos = re_match("NOWTIME\\s*(\\s*)", val);
                 if (vpos == 0) {
-                    char tmbuf[24] = {0};
-                    RDBGetTimestamp(tmbuf);
+                    if (RDBGetServerTime(ctx, tmbuf) == RDBAPI_ERROR) {
+                        return RDBAPI_ERROR;
+                    }
+
                     tmbuf[19] = 0;
                     sqlstmt->upsert.fieldvalueslen[i] = 19;
                     sqlstmt->upsert.fieldvalues[i] = strdup(tmbuf);
                     free(val);
                     break;
                 }
+
+                vpos = re_match("TOTIME\\s*(\\s*", val);
+                if (vpos == 0) {
+                    char *p = strchr(val, 40);
+                    char *q = strrchr(val, 41);
+
+                    *tmbuf = 0;
+
+                    if (p && q && q > p) {
+                        *p++ = 0;
+                        *q-- = 0;
+
+                        int lll = q-p;
+                        if (cstr_timestamp_to_datetime(p, -1, tmbuf)) {
+                            tmbuf[19] = 0;
+                            sqlstmt->upsert.fieldvalueslen[i] = 19;
+                            sqlstmt->upsert.fieldvalues[i] = strdup(tmbuf);
+                            free(val);
+                        }
+                    }
+
+                    if (! *tmbuf) {
+                        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "error TOTIME(%s)", val);
+                        return RDBAPI_ERROR;
+                    }
+                }
                 break;
 
             case RDBVT_STAMP:
+                tstamp = (ub8)(-1);
+
                 vpos = re_match("NOWSTAMP\\s*(\\s*)", val);
                 if (vpos == 0) {
-                    char tsbuf[22] = {0};                    
-                    ub8 tstamp = RDBGetTimestamp(NULL);
-                    sqlstmt->upsert.fieldvalueslen[i] = snprintf_chkd_V1(tsbuf, sizeof(tsbuf), "%"PRIu64, tstamp);
-                    sqlstmt->upsert.fieldvalues[i] = strdup(tsbuf);
+                    tstamp = RDBGetServerTime(ctx, NULL);
+                    if (tstamp == (ub8)(-1)) {
+                        return RDBAPI_ERROR;
+                    }
+
+                    sqlstmt->upsert.fieldvalueslen[i] = snprintf_chkd_V1(tmbuf, sizeof(tmbuf), "%"PRIu64, tstamp);
+                    sqlstmt->upsert.fieldvalues[i] = strdup(tmbuf);
                     free(val);
                     break;
                 }
 
                 vpos = re_match("TOSTAMP\\s*(\\s*", val);
                 if (vpos == 0) {
-                    char tsbuf[22] = {0};
-                    ub8 tstamp = (ub8)(-1);
-
                     char *p = strchr(val, 40);
                     char *q = strrchr(val, 41);
 
@@ -2137,9 +2240,8 @@ RDBAPI_RESULT RDBSQLStmtPrepare (RDBSQLStmt sqlstmt)
 
                         tstamp = cstr_parse_timestamp(p);
                         if (tstamp != (ub8)(-1)) {
-                            char tsbuf[22] = {0};
-                            sqlstmt->upsert.fieldvalueslen[i] = snprintf_chkd_V1(tsbuf, sizeof(tsbuf), "%"PRIu64, tstamp);
-                            sqlstmt->upsert.fieldvalues[i] = strdup(tsbuf);
+                            sqlstmt->upsert.fieldvalueslen[i] = snprintf_chkd_V1(tmbuf, sizeof(tmbuf), "%"PRIu64, tstamp);
+                            sqlstmt->upsert.fieldvalues[i] = strdup(tmbuf);
                             free(val);
                         }
                     }
@@ -2240,7 +2342,90 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
         }
     }
 
-    if (sqlstmt->stmt == RDBSQL_SELECT || sqlstmt->stmt == RDBSQL_DELETE) {
+    if (sqlstmt->stmt == RDBSQL_SELECT) {
+        if (sqlstmt->select.dual) {
+            RDBRow row;
+            char tmbuf[24];
+
+            RDBResultMapCreate("SUCCESS dual:", sqlstmt->select.selectfields, sqlstmt->select.selectfieldslen, sqlstmt->select.numselect, 0, &resultmap);
+            RDBRowNew(resultmap, sqlstmt->select.tablename, 4, &row);
+            RDBResultMapInsertRow(resultmap, row);
+
+            for (i = 0; i < sqlstmt->select.numselect; i++) {
+                if (! cstr_compare_len(sqlstmt->select.selectfields[i], sqlstmt->select.selectfieldslen[i], "NOWSTAMP()", 10)) {
+                    ub8 stampMS = RDBGetServerTime(ctx, NULL);
+                    if (stampMS != RDBAPI_ERROR) {
+                        keylen = snprintf_chkd_V1(keybuf, RDB_KEY_VALUE_SIZE, "%"PRIu64, stampMS);
+                        RDBCellSetString(RDBRowCell(row, i), keybuf, keylen);
+                    }
+                    continue;
+                }
+
+                if (! cstr_compare_len(sqlstmt->select.selectfields[i], sqlstmt->select.selectfieldslen[i], "NOWTIME()", 9)) {
+                    ub8 stampMS = RDBGetServerTime(ctx, keybuf);
+                    if (stampMS != RDBAPI_ERROR) {
+                        RDBCellSetString(RDBRowCell(row, i), keybuf, cstr_length(keybuf, 19));
+                    }
+                    continue;
+                }
+
+                if (! cstr_compare_len(sqlstmt->select.selectfields[i], sqlstmt->select.selectfieldslen[i], "NOWDATE()", 9)) {
+                    ub8 stampMS = RDBGetServerTime(ctx, keybuf);
+                    if (stampMS != RDBAPI_ERROR) {
+                        RDBCellSetString(RDBRowCell(row, i), keybuf, cstr_length(keybuf, 10));
+                    }
+                    continue;
+                }
+
+                if (cstr_startwith(sqlstmt->select.selectfields[i], sqlstmt->select.selectfieldslen[i], "TODATE(", 7)) {
+                    keylen = snprintf_chkd_V1(keybuf, RDB_KEY_VALUE_SIZE, "%.*s", sqlstmt->select.selectfieldslen[i] - 8, sqlstmt->select.selectfields[i] + 7);
+                    if (cstr_timestamp_to_datetime(keybuf, keylen, tmbuf)) {
+                        RDBCellSetString(RDBRowCell(row, i), tmbuf, cstr_length(tmbuf, 10));
+                    }
+                    continue;
+                }
+
+                if (cstr_startwith(sqlstmt->select.selectfields[i], sqlstmt->select.selectfieldslen[i], "TOTIME(", 7)) {
+                    keylen = snprintf_chkd_V1(keybuf, RDB_KEY_VALUE_SIZE, "%.*s", sqlstmt->select.selectfieldslen[i] - 8, sqlstmt->select.selectfields[i] + 7);
+                    if (cstr_timestamp_to_datetime(keybuf, keylen, tmbuf)) {
+                        RDBCellSetString(RDBRowCell(row, i), tmbuf, cstr_length(tmbuf, 19));
+                    }
+                    continue;
+                }
+
+                if (cstr_startwith(sqlstmt->select.selectfields[i], sqlstmt->select.selectfieldslen[i], "TOSTAMP(", 8)) {
+                    keylen = snprintf_chkd_V1(keybuf, RDB_KEY_VALUE_SIZE, "%.*s", sqlstmt->select.selectfieldslen[i] - 9, sqlstmt->select.selectfields[i] + 8);
+
+                    ub8 stampMS = cstr_parse_timestamp(keybuf);
+
+                    if (stampMS != (ub8)(-1)) {
+                        keylen = snprintf_chkd_V1(keybuf, RDB_KEY_VALUE_SIZE, "%"PRIu64, stampMS);
+                        RDBCellSetString(RDBRowCell(row, i), keybuf, keylen);
+                    }
+                    continue;
+                }
+            }
+
+            *outResultMap = resultmap;
+            return RDBAPI_SUCCESS;
+        } else {
+            res = RDBTableScanFirst(ctx, sqlstmt, &resultmap);
+            if (res == RDBAPI_SUCCESS) {
+                ub8 offset = RDBTableScanNext(resultmap, sqlstmt->select.offset, sqlstmt->select.limit);
+
+                if (offset != RDB_ERROR_OFFSET) {
+                    if (sqlstmt->stmt == RDBSQL_DELETE) {
+                        RDBResultMapDeleteAllOnCluster(resultmap);
+                    }
+
+                    *outResultMap = resultmap;
+                    return RDBAPI_SUCCESS;
+                }
+
+                RDBResultMapDestroy(resultmap);
+            }
+        }
+    } else if (sqlstmt->stmt == RDBSQL_DELETE) {
         res = RDBTableScanFirst(ctx, sqlstmt, &resultmap);
         if (res == RDBAPI_SUCCESS) {
             ub8 offset = RDBTableScanNext(resultmap, sqlstmt->select.offset, sqlstmt->select.limit);

@@ -22,103 +22,58 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************/
+
 /**
- * rdbresultmap.h
- *   rdb result map type
+ * rdbfuncs.h
+ *   rdb functions
  *
  * @author: master@pepstack.com
  *
  * @version: 1.0.0
- * @create: 2019-09-02
+ * @create: 2019-06-14
  * @update:
  */
-#ifndef RDBRESULTMAP_H_INCLUDED
-#define RDBRESULTMAP_H_INCLUDED
+#ifndef RDBFUNCS_H_INCLUDED
+#define RDBFUNCS_H_INCLUDED
 
 #if defined(__cplusplus)
 extern "C"
 {
 #endif
 
-#include "rdbfuncs.h"
+#include "rdbcommon.h"
+
+#define RDBFUNC_TODATE    "TODATE"
+#define RDBFUNC_TOTIME    "TOTIME"
+#define RDBFUNC_TOSTAMP   "TOSTAMP"
+
+#define RDBFUNC_NOWDATE   "NOWDATE"
+#define RDBFUNC_NOWTIME   "NOWTIME"
+#define RDBFUNC_NOWSTAMP  "NOWSTAMP"
 
 
-typedef struct _RDBCell_t
-{
-    /* type of col value */
-    RDBCellType type;
-
-    union {
-        sb8 integer;
-
-        double dblval;
-
-        // RDB_COLTYPE_STRING
-        RDBZString zstr;
-
-        // RDB_COLTYPE_BINARY
-        RDBBinary  bin;
-
-        // RDB_COLTYPE_REPLY
-        redisReply *reply;
-
-        // RDB_COLTYPE_RESULTMAP
-        RDBResultMap resultmap; /* nested result map */
+/**
+ * TE_FUNCTION2 used because my_sum takes two arguments.
+    te_variable vars[] = {
+        {"sum", my_sum, TE_FUNCTION2},
+        {"mul", my_mul, TE_FUNCTION2},
     };
-} RDBCell_t;
 
+    int error;
+    te_expr *n = te_compile("mul(mul(2,3), sum(7, sum(7, 8)))", vars, 2, &error);
 
-typedef struct _RDBRow_t
-{
-    char *key;
-    int keylen;
-
-    /* makes this structure hashable */
-    UT_hash_handle hh;
-
-    /* count of cells */
-    int count;
-
-    /* cell values of row */
-    RDBCell_t cells[0];
-} RDBRow_t, *RDBRowNode, *RDBRowsHashMap;
-
-
-typedef struct _RDBRowIter_t
-{
-    RDBRowNode head;
-    RDBRowNode el;
-    RDBRowNode tmp;
-} RDBRowIter_t;
-
-
-/* ResultMap */
-typedef struct _RDBResultMap_t
-{
-    RDBCtx ctx;
-
-    RDBTableFilter filter;
-
-    /* user-specified title for this result */
-    RDBZString title;
-
-    /* rowsmap deletion-safe iteration */
-    RDBRowIter_t rowiter;
-
-    /* result rows saved in hashmap */
-    RDBRowsHashMap rowsmap;
-
-    /* number of rowid columns */
-    int numrowidcols;
-
-    /* number of columns and names for column headers */
-    int colheads;
-    RDBZString colheadnames[0];
-} RDBResultMap_t;
-
+    if (n) {
+        double r = te_eval(n);
+        printf("Result=%lf\n", r);
+        te_free(n);
+    } else {
+        // Show the user where the error is at.
+        printf("Error: %d\n", error);
+    }
+*/
 
 #if defined(__cplusplus)
 }
 #endif
 
-#endif /* RDBRESULTMAP_H_INCLUDED */
+#endif /* RDBFUNCS_H_INCLUDED */

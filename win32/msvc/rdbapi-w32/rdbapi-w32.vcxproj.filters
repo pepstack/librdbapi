@@ -19,6 +19,9 @@
     <Filter Include="tpl\win">
       <UniqueIdentifier>{dbd1e0ce-0724-4b8e-bffe-c688600a6cf1}</UniqueIdentifier>
     </Filter>
+    <Filter Include="tinyexpr">
+      <UniqueIdentifier>{1d0a8520-fa1f-4fff-a476-9f0a52f9b0d3}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\rdbapi.c">
@@ -66,6 +69,9 @@
     <ClCompile Include="..\..\liblog4c\src\log4c_logger.c">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\common\tinyexpr\tinyexpr.c">
+      <Filter>tinyexpr</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\rdbapi.h">
@@ -96,6 +102,12 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\rdbtablefilter.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\tinyexpr\tinyexpr.h">
+      <Filter>tinyexpr</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\rdbfuncs.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

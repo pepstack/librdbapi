@@ -721,7 +721,7 @@ RDBAPI_RESULT RDBTableCreate (RDBCtx ctx, const char *tablespace, const char *ta
 
     valueslen[0] = snprintf_chkd_V1(numfields, sizeof(numfields), "%d", nfields);
     valueslen[1] = outbin.sz;
-    valueslen[2] = snprintf_chkd_V1(timestamp, sizeof(timestamp), "%"PRIu64, RDBGetTimestamp(NULL));
+    valueslen[2] = snprintf_chkd_V1(timestamp, sizeof(timestamp), "%"PRIu64, RDBGetLocalTime(NULL));
     valueslen[3] = commentlen;
     valueslen[4] = 0;
 

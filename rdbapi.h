@@ -430,7 +430,8 @@ typedef struct _RDBBlob_t
  *
  *********************************************************************/
 
-extern ub8 RDBGetTimestamp (char *timemsOut);
+extern ub8 RDBGetLocalTime (char *timestr);
+extern ub8 RDBGetServerTime (RDBCtx ctx, char *localtimestr);
 
 extern void * RDBMemAlloc (size_t sizeb);
 extern void * RDBMemRealloc (void *oldp, size_t oldsizeb, size_t newsizeb);

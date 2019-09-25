@@ -883,9 +883,16 @@ static int cstr_readline (FILE *fp, char line[], size_t maxlen, int ignore_white
 /* 0: error; 1: ok */
 static int time_is_valid (int year, int mon, int day, int hour, int min, int sec)
 {
-    if (year < 1900 || year > 9999 || mon <= 0 || mon > 12 || day <= 0 || day > 31 || hour < 0 || hour > 24 || min < 0 || min > 59 || sec < 0 || sec > 59) {
+    if (year < 1900 || year > 9999 || mon <= 0 || mon > 12 || day <= 0 || day > 31 || hour < 0 || hour > 24 || min < 0 || min > 59 || sec < 0 || sec > 60) {
         return 0;
     }
+
+    // The number of seconds after the minute, normally in the range 0 to 59,
+    //  but can be up to 60 to allow for leap
+    if (! is_leap_year(year) && sec == 60) {
+        return 0;
+    }
+
     if (mon == 1 || mon == 3 || mon == 5 || mon == 7 || mon == 8 || mon == 10 || mon == 12) {
         // 31 days ok
         return 1;
@@ -908,8 +915,6 @@ static ub8 cstr_parse_timestamp (char *timestr)
      * '2019-12-22 12:36:59'
      * '2019-12-22'
      */
-    ub8 stamp = 0;
-
     char Year[5] = {'0', '0', '0', '0', '\0'};
     char Mon[3] = {'0', '0', '\0'};
     char Day[3] = {'0', '0', '\0'};
@@ -1070,7 +1075,7 @@ static ub8 cstr_parse_timestamp (char *timestr)
         cstr_isdigit(min, 2) &&
         cstr_isdigit(sec, 2) &&
         cstr_isdigit(msec, 3)) {
-
+        time_t tsec;
         struct tm t = {0};
 
         t.tm_year = atoi(Year);
@@ -1089,15 +1094,64 @@ static ub8 cstr_parse_timestamp (char *timestr)
         t.tm_year -= 1900;
         t.tm_mon  -= 1;
 
-        stamp = (ub8)(mktime(&t) * 1000 + atoi(msec));
+        // since 1970-01-01 UTChh:00:00 (china: hh=8)
+        tsec = mktime(&t);
 
-        return stamp;                
+        if (tsec == (time_t)(-1)) {
+            fprintf(stderr, "%s\n", strerror(errno));
+            return (-1);
+        }
+
+        return (ub8)(tsec * 1000 + atoi(msec));
     }
 
     // error no digit
     return (-1);
 }
 
+
+static const char * cstr_timestamp_to_datetime (char *stampms, int mslen, char timestr[24])
+{
+    ub8 stamp = 0;
+    time_t tsec;
+    int msec;
+    struct tm * t;
+
+    if (mslen == -1) {
+        mslen = cstr_length(stampms, 20);
+    }
+
+    if (! cstr_to_ub8(10, stampms, mslen, &stamp)) {
+        // error stamp
+        return NULL;
+    }
+
+    tsec = (time_t)(stamp / 1000);
+    msec = (int)(stamp % 1000);
+
+    t = localtime((const time_t*) &tsec);
+    if ( !t ) {
+        // error localtime
+        return NULL;
+    }
+
+    t->tm_year += 1900;
+    t->tm_mon  += 1;
+
+    if (! time_is_valid(t->tm_year, t->tm_mon, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec)) {
+        // invalid time
+        return NULL;
+    }
+
+    if (msec) {
+        /* 2012-12-22 17:45:59.875 */
+        snprintf(timestr, 24, "%04d-%02d-%02d %02d:%02d:%02d.%03d", t->tm_year, t->tm_mon, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, msec);
+    } else {
+        snprintf(timestr, 20, "%04d-%02d-%02d %02d:%02d:%02d", t->tm_year, t->tm_mon, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
+    }
+
+    return timestr;
+}
 
 #ifdef __cplusplus
 }

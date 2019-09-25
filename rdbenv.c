@@ -32,7 +32,7 @@
  * @create: 2019-06-14
  * @update:
  */
-#include "rdbcommon.h"
+#include "rdbfuncs.h"
 
 
 /**
@@ -298,6 +298,9 @@ static void RDBEnvInitInternal (RDBEnv env, RDBNodeCfg nodecfgs[])
     env->valtypetable[RDBVT_STAMP]  = RDBZStringNew("STAMP", 5);
 
     env->valtypetable[RDBVT_SET]   = RDBZStringNew("SET", 3);
+
+    // init rdb functions
+    //
 }
 
 
@@ -479,6 +482,12 @@ void RDBEnvDestroy (RDBEnv env)
 
     for (i = 0; i < sizeof(env->valtypetable)/sizeof(env->valtypetable[0]); i++) {
         RDBZStringFree(env->valtypetable[i]);
+    }
+
+    for (i = 0; i < sizeof(env->rdbfuncs)/sizeof(env->rdbfuncs[0]); i++) {
+        if (env->rdbfuncs[i].name) {
+            free((void*) env->rdbfuncs[i].name);
+        }
     }
 
     threadlock_destroy(&env->thrlock);

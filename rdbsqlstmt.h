@@ -115,6 +115,9 @@ typedef struct _RDBSQLStmt_t
 
             // LIMIT n
             ub8 limit;
+
+            // SELECT NOWDATE() FROM dual;
+            int dual;
         } select;
 
         // UPSERT INTO tablespace.tablename(fieldnames...) VALUES(fieldvalues...);

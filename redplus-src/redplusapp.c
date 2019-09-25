@@ -92,7 +92,7 @@ int main(int argc, const char *argv[])
 
     atexit(redplus_cleanup);
 
-    startTime = RDBGetTimestamp(appcfg);
+    startTime = RDBGetLocalTime(appcfg);
     printf("# %s-%s start : %s\n", APPNAME, APPVER, appcfg);
 
     // makeup default config pathfile
@@ -246,20 +246,20 @@ int main(int argc, const char *argv[])
                             if (*line == '#') {
                                 printf("%s;\n", line);
                             } else if (*line == '$') {
-                                tm0 = RDBGetTimestamp(ts0);
+                                tm0 = RDBGetLocalTime(ts0);
 
                                 redplusExecuteCommand(ctx, cstr_Ltrim_whitespace((char*) &line[1]), RDBCZSTR(output));
 
-                                tm2 = RDBGetTimestamp(ts2);
+                                tm2 = RDBGetLocalTime(ts2);
 
                                 printf("\n# elapsed : %.3lf seconds. (%"PRIu64" ms);"
                                        "\n# duration : %s ~ %s;\n\n", (tm2 - tm0) * 0.001, (ub8)(tm2 - tm0), ts0, ts2);
                             } else {
-                                tm0 = RDBGetTimestamp(ts0);
+                                tm0 = RDBGetLocalTime(ts0);
 
                                 redplusExecuteRdbsql(ctx, line, RDBCZSTR(output));
 
-                                tm2 = RDBGetTimestamp(ts2);
+                                tm2 = RDBGetLocalTime(ts2);
 
                                 printf("\n# elapsed : %.3lf seconds. (%"PRIu64" ms);"
                                        "\n# duration : %s ~ %s;\n\n", (tm2 - tm0) * 0.001, (ub8)(tm2 - tm0), ts0, ts2);

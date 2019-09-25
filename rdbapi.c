@@ -271,7 +271,7 @@ void RDBThreadCtxDestroy (RDBThreadCtx thrctx)
 }
 
 
-ub8 RDBGetTimestamp (char *timestr)
+ub8 RDBGetLocalTime (char *timestr)
 {
 #ifdef __WINDOWS__
     struct timeb tb;
@@ -316,6 +316,46 @@ ub8 RDBGetTimestamp (char *timestr)
 
     // invalid arg
     return 0;
+}
+
+
+ub8 RDBGetServerTime (RDBCtx ctx, char *localtimestr)
+{
+    ub8 sec, usec, msec;
+
+    const char *argv[] = { "time", 0 };
+    size_t   argvlen[] = { 4, 0 };
+
+    redisReply *reply = RedisExecCommandArgv(ctx, 1, argv, argvlen);
+    if (! reply || reply->elements != 2 ||
+        reply->element[0]->type != REDIS_REPLY_STRING ||
+        reply->element[1]->type != REDIS_REPLY_STRING) {
+
+        RedisFreeReplyObject(&reply);
+        return RDBAPI_ERROR;
+    }
+
+    if (cstr_to_ub8(10, reply->element[0]->str, reply->element[0]->len, &sec) &&
+        cstr_to_ub8(10, reply->element[1]->str, reply->element[1]->len, &usec)) {
+
+        RedisFreeReplyObject(&reply);
+
+        msec = (sec * 1000 + usec / 1000);
+
+        if (localtimestr) {
+            char stampms[24] = {0};
+            int len = snprintf_chkd_V1(stampms, sizeof(stampms), "%"PRIu64, msec);
+
+            if (! cstr_timestamp_to_datetime(stampms, len, localtimestr)) {
+                return RDBAPI_ERROR;
+            }
+        }
+
+        return msec;
+    }
+
+    RedisFreeReplyObject(&reply);
+    return RDBAPI_ERROR;
 }
 
 

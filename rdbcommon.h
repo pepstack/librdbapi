@@ -85,6 +85,8 @@ void * librdbapi_log4crc;
 #include "common/tpl/tpl.h"
 #include "common/tiny-regex-c/re.h"
 
+#include "common/tinyexpr/tinyexpr.h"
+
 
 typedef struct _RDBEnvNode_t * RDBEnvNodeMap;
 
@@ -169,6 +171,8 @@ typedef struct _RDBEnv_t
 
     char _exprstr[128];
     char *filterexprs[filterexprs_count_max];
+
+    te_variable rdbfuncs[256];
 
     // 0: OFF; 1: ON (default)
     ub1 verbose;
