@@ -181,7 +181,7 @@ static const char * CSH_get_input (const char *message, char *linebuf, size_t bu
         *linebuf = '\0';
     }
 
-    start = cstr_LRtrim_chr(cstr_LRtrim_chr(linebuf, 32), '\n');
+    start = cstr_LRtrim_chr(cstr_LRtrim_chr(linebuf, 32, 0), '\n', 0);
 
     if (*start == '\0') {
         return NULL;

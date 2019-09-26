@@ -304,6 +304,9 @@ static RDBAPI_RESULT RDBNodeInfoUpdate (RDBCtxNode ctxnode, RDBNodeInfoSection s
             return RDBAPI_ERR_TYPE;
         } else {
             // clear old info map before update
+            char *saveptr;
+            char *mapbuf;
+
             envnode = RDBCtxNodeGetEnvNode(ctxnode);
             propmap = envnode->nodeinfo[section];
             envnode->nodeinfo[section] = NULL;
@@ -311,11 +314,11 @@ static RDBAPI_RESULT RDBNodeInfoUpdate (RDBCtxNode ctxnode, RDBNodeInfoSection s
             RDBPropMapFree(propmap);
             propmap = NULL;
 
-            char *mapbuf = (char *) RDBMemAlloc(reply->len + 1);
+            mapbuf = (char *) RDBMemAlloc(reply->len + 1);
             memcpy(mapbuf, reply->str, reply->len);
             mapbuf[reply->len] = 0;
 
-            char *p = strtok(mapbuf, "\r\n");
+            char *p = strtok_r(mapbuf, "\r\n", &saveptr);
             while (p) {
                 char *key = 0;
                 char *val = 0;
@@ -325,7 +328,7 @@ static RDBAPI_RESULT RDBNodeInfoUpdate (RDBCtxNode ctxnode, RDBNodeInfoSection s
                     val = strchr(p, ':');
                 }
 
-                p = strtok(NULL, "\r\n");
+                p = strtok_r(NULL, "\r\n", &saveptr);
 
                 if (key && val) {
                     RDBPropNode propnode = (RDBPropNode) RDBMemAlloc(sizeof(RDBProp_t));

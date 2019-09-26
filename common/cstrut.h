@@ -255,10 +255,10 @@ static char * cstr_Ltrim_chr (char * str, char ch)
 }
 
 
-static char * cstr_Rtrim_chr (char * str, char ch)
+static char* cstr_Rtrim_chr (char * str, char ch, int *outlen)
 {
     char *p = str;
-    char *q = str;
+    char *q = p;
 
     while (*p) {
         if (*p != ch) {
@@ -268,15 +268,23 @@ static char * cstr_Rtrim_chr (char * str, char ch)
         p++;
     }
 
-    if (++q != p) {
+    if (++q <= p) {
         *q = 0;
+
+        if (outlen) {
+            *outlen = (int)(q - str);
+        }
+    } else {
+        if (outlen) {
+            *outlen = 0;
+        }
     }
 
     return str;
 }
 
 
-#define cstr_LRtrim_chr(str, c)  cstr_Rtrim_chr(cstr_Ltrim_chr((str), (c)), (c))
+#define cstr_LRtrim_chr(str, c, outlen)  cstr_Rtrim_chr(cstr_Ltrim_chr((str), (c)), (c), (outlen))
 
 
 static char * cstr_Lfind_chr (char * str, int len, char c)
@@ -377,6 +385,29 @@ static char * cstr_LRtrim_whitespace (char *str)
 }
 
 
+static int cstr_shrink_whitespace (const char *str, int *start, int *end)
+{
+    int s = *start;
+    int e = *end;
+
+    for (; s < *end; s++) {
+        if (! isspace(str[s])) {
+            break;
+        }
+    }
+    *start = s;
+
+    for (; e >= *start; e--) {
+        if (! isspace(str[e])) {
+            break;
+        }
+    }
+    *end = e;
+    
+    return (*end - *start + 1);
+}
+
+
 static char * cstr_trim_whitespace (char * s)
 {
     return (*s==0)?s:((( ! isspace(*s) )?(((cstr_trim_whitespace(s+1)-1)==s)? s : (*(cstr_trim_whitespace(s+1)-1)=*s, *s=32 ,cstr_trim_whitespace(s+1))):cstr_trim_whitespace(s+1)));
@@ -396,11 +427,12 @@ static char * cstr_replace_chr (char * str, char ch, char rpl)
 }
 
 
-static int cstr_slpit_chr (const char * str, int len, char delim, char **outstrs, int maxoutnum)
+static int cstr_slpit_chr (const char * str, int len, char delim, char **outstrs, int outstrslen[], int maxoutnum)
 {
     char *p;
     const char *s = str;
 
+    int outlen;
     int i = 0;
 
     int n = 1;
@@ -430,7 +462,12 @@ static int cstr_slpit_chr (const char * str, int len, char delim, char **outstrs
 
             if (i < maxoutnum) {
                 // remove whitespaces
-                outstrs[i++] = strdup(cstr_LRtrim_chr(sb, 32));
+                outlen = 0;
+                outstrs[i] = strdup( cstr_LRtrim_chr(sb, 32, &outlen) );
+                if (outstrslen) {
+                    outstrslen[i] = outlen;
+                }
+                i++;
             } else {
                 // overflow than maxoutnum
                 break;
@@ -440,7 +477,12 @@ static int cstr_slpit_chr (const char * str, int len, char delim, char **outstrs
         }
 
         if (i < maxoutnum) {
-            outstrs[i++] = strdup(cstr_LRtrim_chr(sb, 32));
+            outlen = 0;
+            outstrs[i] = strdup( cstr_LRtrim_chr(sb, 32, &outlen) );
+            if (outstrslen) {
+                outstrslen[i] = outlen;
+            }
+            i++;
         }
 
         free(s0);
@@ -539,14 +581,14 @@ static int cstr_to_dbl (const char *str, int slen, double *outval)
  * cstr_split_substr
  *   split string by separator string (sep) into sub strings
  */
-static int cstr_split_substr (char *str, const char *sep, int seplen, char **subs, int maxsubs)
+static int cstr_split_substr (const char *str, const char *sepstr, int seplen, char **subs, int maxsubs)
 {
     int i = 0;
 
-    char *s = str;
+    char *s = (char*) str;
 
     while (s && i < maxsubs) {
-        char *p = strstr(s, sep);
+        char *p = strstr(s, sepstr);
         if (p) {
             *p = 0;
             p += seplen;
@@ -558,6 +600,81 @@ static int cstr_split_substr (char *str, const char *sep, int seplen, char **sub
     }
 
     return i;
+}
+
+
+static int cstr_split_multi_chrs (const char *str, int slen, const char *sepchrs, int count, char **outsubs, int outsubslen[], int maxsubs)
+{
+    char *sub;
+    int substart, subend, sublen;
+
+    int k;
+    int i = 0;
+    int len = 0;
+
+    int start = i;
+    int end = start;
+
+    for (; i < slen; i++) {
+        for (k = 0; k < count; k++) {
+            if (str[i] == sepchrs[k]) {
+                end = i;
+                break;
+            }
+        }
+
+        if (k < count && end > start && len < maxsubs) {
+            substart = start;
+            subend = end - 1;
+
+            sublen = cstr_shrink_whitespace(str, &substart, &subend);
+
+            if (sublen > 0) {
+                sub = (char *) malloc(sublen + 1);
+                if (! sub) {
+                    /* no memory */
+                    exit(EXIT_FAILURE);
+                }
+                memcpy(sub, str + substart, sublen);
+                sub[sublen] = 0;
+
+                outsubs[len] = sub;
+                outsubslen[len] = sublen;
+
+                if (++len == maxsubs) {
+                    return len;
+                }
+            }
+
+            start = end;
+        }
+    }
+
+    end = slen;
+
+    if (len < maxsubs && end > start) {
+        substart = start;
+        subend = end - 1;
+
+        sublen = cstr_shrink_whitespace(str, &substart, &subend);
+
+        if (sublen > 0) {
+            sub = (char *) malloc(sublen + 1);
+            if (! sub) {
+                /* no memory */
+                exit(EXIT_FAILURE);
+            }
+            memcpy(sub, str + substart, sublen);
+            sub[sublen] = 0;
+
+            outsubs[len] = sub;
+            outsubslen[len] = sublen;
+
+            len++;
+        }
+    }
+
+    return len;
 }
 
 

@@ -34,7 +34,6 @@
 #include "rdbsqlstmt.h"
 
 
-
 static ub8 RDBTableGetTimestamp (RDBCtx ctx, const char *tablespace, const char *tablename)
 {
     ub8 u8val = (ub8)(-1);
@@ -73,7 +72,7 @@ static RDBSQLStmt RDBSQLStmtObjectNew (RDBCtx ctx, const char *sql_block, size_t
 
         sql_len = cstr_Rtrim_whitespace(sqlstmt->sqlblock, (int) sql_len);
 
-        cstr_Rtrim_chr(sqlstmt->sqlblock, ';');
+        cstr_Rtrim_chr(sqlstmt->sqlblock, ';', NULL);
 
         sqlstmt->sqloffset = cstr_Ltrim_whitespace(sqlstmt->sqlblock);
         sqlstmt->offsetlen = cstr_Rtrim_whitespace(sqlstmt->sqloffset, cstr_length(sqlstmt->sqloffset, sql_len));
@@ -275,6 +274,7 @@ static int parse_select_fields (char *fields, char *fieldnames[], int fieldnames
     char namebuf[RDB_KEY_NAME_MAXLEN * 2 + 1];
 
     char *p;
+    char *saveptr;
     int namelen;
     int i = 0;
 
@@ -283,12 +283,12 @@ static int parse_select_fields (char *fields, char *fieldnames[], int fieldnames
         return -1;
     }
 
-    p = strtok(fields, ",");
+    p = strtok_r(fields, ",", &saveptr);
     while (p && i <= RDBAPI_ARGV_MAXNUM) {
         char *name;
         namelen = snprintf_chkd_V1(namebuf, RDB_KEY_NAME_MAXLEN * 2, "%s", p);
 
-        name = cstr_LRtrim_chr(namebuf, 32);
+        name = cstr_LRtrim_chr(namebuf, 32, NULL);
         namelen = RDBSQLNameValidateMaxLen(name, RDB_KEY_NAME_MAXLEN * 2);
 
         if (! namelen) {
@@ -353,7 +353,7 @@ static int parse_select_fields (char *fields, char *fieldnames[], int fieldnames
 
         i++;
 
-        p = strtok(0, ",");
+        p = strtok_r(0, ",", &saveptr);
     }
 
     return i;
@@ -365,6 +365,7 @@ static int parse_field_values (char *fields, char *fieldvalues[RDBAPI_ARGV_MAXNU
     char valbuf[RDB_SQLSTMT_SQLBLOCK_MAXLEN + 1];
 
     char *p;
+    char *saveptr;
     int i = 0;
 
     if (fields[0] == '*') {
@@ -372,17 +373,17 @@ static int parse_field_values (char *fields, char *fieldvalues[RDBAPI_ARGV_MAXNU
         return -1;
     }
 
-    p = strtok(fields, ",");
+    p = strtok_r(fields, ",", &saveptr);
     while (p) {
         char *value;
 
         snprintf_chkd_V1(valbuf, sizeof(valbuf), "%s", p);
 
-        value = cstr_LRtrim_chr(cstr_LRtrim_chr(valbuf, 32), '\'');
+        value = cstr_LRtrim_chr(cstr_LRtrim_chr(valbuf, 32, NULL), '\'', NULL);
 
-        fieldvalues[i++] = strdup(value);
+        fieldvalues[i++] = strdup( value );
 
-        p = strtok(0, ",");
+        p = strtok_r(0, ",", &saveptr);
     }
 
     return i;
@@ -394,7 +395,7 @@ static char * ParseWhereFieldName (const char *name, int *namelen)
     char *namestr;
     char tmpbuf[RDB_KEY_NAME_MAXLEN * 2];
     snprintf_chkd_V1(tmpbuf, sizeof(tmpbuf), "%s", name);
-    namestr = cstr_LRtrim_chr(tmpbuf, 32);
+    namestr = cstr_LRtrim_chr(tmpbuf, 32, NULL);
     *namelen = RDBSQLNameValidateMaxLen(namestr, RDB_KEY_NAME_MAXLEN);
     return (*namelen)? strdup(namestr) : NULL;
 }
@@ -409,7 +410,7 @@ static char * ParseWhereFieldValue (const char *value, int *valuelen)
     snprintf_chkd_V1(tmpbuf, sizeof(tmpbuf), "%s", value);
 
     // trim extra chars
-    valstr = cstr_LRtrim_chr(cstr_LRtrim_chr(tmpbuf, 32), 39);
+    valstr = cstr_LRtrim_chr(cstr_LRtrim_chr(tmpbuf, 32, NULL), 39, NULL);
 
     *valuelen = cstr_length(valstr, RDB_KEY_VALUE_SIZE);
     return (*valuelen < RDB_KEY_VALUE_SIZE)? strdup(valstr) : NULL;
@@ -730,7 +731,7 @@ static char * parse_create_field (const char *sqlblockaddr,
 
             len = cstr_length(sqlc, endp - sqlc);
 
-            len = cstr_slpit_chr(sqlc, len, 44, rowkeys, RDBAPI_SQL_KEYS_MAX + 1);
+            len = cstr_slpit_chr(sqlc, len, 44, rowkeys, NULL, RDBAPI_SQL_KEYS_MAX + 1);
             if (len > RDBAPI_SQL_KEYS_MAX) {
                 //??//errat = (int)(sqlc - sqladdr) + sqloffs;
                 //??//snprintf_chkd_V1(buf, bufsz, "SQLError: too many keys in ROWKEY - error char at(%d): '%s'", errat, sqladdr + errat);
@@ -1283,7 +1284,8 @@ void SQLStmtParseUpsert (RDBCtx ctx, RDBSQLStmt sqlstmt)
         *endp++ = 0;
 
         len = cstr_Rtrim_whitespace(sqlc, cstr_length(sqlc, -1));
-        numfields = cstr_slpit_chr(sqlc, len, 44, sqlstmt->upsert.fieldnames, RDBAPI_ARGV_MAXNUM + 1);
+
+        numfields = cstr_slpit_chr(sqlc, len, 44, sqlstmt->upsert.fieldnames, sqlstmt->upsert.fieldnameslen, RDBAPI_ARGV_MAXNUM + 1);
         if (numfields == 0) {
             snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: fields not found");
             return;
@@ -1293,7 +1295,6 @@ void SQLStmtParseUpsert (RDBCtx ctx, RDBSQLStmt sqlstmt)
             return;
         }
         for(i = 0; i < numfields; i++) {
-            sqlstmt->upsert.fieldnameslen[i] = cstr_length(sqlstmt->upsert.fieldnames[i], RDB_KEY_NAME_MAXLEN + 1);
             if (sqlstmt->upsert.fieldnameslen[i] > RDB_KEY_NAME_MAXLEN) {
                 snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "SQLStmtError: too long fieldname: %s", sqlstmt->upsert.fieldnames[i]);
                 return;
@@ -2757,56 +2758,129 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                                     // SET Commands:
                                     //   https://www.tutorialspoint.com/redis/redis_sets.htm
                                     // $SADD key member1 member2 ...
+                                    int membs = 0;
+                                    char *members[RDBAPI_ARGV_MAXNUM] = {0};
+                                    int memberslen[RDBAPI_ARGV_MAXNUM] = {0};
+
+                                    const char *name = sqlstmt->upsert.updcolnames[i];
+                                    int namelen = sqlstmt->upsert.updcolnameslen[i];
 
                                     const char *value = sqlstmt->upsert.updcolvalues[i];
                                     int valuelen = sqlstmt->upsert.updcolvalueslen[i];
 
-                                    zstringbuf skey = zstringbufNew(keypattern->len + sqlstmt->upsert.updcolnameslen[i] + 2, keypattern->str, keypattern->len);
+                                    zstringbuf skey = zstringbufNew(keypattern->len + namelen + 2, keypattern->str, keypattern->len);
 
-                                    skey = zstringbufCat(skey, "$%.*s", sqlstmt->upsert.updcolnameslen[i], sqlstmt->upsert.updcolnames[i]);
+                                    skey = zstringbufCat(skey, "$%.*s", namelen, name);
 
-                                    // SADD {sydb::sessionid:1}$fieldname colval1 ...
-                                    argc = 0;
-                                    argv[argc] = "SADD";
-                                    argvlen[argc] = 4;
-                                    argc++;
+                                    if (value[0] == '{' && value[valuelen - 1] == '}') {
+                                        // SADD {sydb::sessionid:1}$fieldname colval1 ...
 
-                                    argv[argc] = skey->str;
-                                    argvlen[argc] = skey->len;
-                                    argc++;
+                                        // DEL key first
+                                        RedisDeleteKey(ctx, skey->str, skey->len, NULL, 0);
 
-                                    if (value[0] == '[' && value[valuelen - 1] == ']') {
-                                        char *members[RDBAPI_ARGV_MAXNUM] = {0};
+                                        argc = 0;
+                                        argv[argc] = "SADD";
+                                        argvlen[argc] = 4;
+                                        argc++;
 
-                                        int count = cstr_slpit_chr(&value[1], valuelen - 2, ctx->env->delimiter, members, RDBAPI_ARGV_MAXNUM);
+                                        argv[argc] = skey->str;
+                                        argvlen[argc] = skey->len;
+                                        argc++;
 
-                                        for (k = 0; k < count; k++) {
-                                            int memblen = cstr_length(members[k], RDB_ROWKEY_MAX_SIZE);
-                                            if (memblen > 0 && memblen < RDB_ROWKEY_MAX_SIZE) {
-                                                argv[argc] = members[k];
-                                                argvlen[argc] = memblen;
-                                                argc++;
+                                        membs = cstr_slpit_chr(&value[1], valuelen - 2, ctx->env->delimiter, members, memberslen, RDBAPI_ARGV_MAXNUM);
+
+                                        for (k = 0; k < membs; k++) {
+                                            if (memberslen[k] > 0 && memberslen[k] <= RDB_ROWKEY_MAX_SIZE) {
+                                                const char *mstr;
+                                                int mlen = assign_fieldvalue(members[k], memberslen[k], &mstr);
+                                                if (mlen > 0) {
+                                                    argv[argc] = mstr;
+                                                    argvlen[argc] = mlen;
+                                                    argc++;
+                                                }
                                             }
                                         }
 
-                                        replySet = RedisExecCommandArgv(ctx, argc, argv, argvlen);
-
-                                        for (k = 0; k < count; k++) {
-                                            free(members[k]);
+                                        if (argc > 2) {
+                                            replySet = RedisExecCommandArgv(ctx, argc, argv, argvlen);
                                         }
 
-                                        zstringbufFree(&skey);
-
-                                        if (RedisCheckReplyStatus(replySet, "OK", 2)) {
-                                            RedisFreeReplyObject(&replySet);
-
-
-                                        }
-
-                                        RedisFreeReplyObject(&replySet);
-                                    } else {
                                         // TODO:
+                                    } else {
+                                        membs = cstr_split_multi_chrs(value, valuelen, "+-*/", 4, members, memberslen, RDBAPI_ARGV_MAXNUM);
+                                        if (membs == 1 && cstr_compare_len(members[0], memberslen[0], name, namelen)) {
+                                            if (! cstr_compare_len(members[0], memberslen[0], "NULL", 4) ||
+                                                ! cstr_compare_len(members[0], memberslen[0], "(null)", 6)) {
+                                                // DEL key
+                                                RedisDeleteKey(ctx, skey->str, skey->len, NULL, 0);
+                                            }
+                                        } else if (membs > 1 && ! cstr_compare_len(members[0], memberslen[0], name, namelen)) {
+                                            // add into SET
+                                            argc = 0;
+                                            argv[argc] = "SADD";
+                                            argvlen[argc] = 4;
+                                            argc++;
 
+                                            argv[argc] = skey->str;
+                                            argvlen[argc] = skey->len;
+                                            argc++;
+
+                                            for (k = 1; k < membs; k++) {
+                                                if (*members[k] == '+') {
+                                                    int mstart = 1;
+                                                    int mend = memberslen[k] - 1;
+
+                                                    int mlen = cstr_shrink_whitespace(members[k], &mstart, &mend);
+                                                    if (mlen > 0) {
+                                                        const char *mstr;
+
+                                                        mlen = assign_fieldvalue(members[k] + mstart, mlen, &mstr);
+                                                        if (mlen > 0) {
+                                                            argv[argc] = mstr;
+                                                            argvlen[argc] = mlen;
+                                                            argc++;
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            if (argc > 2) {
+                                                replySet = RedisExecCommandArgv(ctx, argc, argv, argvlen);
+                                            }
+
+                                            // remove from SET
+                                            argc = 0;
+                                            argv[argc] = "SREM";
+                                            argvlen[argc] = 4;
+                                            argc++;
+
+                                            argv[argc] = skey->str;
+                                            argvlen[argc] = skey->len;
+                                            argc++;
+
+                                            for (k = 1; k < membs; k++) {
+                                                if (*members[k] == '-') {
+                                                    int mstart = 1;
+                                                    int mend = memberslen[k] - 1;
+
+                                                    int mlen = cstr_shrink_whitespace(members[k], &mstart, &mend);
+                                                    if (mlen > 0) {
+                                                        const char *mstr;
+
+                                                        mlen = assign_fieldvalue(members[k] + mstart, mlen, &mstr);
+                                                        if (mlen > 0) {
+                                                            argv[argc] = mstr;
+                                                            argvlen[argc] = mlen;
+                                                            argc++;
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            if (argc > 2) {
+                                                replySet = RedisExecCommandArgv(ctx, argc, argv, argvlen);
+                                            }
+                                        }
                                     }
                                 }
                             }

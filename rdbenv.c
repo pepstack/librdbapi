@@ -60,8 +60,9 @@ typedef struct _RDBNodeCfg_t
 static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_ms, RDBNodeCfg nodecfgs[RDB_CLUSTER_NODES_MAX])
 {
     char *nodenames[RDB_CLUSTER_NODES_MAX] = {0};
+    int nodenameslen[RDB_CLUSTER_NODES_MAX] = {0};
 
-    int nn = cstr_slpit_chr(hosts, cstr_length(hosts, -1), ',', nodenames, RDB_CLUSTER_NODES_MAX);
+    int nn = cstr_slpit_chr(hosts, cstr_length(hosts, -1), ',', nodenames, nodenameslen, RDB_CLUSTER_NODES_MAX);
 
     int nodeindex = 0;
 
@@ -76,10 +77,11 @@ static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_
         char *outs[2] = {0};
 
         char * nodestr = nodenames[nodeindex];
+        int nodelen =  nodenameslen[nodeindex];
 
-        if (nodestr[0] == nodestr[ strlen(nodestr) - 1 ]) {
+        if (nodestr[0] == nodestr[ nodelen - 1 ]) {
             if (nodestr[0] == '\'' || nodestr[0] == '"') {
-                nodestr[ strlen(nodestr) - 1 ] = 0;
+                nodestr[ nodelen - 1 ] = 0;
                 nodestr++;
             }
         }
@@ -142,10 +144,10 @@ static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_
             char *hpouts[2] = {0};
 
             // get ip:port
-            if (cstr_slpit_chr(nodenames[nodeindex], (int)strlen(nodenames[nodeindex]), ':', hpouts, 2) == 2) {
-                if (cstr_slpit_chr(outs[1], cstr_length(outs[1], -1), ':', hpouts, 2) == 2) {
-                    host = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[0], 32), '\''));
-                    port = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[1], 32), '\''));
+            if (cstr_slpit_chr(nodenames[nodeindex], nodelen, ':', hpouts, NULL, 2) == 2) {
+                if (cstr_slpit_chr(outs[1], cstr_length(outs[1], -1), ':', hpouts, NULL, 2) == 2) {
+                    host = strdup( cstr_LRtrim_chr( cstr_LRtrim_chr(hpouts[0], 32, NULL), '\'', NULL) );
+                    port = strdup( cstr_LRtrim_chr( cstr_LRtrim_chr(hpouts[1], 32, NULL), '\'', NULL) );
                 }
 
                 free(hpouts[0]);
@@ -155,11 +157,11 @@ static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_
             // with authpass
             char *hpouts[2] = {0};
 
-            authpass = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(outs[0], 32), '\''));
+            authpass = strdup( cstr_LRtrim_chr(cstr_LRtrim_chr(outs[0], 32, NULL), '\'', NULL));
 
-            if (cstr_slpit_chr(outs[1], cstr_length(outs[1], -1), ':', hpouts, 2) == 2) {
-                host = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[0], 32), '\''));
-                port = strdup(cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[1], 32), '\''));
+            if (cstr_slpit_chr(outs[1], cstr_length(outs[1], -1), ':', hpouts, NULL, 2) == 2) {
+                host = strdup( cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[0], 32, NULL), '\'', NULL) );
+                port = strdup( cstr_LRtrim_chr(cstr_LRtrim_chr(hpouts[1], 32, NULL), '\'', NULL) );
             }
 
             free(hpouts[0]);
@@ -183,7 +185,7 @@ static int RDBParseClusterNodes (const char *hosts, ub4 ctxtimeout, ub4 sotimeo_
         do {
             char *pnouts[2] = {0};
 
-            if (cstr_slpit_chr(port, (int) strlen(port), '-', pnouts, 2) == 2) {
+            if (cstr_slpit_chr(port, (int) strlen(port), '-', pnouts, NULL, 2) == 2) {
                 int pno = atoi(pnouts[0]);
                 int endpno = atoi(pnouts[1]);
 
@@ -332,7 +334,7 @@ static size_t RDBEnvLoadCfgfile (const char *cfgfile, char **outCluster, int *io
 
         cstr_readline(fp, rdbuf, 127, 1);
 
-        n = cstr_slpit_chr(rdbuf, cstr_length(rdbuf, 127), ',', cols, 3);
+        n = cstr_slpit_chr(rdbuf, cstr_length(rdbuf, 127), ',', cols, NULL, 3);
 
         if (n != 3) {
             printf("RDBAPI_ERROR: (%s:%d) fail on read config: %s\n", __FILE__, __LINE__, cfgfile);
@@ -447,11 +449,12 @@ RDBAPI_RESULT RDBEnvCreate (const char *cluster, int ctxtimeout, int sotimeo_ms,
 
         snprintf_chkd_V1(env->_exprstr, sizeof(env->_exprstr), "%s", "=,LLIKE,RLIKE,LIKE,MATCH,!=,>,<,>=,<=");
         do {
+            char *saveptr;
             int cnt = 0;
-            char *ps = strtok(env->_exprstr, ",");
+            char *ps = strtok_r(env->_exprstr, ",", &saveptr);
             while (ps && cnt++ < filterexprs_count_max) {
                 env->filterexprs[cnt] = ps;
-                ps = strtok(NULL, ",");
+                ps = strtok_r(NULL, ",", &saveptr);
             }
         } while(0);
 

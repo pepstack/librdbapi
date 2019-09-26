@@ -1,4 +1,4 @@
-/***********************************************************************
+﻿/***********************************************************************
 * Copyright (c) 2008-2080 syna-tech.com, pepstack.com, 350137278@qq.com
 *
 * ALL RIGHTS RESERVED.
@@ -79,6 +79,13 @@ extern "C"
 #   define snprintf    _snprintf
 # endif
 # define SNPRINTF
+#endif
+
+#ifndef STRTOK
+# if defined(__WINDOWS__)
+#   define strtok_r    strtok_s
+# endif
+# define STRTOK
 #endif
 
 #if defined(__WINDOWS__)

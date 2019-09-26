@@ -1,4 +1,4 @@
-/***********************************************************************
+﻿/***********************************************************************
 * Copyright (c) 2008-2080 syna-tech.com, pepstack.com, 350137278@qq.com
 *
 * ALL RIGHTS RESERVED.
@@ -58,6 +58,13 @@ extern "C"
 #ifndef STDDEF
 # include <stddef.h>
 # define STDDEF
+#endif
+
+#ifndef STRTOK
+# if defined(__WINDOWS__)
+#   define strtok_r    strtok_s
+# endif
+# define STRTOK
 #endif
 
 #ifndef BCOPY
