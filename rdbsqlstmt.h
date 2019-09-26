@@ -135,12 +135,14 @@ typedef struct _RDBSQLStmt_t
             int   fieldnameslen[RDBAPI_ARGV_MAXNUM + 1];
             char *fieldvalues[RDBAPI_ARGV_MAXNUM + 1];
             int   fieldvalueslen[RDBAPI_ARGV_MAXNUM + 1];
+            int   fielddesid[RDBAPI_ARGV_MAXNUM + 1];
 
             int updcols;
             char *updcolnames[RDBAPI_ARGV_MAXNUM + 1];
             int   updcolnameslen[RDBAPI_ARGV_MAXNUM + 1];
             char *updcolvalues[RDBAPI_ARGV_MAXNUM + 1];
             int   updcolvalueslen[RDBAPI_ARGV_MAXNUM + 1];
+            int   updcoldesid[RDBAPI_ARGV_MAXNUM + 1];
 
             // RDBSQL_UPSERT_MODE_INSERT
             // RDBSQL_UPSERT_MODE_IGNORE

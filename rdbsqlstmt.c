@@ -2124,6 +2124,8 @@ RDBAPI_RESULT RDBSQLStmtPrepare (RDBSQLStmt sqlstmt)
                 return RDBAPI_ERROR;
             }
 
+            sqlstmt->upsert.fielddesid[i] = j;
+
             if (fields[j + 1]) {
                 snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "duplicated field: '%.*s'", sqlstmt->upsert.fieldnameslen[i], sqlstmt->upsert.fieldnames[i]);
                 return RDBAPI_ERROR;
@@ -2284,6 +2286,9 @@ RDBAPI_RESULT RDBSQLStmtPrepare (RDBSQLStmt sqlstmt)
                 snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "field for update not found: '%.*s'", sqlstmt->upsert.updcolnameslen[i], sqlstmt->upsert.updcolnames[i]);
                 return RDBAPI_ERROR;
             }
+
+            sqlstmt->upsert.updcoldesid[i] = j;
+
             if (tabledes->fielddes[j].rowkey) {
                 snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "cannot update rowkey field: '%.*s'", sqlstmt->upsert.updcolnameslen[i], sqlstmt->upsert.updcolnames[i]);
                 return RDBAPI_ERROR;
@@ -2672,67 +2677,148 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                 snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "not all fields of rowkey assigned: %.*s", keypattern->len, keypattern->str);
             }
         } else if (sqlstmt->upsert.upsertmode == RDBSQL_UPSERT_MODE_UPDATE) {
-            if (! sqlstmt->upsert.prepare.attfields) {
-                snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "upsert no field for key: %.*s", keypattern->len, keypattern->str);
-                return RDBAPI_ERROR;                    
-            }
-
             if (sqlstmt->upsert.prepare.dupkey) {
-                // get old first
                 redisReply *replyGet = NULL;
                 redisReply *replySet = NULL;
 
-                argc = 0;
-                argv[argc] = "HMGET";
-                argvlen[argc++] = 5;
+                res = RedisExistsKey(ctx, keypattern->str, keypattern->len);
 
-                argv[argc] = keypattern->str;
-                argvlen[argc++] = keypattern->len;
-
-                for (i = 0; i < sqlstmt->upsert.updcols; i++) {
-                    argv[argc] = sqlstmt->upsert.updcolnames[i];
-                    argvlen[argc++] = sqlstmt->upsert.updcolnameslen[i];
-                }
-
-                replyGet = RedisExecCommandArgv(ctx, argc, argv, argvlen);
-
-                if (replyGet && replyGet->type == REDIS_REPLY_ARRAY && replyGet->elements == sqlstmt->upsert.updcols) {
-                    // on duplicate key: update
+                if (res == 1) {
+                    // duplicate key update
                     argc = 0;
-                    argv[argc] = "HMSET";
-                    argvlen[argc++] = 5;
+                    argv[argc] = "HMGET";
+                    argvlen[argc] = 5;
+                    argc++;
 
                     argv[argc] = keypattern->str;
-                    argvlen[argc++] = keypattern->len;
+                    argvlen[argc] = keypattern->len;
+                    argc++;
 
                     for (i = 0; i < sqlstmt->upsert.updcols; i++) {
                         argv[argc] = sqlstmt->upsert.updcolnames[i];
                         argvlen[argc] = sqlstmt->upsert.updcolnameslen[i];
-
-                        argc++;
-                        argvlen[argc] = assign_fieldvalue(sqlstmt->upsert.updcolvalues[i], sqlstmt->upsert.updcolvalueslen[i], &argv[argc]);
-
                         argc++;
                     }
 
-                    replySet = RedisExecCommandArgv(ctx, argc, argv, argvlen);
+                    replyGet = RedisExecCommandArgv(ctx, argc, argv, argvlen);
 
-                    if (RedisCheckReplyStatus(replySet, "OK", 2)) {
-                        RDBRow row;
+                    if (replyGet && replyGet->type == REDIS_REPLY_ARRAY && replyGet->elements == sqlstmt->upsert.updcols) {
+                        int refcols = 0;
 
-                        RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, 0, &resultmap);
-                        RDBRowNew(resultmap, keypattern->str, keypattern->len, &row);
-                        RDBCellSetString(RDBRowCell(row, 0), keypattern->str, keypattern->len);
-                        RDBResultMapInsertRow(resultmap, row);
+                        // update existed key by updcols
+                        argc = 0;
+                        argv[argc] = "HMSET";
+                        argvlen[argc] = 5;
+                        argc++;
 
-                        RedisFreeReplyObject(&replyGet);
-                        RedisFreeReplyObject(&replySet);
+                        argv[argc] = keypattern->str;
+                        argvlen[argc] = keypattern->len;
+                        argc++;
 
-                        *outResultMap = resultmap;
-                        return RDBAPI_SUCCESS;
+                        for (i = 0; i < sqlstmt->upsert.updcols; i++) {
+                            j = sqlstmt->upsert.updcoldesid[i];
+
+                            if (sqlstmt->upsert.prepare.tabledes.fielddes[j].fieldtype != RDBVT_SET) {
+                                argv[argc] = sqlstmt->upsert.updcolnames[i];
+                                argvlen[argc] = sqlstmt->upsert.updcolnameslen[i];
+                                argc++;
+
+                                argvlen[argc] = assign_fieldvalue(sqlstmt->upsert.updcolvalues[i], sqlstmt->upsert.updcolvalueslen[i], &argv[argc]);
+                                argc++;
+                            } else {
+                                refcols++;
+                            }
+                        }
+
+                        if (argc > 2) {
+                            replySet = RedisExecCommandArgv(ctx, argc, argv, argvlen);
+
+                            if (RedisCheckReplyStatus(replySet, "OK", 2)) {
+                                RDBRow row;
+
+                                RDBResultMapCreate("SUCCESS results", colnames, colnameslen, 1, 0, &resultmap);
+                                RDBRowNew(resultmap, keypattern->str, keypattern->len, &row);
+                                RDBCellSetString(RDBRowCell(row, 0), keypattern->str, keypattern->len);
+                                RDBResultMapInsertRow(resultmap, row);
+
+                                RedisFreeReplyObject(&replyGet);
+                                RedisFreeReplyObject(&replySet);
+
+                                //*outResultMap = resultmap;
+                                //return RDBAPI_SUCCESS;
+                            }
+                        }
+
+                        if (refcols > 0) {
+                            for (i = 0; i < sqlstmt->upsert.updcols; i++) {
+                                j = sqlstmt->upsert.updcoldesid[i];
+
+                                if (sqlstmt->upsert.prepare.tabledes.fielddes[j].fieldtype == RDBVT_SET) {
+                                    // SET Commands:
+                                    //   https://www.tutorialspoint.com/redis/redis_sets.htm
+                                    // $SADD key member1 member2 ...
+
+                                    const char *value = sqlstmt->upsert.updcolvalues[i];
+                                    int valuelen = sqlstmt->upsert.updcolvalueslen[i];
+
+                                    zstringbuf skey = zstringbufNew(keypattern->len + sqlstmt->upsert.updcolnameslen[i] + 2, keypattern->str, keypattern->len);
+
+                                    skey = zstringbufCat(skey, "$%.*s", sqlstmt->upsert.updcolnameslen[i], sqlstmt->upsert.updcolnames[i]);
+
+                                    // SADD {sydb::sessionid:1}$fieldname colval1 ...
+                                    argc = 0;
+                                    argv[argc] = "SADD";
+                                    argvlen[argc] = 4;
+                                    argc++;
+
+                                    argv[argc] = skey->str;
+                                    argvlen[argc] = skey->len;
+                                    argc++;
+
+                                    if (value[0] == '[' && value[valuelen - 1] == ']') {
+                                        char *members[RDBAPI_ARGV_MAXNUM] = {0};
+
+                                        int count = cstr_slpit_chr(&value[1], valuelen - 2, ctx->env->delimiter, members, RDBAPI_ARGV_MAXNUM);
+
+                                        for (k = 0; k < count; k++) {
+                                            int memblen = cstr_length(members[k], RDB_ROWKEY_MAX_SIZE);
+                                            if (memblen > 0 && memblen < RDB_ROWKEY_MAX_SIZE) {
+                                                argv[argc] = members[k];
+                                                argvlen[argc] = memblen;
+                                                argc++;
+                                            }
+                                        }
+
+                                        replySet = RedisExecCommandArgv(ctx, argc, argv, argvlen);
+
+                                        for (k = 0; k < count; k++) {
+                                            free(members[k]);
+                                        }
+
+                                        zstringbufFree(&skey);
+
+                                        if (RedisCheckReplyStatus(replySet, "OK", 2)) {
+                                            RedisFreeReplyObject(&replySet);
+
+
+                                        }
+
+                                        RedisFreeReplyObject(&replySet);
+                                    } else {
+                                        // TODO:
+
+                                    }
+                                }
+                            }
+                        }                        
                     }
-                } else {
-                    // not duplicate key add new
+                } else if (res == 0) {
+                    // not found key then add new
+                    if (! sqlstmt->upsert.prepare.attfields) {
+                        snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "upsert no field for key: %.*s", keypattern->len, keypattern->str);
+                        return RDBAPI_ERROR;                    
+                    }
+
                     argc = 0;
                     argv[argc] = "HMSET";
                     argvlen[argc++] = 5;
@@ -2771,9 +2857,6 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
                         return RDBAPI_SUCCESS;
                     }
                 }
-
-                RedisFreeReplyObject(&replyGet);
-                RedisFreeReplyObject(&replySet);
             } else {
                 snprintf_chkd_V1(ctx->errmsg, sizeof(ctx->errmsg), "not all fields of rowkey assigned: %.*s", keypattern->len, keypattern->str);
             }
@@ -2783,7 +2866,6 @@ RDBAPI_RESULT RDBSQLStmtExecute (RDBSQLStmt sqlstmt, RDBResultMap *outResultMap)
             for (i = 0; i < sqlstmt->upsert.numfields; i++) {
                 printf("(%s)\n", sqlstmt->upsert.fieldnames[i]);
             }
-
 
 /*
             RDBResultMap selresultmap;
